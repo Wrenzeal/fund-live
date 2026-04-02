@@ -1,0 +1,27 @@
+# Docker Compose for a sample local FundLive database.
+# Runtime should follow fundlive.yaml; this file is only a local example.
+#
+# Usage:
+#   docker-compose up -d     # Start database in background
+#   docker-compose down      # Stop database
+#   docker-compose logs db   # View database logs
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: fundlive_db
+    restart: unless-stopped
+    ports:
+      - "15432:5432" # Host port 15432 -> Container port 5432
+    environment:
+      POSTGRES_USER: fundlive
+      POSTGRES_PASSWORD: fundlive_secret
+      POSTGRES_DB: fundlive
+      TZ: Asia/Shanghai
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data # Persist data across restarts
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U fundlive -d fundlive" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5

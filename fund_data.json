@@ -1,0 +1,185 @@
+{
+  "crawled_at": "2026-02-01T20:39:39+08:00",
+  "funds": [
+    {
+      "code": "320007",
+      "name": "诺安成长混合A",
+      "manager": "刘慧影",
+      "company": "",
+      "nav": "2.087",
+      "scale": "0",
+      "holdings": [
+        {
+          "stock_code": "688981",
+          "stock_name": "中芯国际",
+          "holding_ratio": "8.52",
+          "exchange": "SH"
+        },
+        {
+          "stock_code": "002371",
+          "stock_name": "北方华创",
+          "holding_ratio": "8.41",
+          "exchange": "SZ"
+        },
+        {
+          "stock_code": "688361",
+          "stock_name": "中科飞测",
+          "holding_ratio": "8.28",
+          "exchange": "SH"
+        },
+        {
+          "stock_code": "688012",
+          "stock_name": "中微公司",
+          "holding_ratio": "8.16",
+          "exchange": "SH"
+        },
+        {
+          "stock_code": "301269",
+          "stock_name": "华大九天",
+          "holding_ratio": "8.15",
+          "exchange": "SZ"
+        },
+        {
+          "stock_code": "300661",
+          "stock_name": "圣邦股份",
+          "holding_ratio": "7.34",
+          "exchange": "SZ"
+        },
+        {
+          "stock_code": "688072",
+          "stock_name": "拓荆科技",
+          "holding_ratio": "4.62",
+          "exchange": "SH"
+        },
+        {
+          "stock_code": "688036",
+          "stock_name": "传音控股",
+          "holding_ratio": "3.65",
+          "exchange": "SH"
+        },
+        {
+          "stock_code": "688037",
+          "stock_name": "芯源微",
+          "holding_ratio": "3.17",
+          "exchange": "SH"
+        },
+        {
+          "stock_code": "688111",
+          "stock_name": "金山办公",
+          "holding_ratio": "2.79",
+          "exchange": "SH"
+        }
+      ]
+    },
+    {
+      "code": "005827",
+      "name": "易方达蓝筹精选混合",
+      "manager": "张坤",
+      "company": "",
+      "nav": "1.9387",
+      "scale": "0",
+      "holdings": [
+        {
+          "stock_code": "600519",
+          "stock_name": "贵州茅台",
+          "holding_ratio": "9.9",
+          "exchange": "SH"
+        },
+        {
+          "stock_code": "000858",
+          "stock_name": "五粮液",
+          "holding_ratio": "9.63",
+          "exchange": "SZ"
+        },
+        {
+          "stock_code": "600809",
+          "stock_name": "山西汾酒",
+          "holding_ratio": "9.58",
+          "exchange": "SH"
+        },
+        {
+          "stock_code": "000568",
+          "stock_name": "泸州老窖",
+          "holding_ratio": "9.57",
+          "exchange": "SZ"
+        },
+        {
+          "stock_code": "002027",
+          "stock_name": "分众传媒",
+          "holding_ratio": "4.68",
+          "exchange": "SZ"
+        }
+      ]
+    },
+    {
+      "code": "003095",
+      "name": "中欧医疗健康混合A",
+      "manager": "葛兰、赵磊",
+      "company": "",
+      "nav": "1.7878",
+      "scale": "0",
+      "holdings": [
+        {
+          "stock_code": "603259",
+          "stock_name": "药明康德",
+          "holding_ratio": "10.11",
+          "exchange": "SH"
+        },
+        {
+          "stock_code": "600276",
+          "stock_name": "恒瑞医药",
+          "holding_ratio": "10.08",
+          "exchange": "SH"
+        },
+        {
+          "stock_code": "300759",
+          "stock_name": "康龙化成",
+          "holding_ratio": "7.64",
+          "exchange": "SZ"
+        },
+        {
+          "stock_code": "300347",
+          "stock_name": "泰格医药",
+          "holding_ratio": "6.54",
+          "exchange": "SZ"
+        },
+        {
+          "stock_code": "688506",
+          "stock_name": "百利天恒",
+          "holding_ratio": "6.42",
+          "exchange": "SH"
+        },
+        {
+          "stock_code": "002821",
+          "stock_name": "凯莱英",
+          "holding_ratio": "5.63",
+          "exchange": "SZ"
+        },
+        {
+          "stock_code": "002294",
+          "stock_name": "信立泰",
+          "holding_ratio": "4.87",
+          "exchange": "SZ"
+        },
+        {
+          "stock_code": "002653",
+          "stock_name": "海思科",
+          "holding_ratio": "4.65",
+          "exchange": "SZ"
+        },
+        {
+          "stock_code": "002422",
+          "stock_name": "科伦药业",
+          "holding_ratio": "4.16",
+          "exchange": "SZ"
+        },
+        {
+          "stock_code": "688235",
+          "stock_name": "百济神州",
+          "holding_ratio": "4.1",
+          "exchange": "SH"
+        }
+      ]
+    }
+  ]
+}

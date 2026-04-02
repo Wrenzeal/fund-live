@@ -1,0 +1,623 @@
+@import "tailwindcss";
+
+/* ===== Custom CSS Variables for Theming ===== */
+:root {
+  /* Base colors - Default is Dark theme */
+  --background: #0a0a0f;
+  --foreground: #ededed;
+
+  /* Accent colors - A股配色: 红涨绿跌 */
+  --accent-up: #f43f5e;
+  /* Rose/Red for positive */
+  --accent-down: #10b981;
+  /* Emerald/Green for negative */
+  --accent-primary: #06b6d4;
+  /* Cyan */
+  --accent-secondary: #8b5cf6;
+  /* Purple */
+
+  /* Card colors */
+  --card-bg: rgba(255, 255, 255, 0.05);
+  --card-border: rgba(255, 255, 255, 0.1);
+  --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+
+  /* Text colors */
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-muted: rgba(255, 255, 255, 0.4);
+
+  /* Input colors */
+  --input-bg: rgba(255, 255, 255, 0.16);
+  --input-border: rgba(255, 255, 255, 0.2);
+  --input-focus: rgba(6, 182, 212, 0.5);
+}
+
+/* ===== Classic Theme - Light Mode Fix ===== */
+[data-theme="classic"] {
+  /* 背景使用浅灰，卡片使用纯白形成层次 */
+  --background: #f1f5f9;
+  /* slate-100 - 页面背景 */
+  --foreground: #0f172a;
+  /* slate-900 - 主文字色 */
+
+  /* A股经典配色 */
+  --accent-up: #dc2626;
+  /* red-600 */
+  --accent-down: #16a34a;
+  /* green-600 */
+  --accent-primary: #0284c7;
+  /* sky-600 */
+  --accent-secondary: #7c3aed;
+  /* violet-600 */
+
+  /* 卡片使用纯白 + 边框 + 阴影 */
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+  /* slate-200 */
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+
+  /* 深色文字确保可读性 */
+  --text-primary: #0f172a;
+  /* slate-900 */
+  --text-secondary: #475569;
+  /* slate-600 */
+  --text-muted: #94a3b8;
+  /* slate-400 */
+
+  /* 输入框 */
+  --input-bg: #ffffff;
+  --input-border: #cbd5e1;
+  /* slate-300 */
+  --input-focus: rgba(2, 132, 199, 0.5);
+}
+
+/* Cyber theme - Neon colors */
+[data-theme="cyber"] {
+  --background: #0f0f1a;
+  --foreground: #e0f2fe;
+  --accent-up: #f43296;
+  /* Pink for positive */
+  --accent-down: #22d3ee;
+  /* Cyan for negative */
+  --accent-primary: #06b6d4;
+  --accent-secondary: #c084fc;
+  --card-bg: rgba(6, 182, 212, 0.08);
+  --card-border: rgba(6, 182, 212, 0.25);
+  --card-shadow: 0 0 20px rgba(6, 182, 212, 0.15);
+  --text-primary: #f0f9ff;
+  --text-secondary: rgba(224, 242, 254, 0.7);
+  --text-muted: rgba(224, 242, 254, 0.4);
+  --input-bg: rgba(6, 182, 212, 0.1);
+  --input-border: rgba(6, 182, 212, 0.3);
+  --input-focus: rgba(192, 132, 252, 0.5);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-mono);
+}
+
+/* ===== Base Styles ===== */
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
+}
+
+input,
+textarea,
+select {
+  color: var(--text-primary);
+}
+
+input::selection,
+textarea::selection {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.auth-input-shell {
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.auth-input-shell:focus-within {
+  border-color: var(--input-focus);
+  box-shadow: 0 0 0 1px var(--input-focus);
+}
+
+.auth-input {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.auth-input:-webkit-autofill,
+.auth-input:-webkit-autofill:hover,
+.auth-input:-webkit-autofill:focus,
+.auth-input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--text-primary);
+  caret-color: var(--text-primary);
+  box-shadow: 0 0 0 1000px color-mix(in srgb, var(--input-bg) 88%, transparent) inset;
+  -webkit-box-shadow: 0 0 0 1000px color-mix(in srgb, var(--input-bg) 88%, transparent) inset;
+  transition: background-color 9999s ease-out 0s;
+}
+
+/* Dark theme gradient background */
+[data-theme="dark"] body,
+:root body {
+  background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0a0a0f 100%);
+  background-attachment: fixed;
+}
+
+/* Cyber theme with animated gradient */
+[data-theme="cyber"] body {
+  background: linear-gradient(135deg, #0f0f1a 0%, #1a0a2e 25%, #0a1a2e 50%, #0f1a1a 75%, #0f0f1a 100%);
+  background-size: 400% 400%;
+  animation: gradient-shift 15s ease infinite;
+  background-attachment: fixed;
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Classic theme - clean white/gray background */
+[data-theme="classic"] body {
+  background: #f1f5f9;
+  background-attachment: fixed;
+}
+
+/* ===== Theme-aware utility classes ===== */
+
+/* Glass morphism - adapts to theme */
+.glass {
+  background: var(--card-bg);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+}
+
+.glass-strong {
+  background: color-mix(in srgb, var(--card-bg) 14%, var(--background));
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+}
+
+/* Classic theme specific card styling */
+[data-theme="classic"] .glass,
+[data-theme="classic"] .glass-strong {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+}
+
+/* Theme-aware text colors */
+.text-theme-primary {
+  color: var(--text-primary);
+}
+
+.text-theme-secondary {
+  color: var(--text-secondary);
+}
+
+.text-theme-muted {
+  color: var(--text-muted);
+}
+
+/* Theme-aware accent colors */
+.text-up {
+  color: var(--accent-up);
+}
+
+.text-down {
+  color: var(--accent-down);
+}
+
+.bg-up {
+  background-color: var(--accent-up);
+}
+
+.bg-down {
+  background-color: var(--accent-down);
+}
+
+/* ===== Custom Animations ===== */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 10s linear infinite;
+}
+
+@keyframes pulse-glow {
+
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes holding-delete-button {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0);
+  }
+
+  35% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.28);
+  }
+
+  70% {
+    transform: scale(1.04);
+    box-shadow: 0 0 0 8px rgba(244, 63, 94, 0.12);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0);
+  }
+}
+
+@keyframes holding-delete-icon {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+
+  20% {
+    transform: rotate(-18deg) scale(1.08) translateY(-1px);
+  }
+
+  45% {
+    transform: rotate(12deg) scale(0.94) translateY(1px);
+  }
+
+  65% {
+    transform: rotate(-10deg) scale(1.05) translateY(-1px);
+  }
+
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+.holding-delete-button {
+  animation: holding-delete-button 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.holding-delete-icon {
+  animation: holding-delete-icon 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.danger-button-pop {
+  animation: holding-delete-button 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.danger-button-icon {
+  animation: holding-delete-icon 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes holding-action-button {
+  0% {
+    transform: scale(1);
+    filter: saturate(1);
+  }
+
+  35% {
+    transform: scale(0.985);
+    filter: saturate(1.08);
+  }
+
+  65% {
+    transform: scale(1.015);
+    filter: saturate(1.16);
+  }
+
+  100% {
+    transform: scale(1);
+    filter: saturate(1.08);
+  }
+}
+
+.holding-action-button {
+  animation: holding-action-button 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.action-button-pop {
+  animation: holding-action-button 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.holding-action-shine {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.2) 35%, transparent 70%);
+  opacity: 0;
+  transform: translateX(-130%);
+  transition: opacity 200ms ease;
+}
+
+.group:hover .holding-action-shine,
+.holding-action-button .holding-action-shine {
+  opacity: 1;
+  transform: translateX(130%);
+  transition:
+    transform 650ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease;
+}
+
+.action-button-shine {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.2) 35%, transparent 70%);
+  opacity: 0;
+  transform: translateX(-130%);
+  transition: opacity 200ms ease;
+}
+
+.group:hover .action-button-shine,
+.action-button-pop .action-button-shine,
+.danger-button-pop .action-button-shine {
+  opacity: 1;
+  transform: translateX(130%);
+  transition:
+    transform 650ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease;
+}
+
+@keyframes account-tab-active {
+  0% {
+    transform: translateY(0);
+    letter-spacing: 0;
+  }
+
+  45% {
+    transform: translateY(-1px);
+    letter-spacing: 0.01em;
+  }
+
+  100% {
+    transform: translateY(0);
+    letter-spacing: 0;
+  }
+}
+
+.account-tab-active {
+  animation: account-tab-active 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.account-tab-shine {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.18) 36%, transparent 72%);
+  opacity: 0;
+  transform: translateX(-125%);
+  transition: opacity 200ms ease;
+}
+
+.group:hover .account-tab-shine,
+.group:focus-visible .account-tab-shine {
+  opacity: 1;
+  transform: translateX(125%);
+  transition:
+    transform 560ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease;
+}
+
+.holding-picker-shine {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at top right, rgba(34, 211, 238, 0.18), transparent 42%);
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.group:hover .holding-picker-shine,
+.group:focus-within .holding-picker-shine,
+.group\/field:hover .holding-picker-shine,
+.group\/field:focus-within .holding-picker-shine {
+  opacity: 1;
+}
+
+.holding-picker-shell::after,
+.watchlist-select-shell::after {
+  content: "";
+  position: absolute;
+  inset: auto 14px 0 14px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.32), transparent);
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.holding-picker-shell:hover::after,
+.holding-picker-shell:focus-within::after,
+.watchlist-select-shell:hover::after,
+.watchlist-select-shell:focus-within::after {
+  opacity: 1;
+}
+
+.holding-datetime-input {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  color: var(--text-primary);
+  color-scheme: dark;
+  border: 0;
+}
+
+[data-theme="classic"] .holding-datetime-input {
+  color-scheme: light;
+}
+
+.holding-datetime-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.9;
+  filter: invert(94%) sepia(10%) saturate(322%) hue-rotate(163deg) brightness(88%) contrast(90%);
+}
+
+[data-theme="classic"] .holding-datetime-input::-webkit-calendar-picker-indicator {
+  filter: invert(26%) sepia(13%) saturate(722%) hue-rotate(175deg) brightness(95%) contrast(89%);
+}
+
+.watchlist-select-native {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  color: transparent;
+}
+
+.watchlist-select-native:focus {
+  outline: none;
+}
+
+/* ===== Scrollbar Styles ===== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* ===== Selection Styles ===== */
+::selection {
+  background: var(--accent-primary);
+  color: white;
+}
+
+/* ===== Gradient Text ===== */
+.gradient-text {
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ===== Loading Skeleton ===== */
+.skeleton {
+  background: linear-gradient(90deg, var(--card-bg) 25%, var(--card-border) 50%, var(--card-bg) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ===== Market Status Indicator ===== */
+.market-open {
+  color: #10b981;
+}
+
+.market-closed {
+  color: #f59e0b;
+}
+
+/* Blinking indicator for live trading */
+@keyframes blink {
+
+  0%,
+  50% {
+    opacity: 1;
+  }
+
+  51%,
+  100% {
+    opacity: 0.3;
+  }
+}
+
+.live-indicator {
+  animation: blink 1s infinite;
+}
+
+/* Theme-specific search dropdown opacity */
+[data-theme="dark"] .search-dropdown-panel {
+  background: rgba(36, 36, 63, 1.00);
+  border-color: rgba(255, 255, 255, 0.30);
+}
+
+[data-theme="cyber"] .search-dropdown-panel {
+  background: rgba(15, 15, 26, 1.00);
+  border-color: rgba(6, 182, 212, 0.30);
+}
+
+[data-theme="dark"] .switcher-toggle,
+[data-theme="dark"] .switcher-dropdown-panel {
+  background: rgb(24, 22, 31);
+  border-color: rgba(255, 255, 255, 0.30);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+[data-theme="cyber"] .switcher-toggle,
+[data-theme="cyber"] .switcher-dropdown-panel {
+  background: rgba(15, 15, 26, 1.00);
+  border-color: rgba(6, 182, 212, 0.30);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.search-input {
+  background-color: var(--input-bg);
+}
+
+[data-theme="dark"] .search-input {
+  background-color: rgba(14, 14, 20, 0.92) !important;
+  border-color: rgba(255, 255, 255, 0.18);
+}

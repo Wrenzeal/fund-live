@@ -1,0 +1,29 @@
+# FundLive Project Configuration
+# Copy this file to fundlive.yaml in the project root.
+# Environment variables still override these values when set.
+
+server:
+  port: 8080
+  allowed_origins:
+    - http://127.0.0.1:3000
+    - http://localhost:3000
+
+storage:
+  mode: postgres
+
+database:
+  host: 127.0.0.1
+  port: 5432
+  user: postgres
+  password: your-db-password
+  name: my-db
+  ssl_mode: disable
+  timezone: Asia/Shanghai
+  log_level: warn
+  auto_migrate: false
+
+auth:
+  cookie_name: fundlive_session
+  cookie_secure: false
+  session_ttl_hours: 720
+  google_client_id: ""
