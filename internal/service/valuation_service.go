@@ -1,0 +1,569 @@
+// Package service contains the core business logic implementations.
+package service
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/RomaticDOG/fund/internal/domain"
+	"github.com/RomaticDOG/fund/internal/trading"
+	"github.com/shopspring/decimal"
+)
+
+// ValuationServiceImpl implements the ValuationService interface.
+type ValuationServiceImpl struct {
+	fundRepo      domain.FundRepository
+	quoteProvider domain.QuoteProvider
+	cache         domain.CacheRepository
+	dataLoader    *FundDataLoader
+	profileStore  *ValuationProfileStore
+
+	// FundResolver handles feeder fund to ETF resolution
+	fundResolver *FundResolver
+
+	// Time series storage with date-indexed keys: "fundID:YYYY-MM-DD"
+	// This allows fallback to previous trading day data
+	timeSeriesMu sync.RWMutex
+	timeSeries   map[string][]domain.TimeSeriesPoint // key format: "fundID:2006-01-02"
+
+	// Background collector control
+	stopCollector chan struct{}
+	collectorOnce sync.Once
+
+	// Fund IDs to track (set by StartBackgroundCollector)
+	trackedFunds   []string
+	trackedFundsMu sync.RWMutex
+}
+
+// NewValuationService creates a new ValuationService instance.
+func NewValuationService(
+	fundRepo domain.FundRepository,
+	quoteProvider domain.QuoteProvider,
+	cache domain.CacheRepository,
+) *ValuationServiceImpl {
+	return &ValuationServiceImpl{
+		fundRepo:      fundRepo,
+		quoteProvider: quoteProvider,
+		cache:         cache,
+		dataLoader:    NewFundDataLoader(fundRepo),
+		timeSeries:    make(map[string][]domain.TimeSeriesPoint),
+		stopCollector: make(chan struct{}),
+		trackedFunds:  []string{},
+	}
+}
+
+// SetValuationProfileStore sets the valuation profile store for non-stock funds.
+func (s *ValuationServiceImpl) SetValuationProfileStore(store *ValuationProfileStore) {
+	s.profileStore = store
+}
+
+// SetFundDataLoader overrides the transient fund data loader used by read paths.
+func (s *ValuationServiceImpl) SetFundDataLoader(loader *FundDataLoader) {
+	if loader != nil {
+		s.dataLoader = loader
+	}
+}
+
+// SetFundResolver sets the fund resolver for handling feeder fund resolution.
+// This enables transparent access to target ETF holdings for feeder funds.
+func (s *ValuationServiceImpl) SetFundResolver(resolver *FundResolver) {
+	s.fundResolver = resolver
+}
+
+// StartBackgroundCollector starts a background goroutine that automatically
+// collects time series data for tracked funds during trading hours.
+// This ensures complete data from market open (09:30) regardless of frontend activity.
+// If fundIDs is empty, the collector starts idle and waits for explicit tracking updates.
+func (s *ValuationServiceImpl) StartBackgroundCollector(ctx context.Context, fundIDs []string, interval time.Duration) {
+	s.collectorOnce.Do(func() {
+		s.TrackFundIDs(fundIDs...)
+
+		go s.runBackgroundCollector(ctx, interval)
+		trackedCount := len(s.snapshotTrackedFunds())
+		if trackedCount == 0 {
+			log.Printf("🔄 Background data collector started idle (interval: %s, tracked funds: 0)", interval)
+			return
+		}
+		log.Printf("🔄 Background data collector started (interval: %s, tracked funds: %d)", interval, trackedCount)
+	})
+}
+
+// runBackgroundCollector is the main loop for the background data collector.
+func (s *ValuationServiceImpl) runBackgroundCollector(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	// Do an initial collection immediately
+	s.collectDataForAllFunds(ctx)
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("⏹️ Background collector stopped (context cancelled)")
+			return
+		case <-s.stopCollector:
+			log.Println("⏹️ Background collector stopped")
+			return
+		case <-ticker.C:
+			// Only collect during trading hours
+			if trading.IsTradingHours(time.Now()) {
+				s.collectDataForAllFunds(ctx)
+			}
+		}
+	}
+}
+
+// collectDataForAllFunds fetches estimates for all tracked funds.
+func (s *ValuationServiceImpl) collectDataForAllFunds(ctx context.Context) {
+	funds := s.snapshotTrackedFunds()
+
+	if len(funds) == 0 {
+		return
+	}
+
+	for _, fundID := range funds {
+		_, err := s.CalculateEstimate(ctx, fundID)
+		if err != nil {
+			// Log error but continue with other funds
+			log.Printf("⚠️ Background collector: failed to collect data for %s: %v", fundID, err)
+		}
+	}
+}
+
+// CalculateEstimate computes the real-time fund valuation estimate.
+// This is the core algorithm:
+// 1. Fetch top 10 holdings for the fund (with feeder fund resolution)
+// 2. Concurrently fetch real-time prices using errgroup
+// 3. Calculate weighted average change percent
+// 4. Return the estimate with detailed breakdown
+func (s *ValuationServiceImpl) CalculateEstimate(ctx context.Context, fundID string) (*domain.FundEstimate, error) {
+	// Step 1: Get fund information
+	fund, err := s.fundRepo.GetFundByID(ctx, fundID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get fund: %w", err)
+	}
+	if fund == nil {
+		return nil, fmt.Errorf("fund not found: %s", fundID)
+	}
+
+	// Step 2: Get holdings (with feeder fund resolution)
+	var holdings []domain.StockHolding
+	var holdingsSource string = fundID // Track which fund's holdings we're using
+
+	// First try direct holdings
+	holdings, err = s.fundRepo.GetFundHoldings(ctx, fundID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get holdings: %w", err)
+	}
+
+	// Hydrate valuation-critical data on demand without mutating the database from read requests.
+	if s.dataLoader != nil && needsRuntimeFundData(fund, holdings) {
+		hydratedFund, hydratedHoldings, hydrateErr := s.dataLoader.FetchTransientFundData(ctx, fundID)
+		if hydrateErr != nil {
+			log.Printf("⚠️ On-demand fund hydration failed for %s: %v", fundID, hydrateErr)
+		} else {
+			if hydratedFund != nil {
+				fund = hydratedFund
+			}
+			if len(hydratedHoldings) > 0 {
+				holdings = hydratedHoldings
+			}
+		}
+	}
+
+	// If no holdings and we have a fund resolver, try feeder fund resolution
+	if len(holdings) == 0 && s.fundResolver != nil {
+		holdings, holdingsSource, err = s.fundResolver.GetHoldingsWithFallback(ctx, fundID, fund.Name)
+		if err != nil {
+			log.Printf("⚠️ Feeder fund resolution failed for %s: %v", fundID, err)
+			// Continue with empty holdings - will fail below
+		}
+	}
+
+	if len(holdings) == 0 {
+		// 特殊情况：如果是联接基金，且已解析出目标 ETF，但该 ETF 无持仓（如黄金ETF、QDII ETF）
+		// 此时直接使用目标 ETF 的实时行情作为预估值
+		if holdingsSource != fundID && holdingsSource != "" {
+			log.Printf("📊 Fund %s has no holdings, but tracks ETF %s. Using ETF quote directly.", fundID, holdingsSource)
+			estimate, targetErr := s.calculateEstimateFromTargetETF(ctx, fund, holdingsSource)
+			if targetErr != nil {
+				return nil, targetErr
+			}
+			s.recordTimeSeriesPoint(fundID, estimate)
+			return estimate, nil
+		}
+
+		if estimate, handled, profileErr := s.calculateEstimateFromValuationProfile(ctx, fund); handled {
+			if profileErr != nil {
+				return nil, profileErr
+			}
+			s.recordTimeSeriesPoint(fundID, estimate)
+			return estimate, nil
+		}
+
+		if IsFeederFund(fund.Name) {
+			return nil, fmt.Errorf("no holdings found for feeder fund %s (target ETF resolution may have failed)", fundID)
+		}
+		return nil, fmt.Errorf("no holdings found for fund: %s", fundID)
+	}
+
+	// Log if using fallback holdings
+	if holdingsSource != fundID {
+		log.Printf("📊 Using holdings from target ETF %s for feeder fund %s", holdingsSource, fundID)
+	}
+
+	// Step 3: Get stock codes for quote fetching
+	stockCodes := make([]string, len(holdings))
+	for i, h := range holdings {
+		stockCodes[i] = h.StockCode
+	}
+
+	// Step 4: Fetch real-time quotes (with caching)
+	quotes, err := s.fetchQuotesWithCache(ctx, stockCodes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch quotes: %w", err)
+	}
+
+	// Step 5: Calculate the estimate using precise decimal arithmetic
+	estimate := s.calculateWeightedEstimate(fund, holdings, quotes)
+
+	// Step 6: Store time series point for intraday chart
+	s.recordTimeSeriesPoint(fundID, estimate)
+
+	return estimate, nil
+}
+
+// fetchQuotesWithCache fetches quotes with caching support.
+func (s *ValuationServiceImpl) fetchQuotesWithCache(ctx context.Context, stockCodes []string) (map[string]domain.StockQuote, error) {
+	const cacheKeyPrefix = "quote:"
+	const cacheTTL = 60 // 60 seconds
+
+	result := make(map[string]domain.StockQuote)
+	var uncachedCodes []string
+
+	// Check cache first
+	for _, code := range stockCodes {
+		if cached, found := s.cache.Get(ctx, cacheKeyPrefix+code); found {
+			if quote, ok := cached.(domain.StockQuote); ok {
+				result[code] = quote
+				continue
+			}
+		}
+		uncachedCodes = append(uncachedCodes, code)
+	}
+
+	// If all quotes are cached, return early
+	if len(uncachedCodes) == 0 {
+		return result, nil
+	}
+
+	// Fetch uncached quotes
+	freshQuotes, err := s.quoteProvider.GetRealTimeQuotes(ctx, uncachedCodes)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache the fresh quotes
+	for code, quote := range freshQuotes {
+		result[code] = quote
+		_ = s.cache.Set(ctx, cacheKeyPrefix+code, quote, cacheTTL)
+	}
+
+	return result, nil
+}
+
+// calculateEstimateFromTargetETF estimates fund value using the target ETF's direct quote.
+// This is used for feeder funds tracking ETFs that don't have stock holdings (e.g. Gold ETFs).
+func (s *ValuationServiceImpl) calculateEstimateFromTargetETF(ctx context.Context, fund *domain.Fund, targetCode string) (*domain.FundEstimate, error) {
+	// Fetch quote for the target ETF
+	quotes, err := s.fetchQuotesWithCache(ctx, []string{targetCode})
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch quote for target ETF %s: %w", targetCode, err)
+	}
+
+	quote, ok := quotes[targetCode]
+	if !ok || quote.CurrentPrice.IsZero() {
+		return nil, fmt.Errorf("no quote data for target ETF %s", targetCode)
+	}
+
+	// Calculate estimated NAV based on ETF change
+	nav := fund.NetAssetVal
+	estimatedNav := nav
+	changePercent := quote.ChangePercent
+
+	if !changePercent.IsZero() {
+		changeFactor := decimal.NewFromFloat(1).Add(changePercent.Div(decimal.NewFromFloat(100)))
+		estimatedNav = nav.Mul(changeFactor)
+	}
+
+	// Create a virtual holding detail for the ETF
+	details := []domain.HoldingDetail{
+		{
+			StockCode:    targetCode,
+			StockName:    quote.StockName,
+			HoldingRatio: decimal.NewFromFloat(100.00), // Assume 100% tracking
+			StockChange:  changePercent,
+			Contribution: changePercent, // For 100% holding, contribution equals change
+			CurrentPrice: quote.CurrentPrice,
+			PrevClose:    quote.PrevClose,
+		},
+	}
+
+	now := time.Now()
+	return &domain.FundEstimate{
+		FundID:         fund.ID,
+		FundName:       fund.Name,
+		EstimateNav:    estimatedNav,
+		PrevNav:        nav,
+		ChangePercent:  changePercent,
+		ChangeAmount:   estimatedNav.Sub(nav),
+		CalculatedAt:   now,
+		HoldingDetails: details,
+		TotalHoldRatio: decimal.NewFromFloat(100.00),
+		DataSource:     fmt.Sprintf("追踪目标ETF: %s", quote.StockName),
+	}, nil
+}
+
+// calculateWeightedEstimate performs the core weighted average calculation.
+// Formula: EstimatedChange = Σ(StockChange × HoldingRatio) / Σ(HoldingRatio)
+// All calculations use decimal.Decimal for precision.
+func (s *ValuationServiceImpl) calculateWeightedEstimate(
+	fund *domain.Fund,
+	holdings []domain.StockHolding,
+	quotes map[string]domain.StockQuote,
+) *domain.FundEstimate {
+	estimate := &domain.FundEstimate{
+		FundID:       fund.ID,
+		FundName:     fund.Name,
+		PrevNav:      fund.NetAssetVal,
+		CalculatedAt: time.Now(),
+		DataSource:   "SinaFinance",
+	}
+
+	// Use decimal for all calculations
+	weightedSum := decimal.Zero       // Σ(StockChange × HoldingRatio)
+	totalHoldingRatio := decimal.Zero // Σ(HoldingRatio)
+	hundred := decimal.NewFromInt(100)
+
+	for _, holding := range holdings {
+		quote, exists := quotes[holding.StockCode]
+		if !exists {
+			// Skip stocks without quote data
+			continue
+		}
+
+		// Calculate contribution: (stock_change_percent / 100) * (holding_ratio / 100)
+		// Then multiply by 100 to get percentage contribution
+		holdingRatioDecimal := holding.HoldingRatio.Div(hundred)
+		stockChangeDecimal := quote.ChangePercent.Div(hundred)
+		contribution := stockChangeDecimal.Mul(holdingRatioDecimal).Mul(hundred)
+
+		weightedSum = weightedSum.Add(contribution)
+		totalHoldingRatio = totalHoldingRatio.Add(holding.HoldingRatio)
+
+		// Record detail for frontend display
+		detail := domain.HoldingDetail{
+			StockCode:    holding.StockCode,
+			StockName:    quote.StockName,
+			HoldingRatio: holding.HoldingRatio,
+			StockChange:  quote.ChangePercent,
+			Contribution: contribution.Round(4),
+			CurrentPrice: quote.CurrentPrice,
+			PrevClose:    quote.PrevClose,
+		}
+		estimate.HoldingDetails = append(estimate.HoldingDetails, detail)
+	}
+
+	estimate.TotalHoldRatio = totalHoldingRatio
+
+	// Calculate final change percent with normalization
+	// We normalize by the total holding ratio to account for the unknown portion
+	if !totalHoldingRatio.IsZero() {
+		// Normalized formula: (weightedSum / totalHoldingRatio) * 100
+		// This assumes the non-top-10 holdings behave similarly to top 10
+		normalizedChange := weightedSum.Div(totalHoldingRatio).Mul(hundred)
+		estimate.ChangePercent = normalizedChange.Round(4)
+	}
+
+	// Calculate estimated NAV
+	// EstimateNav = PrevNav × (1 + ChangePercent / 100)
+	if !fund.NetAssetVal.IsZero() {
+		changeFactor := decimal.NewFromInt(1).Add(estimate.ChangePercent.Div(hundred))
+		estimate.EstimateNav = fund.NetAssetVal.Mul(changeFactor).Round(4)
+		estimate.ChangeAmount = estimate.EstimateNav.Sub(fund.NetAssetVal).Round(4)
+	}
+
+	return estimate
+}
+
+// makeTimeSeriesKey creates a composite key for time series storage.
+// Format: "fundID:YYYY-MM-DD"
+func makeTimeSeriesKey(fundID string, date time.Time) string {
+	return fmt.Sprintf("%s:%s", fundID, date.Format("2006-01-02"))
+}
+
+// recordTimeSeriesPoint stores an aligned in-memory time series point for intraday charting.
+// Estimate requests can be much more frequent than the 5-minute chart granularity, so
+// we collapse multiple updates within the same bucket instead of appending raw points.
+func (s *ValuationServiceImpl) recordTimeSeriesPoint(fundID string, estimate *domain.FundEstimate) {
+	s.TrackFundIDs(fundID)
+
+	alignedTimestamp := alignTimeSeriesTimestamp(estimate.CalculatedAt)
+	point := domain.TimeSeriesPoint{
+		Timestamp:     alignedTimestamp,
+		ChangePercent: estimate.ChangePercent,
+		EstimateNav:   estimate.EstimateNav,
+	}
+
+	s.timeSeriesMu.Lock()
+	key := makeTimeSeriesKey(fundID, alignedTimestamp)
+	if s.timeSeries[key] == nil {
+		s.timeSeries[key] = make([]domain.TimeSeriesPoint, 0, 72) // ~6 hours of 5-minute buckets
+	}
+
+	points := s.timeSeries[key]
+	if len(points) > 0 && points[len(points)-1].Timestamp.Equal(alignedTimestamp) {
+		points[len(points)-1] = point
+		s.timeSeries[key] = points
+	} else {
+		s.timeSeries[key] = append(points, point)
+	}
+	s.cleanupOldDates()
+	s.timeSeriesMu.Unlock()
+}
+
+// cleanupOldDates removes time series data older than 7 days.
+func (s *ValuationServiceImpl) cleanupOldDates() {
+	now := time.Now()
+	cutoff := now.AddDate(0, 0, -7)
+
+	for key := range s.timeSeries {
+		// Parse date from key (format: fundID:2006-01-02)
+		parts := key[len(key)-10:] // Last 10 chars = date
+		if dateVal, err := time.Parse("2006-01-02", parts); err == nil {
+			if dateVal.Before(cutoff) {
+				delete(s.timeSeries, key)
+			}
+		}
+	}
+}
+
+// GetIntradayTimeSeries returns the intraday time series for a fund.
+// If persisted points are missing or start too late, it backfills the requested session
+// from external intraday kline data.
+func (s *ValuationServiceImpl) GetIntradayTimeSeries(ctx context.Context, fundID string) ([]domain.TimeSeriesPoint, error) {
+	now := time.Now()
+	targetDate := s.preferredTimeSeriesDate(now)
+	targetKey := makeTimeSeriesKey(fundID, targetDate)
+
+	if points := s.getTimeSeriesForKey(targetKey); len(points) > 0 && !needsTimeSeriesBackfill(points, targetDate, now) {
+		return ensureLunchBreakResumePoint(points), nil
+	}
+
+	if points, err := s.fundRepo.GetTimeSeriesByDate(ctx, fundID, targetDate); err == nil && len(points) > 0 {
+		if !needsTimeSeriesBackfill(points, targetDate, now) {
+			s.cacheTimeSeriesPoints(fundID, points)
+			return ensureLunchBreakResumePoint(points), nil
+		}
+	}
+
+	if points, err := s.backfillTimeSeries(ctx, fundID, targetDate); err == nil && len(points) > 0 {
+		s.cacheTimeSeriesPoints(fundID, points)
+		if err := s.fundRepo.ReplaceTimeSeriesByDate(ctx, fundID, targetDate, points); err != nil {
+			log.Printf("⚠️ Failed to persist backfilled time series for %s: %v", fundID, err)
+		}
+		return ensureLunchBreakResumePoint(points), nil
+	}
+
+	// Fallback: search backwards for up to 7 days to find valid data
+	for i := 1; i <= 7; i++ {
+		prevDate := targetDate.AddDate(0, 0, -i)
+		prevKey := makeTimeSeriesKey(fundID, prevDate)
+		if points := s.getTimeSeriesForKey(prevKey); len(points) > 0 {
+			return ensureLunchBreakResumePoint(points), nil
+		}
+		if points, err := s.fundRepo.GetTimeSeriesByDate(ctx, fundID, prevDate); err == nil && len(points) > 0 {
+			s.cacheTimeSeriesPoints(fundID, points)
+			return ensureLunchBreakResumePoint(points), nil
+		}
+	}
+
+	return []domain.TimeSeriesPoint{}, nil
+}
+
+// cacheTimeSeriesPoints caches time series points in memory for fast access.
+func (s *ValuationServiceImpl) cacheTimeSeriesPoints(fundID string, points []domain.TimeSeriesPoint) {
+	if len(points) == 0 {
+		return
+	}
+
+	s.timeSeriesMu.Lock()
+	defer s.timeSeriesMu.Unlock()
+
+	key := makeTimeSeriesKey(fundID, points[0].Timestamp)
+	s.timeSeries[key] = points
+}
+
+// getTimeSeriesForKey retrieves points for a specific key (thread-safe).
+func (s *ValuationServiceImpl) getTimeSeriesForKey(key string) []domain.TimeSeriesPoint {
+	s.timeSeriesMu.RLock()
+	defer s.timeSeriesMu.RUnlock()
+
+	if points, ok := s.timeSeries[key]; ok && len(points) > 0 {
+		// Return a copy to avoid race conditions
+		result := make([]domain.TimeSeriesPoint, len(points))
+		copy(result, points)
+		return result
+	}
+	return nil
+}
+
+func alignTimeSeriesTimestamp(ts time.Time) time.Time {
+	local := ts.In(trading.TradingLocation())
+	flooredMinute := (local.Minute() / 5) * 5
+	return time.Date(local.Year(), local.Month(), local.Day(), local.Hour(), flooredMinute, 0, 0, trading.TradingLocation())
+}
+
+// TrackFundIDs adds funds to the background collector tracking set.
+func (s *ValuationServiceImpl) TrackFundIDs(fundIDs ...string) {
+	if s == nil {
+		return
+	}
+
+	s.trackedFundsMu.Lock()
+	defer s.trackedFundsMu.Unlock()
+
+	seen := make(map[string]struct{}, len(s.trackedFunds))
+	for _, fundID := range s.trackedFunds {
+		seen[fundID] = struct{}{}
+	}
+
+	for _, fundID := range fundIDs {
+		fundID = strings.TrimSpace(fundID)
+		if fundID == "" {
+			continue
+		}
+		if _, ok := seen[fundID]; ok {
+			continue
+		}
+		seen[fundID] = struct{}{}
+		s.trackedFunds = append(s.trackedFunds, fundID)
+	}
+}
+
+func (s *ValuationServiceImpl) snapshotTrackedFunds() []string {
+	s.trackedFundsMu.RLock()
+	defer s.trackedFundsMu.RUnlock()
+
+	if len(s.trackedFunds) == 0 {
+		return nil
+	}
+
+	funds := make([]string, len(s.trackedFunds))
+	copy(funds, s.trackedFunds)
+	return funds
+}
