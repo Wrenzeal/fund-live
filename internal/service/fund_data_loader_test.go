@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -71,6 +72,7 @@ func TestFundDataLoaderFetchTransientFundDataDoesNotPersist(t *testing.T) {
 		fundRepo: repo,
 		fetcher:  fetcher,
 		cacheTTL: time.Minute,
+		fetchTTL: time.Second,
 		cache:    make(map[string]cachedFundData),
 	}
 
@@ -123,6 +125,7 @@ func TestFundDataLoaderEnsureFundDataPersistsFetchedResult(t *testing.T) {
 		fundRepo: repo,
 		fetcher:  fetcher,
 		cacheTTL: time.Minute,
+		fetchTTL: time.Second,
 		cache:    make(map[string]cachedFundData),
 	}
 
@@ -168,5 +171,49 @@ func TestNeedsRuntimeFundDataIgnoresMissingDisplayFields(t *testing.T) {
 
 	if needsRuntimeFundData(fund, holdings) {
 		t.Fatalf("needsRuntimeFundData() = true, want false when NAV and holdings already exist")
+	}
+}
+
+func TestFundDataLoaderDeduplicatesConcurrentTransientFetches(t *testing.T) {
+	repo := newCountingPersistFundRepository()
+	fetcher := &stubFundDataFetcher{
+		fund: &domain.Fund{
+			ID:          "777777",
+			Name:        "并发基金",
+			Type:        "hybrid",
+			NetAssetVal: decimal.RequireFromString("1.1111"),
+			UpdatedAt:   time.Now(),
+		},
+	}
+	loader := &FundDataLoader{
+		fundRepo: repo,
+		fetcher:  fetcher,
+		cacheTTL: time.Minute,
+		fetchTTL: time.Second,
+		cache:    make(map[string]cachedFundData),
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, err := loader.FetchTransientFundData(context.Background(), "777777")
+			errs <- err
+		}()
+	}
+
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("FetchTransientFundData() error = %v", err)
+		}
+	}
+	if fetcher.calls != 1 {
+		t.Fatalf("fetcher calls = %d, want 1", fetcher.calls)
 	}
 }

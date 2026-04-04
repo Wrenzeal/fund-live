@@ -14,6 +14,7 @@ type Config struct {
 	Server   ServerConfig   `yaml:"server" json:"server"`
 	Storage  StorageConfig  `yaml:"storage" json:"storage"`
 	Database DatabaseConfig `yaml:"database" json:"database"`
+	Quote    QuoteConfig    `yaml:"quote" json:"quote"`
 	Auth     AuthConfig     `yaml:"auth" json:"auth"`
 }
 
@@ -24,6 +25,10 @@ type ServerConfig struct {
 
 type StorageConfig struct {
 	Mode string `yaml:"mode" json:"mode"`
+}
+
+type QuoteConfig struct {
+	DefaultSource string `yaml:"default_source" json:"default_source"`
 }
 
 type DatabaseConfig struct {

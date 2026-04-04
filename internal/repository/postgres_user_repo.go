@@ -75,6 +75,7 @@ func (r *PostgresUserRepository) SaveUser(ctx context.Context, user *domain.User
 			"email",
 			"display_name",
 			"avatar_url",
+			"preferred_quote_source",
 			"password_hash",
 			"google_sub",
 			"provider",
@@ -526,17 +527,18 @@ func (r *PostgresUserRepository) toDomainUser(dbUser *database.User) *domain.Use
 	}
 
 	return &domain.User{
-		ID:            dbUser.ID,
-		Email:         dbUser.Email,
-		DisplayName:   dbUser.DisplayName,
-		AvatarURL:     dbUser.AvatarURL,
-		PasswordHash:  dbUser.PasswordHash,
-		GoogleSub:     googleSub,
-		Provider:      domain.AuthProvider(dbUser.Provider),
-		EmailVerified: dbUser.EmailVerified,
-		LastLoginAt:   dbUser.LastLoginAt,
-		CreatedAt:     dbUser.CreatedAt,
-		UpdatedAt:     dbUser.UpdatedAt,
+		ID:                   dbUser.ID,
+		Email:                dbUser.Email,
+		DisplayName:          dbUser.DisplayName,
+		AvatarURL:            dbUser.AvatarURL,
+		PreferredQuoteSource: domain.NormalizeQuoteSource(dbUser.PreferredQuoteSource),
+		PasswordHash:         dbUser.PasswordHash,
+		GoogleSub:            googleSub,
+		Provider:             domain.AuthProvider(dbUser.Provider),
+		EmailVerified:        dbUser.EmailVerified,
+		LastLoginAt:          dbUser.LastLoginAt,
+		CreatedAt:            dbUser.CreatedAt,
+		UpdatedAt:            dbUser.UpdatedAt,
 	}
 }
 
@@ -547,16 +549,17 @@ func (r *PostgresUserRepository) toDBUser(user *domain.User) *database.User {
 	}
 
 	return &database.User{
-		ID:            user.ID,
-		Email:         user.Email,
-		DisplayName:   user.DisplayName,
-		AvatarURL:     user.AvatarURL,
-		PasswordHash:  user.PasswordHash,
-		GoogleSub:     googleSub,
-		Provider:      string(user.Provider),
-		EmailVerified: user.EmailVerified,
-		LastLoginAt:   user.LastLoginAt,
-		CreatedAt:     user.CreatedAt,
-		UpdatedAt:     user.UpdatedAt,
+		ID:                   user.ID,
+		Email:                user.Email,
+		DisplayName:          user.DisplayName,
+		AvatarURL:            user.AvatarURL,
+		PreferredQuoteSource: string(domain.ResolveQuoteSource(user.PreferredQuoteSource, domain.QuoteSourceSina)),
+		PasswordHash:         user.PasswordHash,
+		GoogleSub:            googleSub,
+		Provider:             string(user.Provider),
+		EmailVerified:        user.EmailVerified,
+		LastLoginAt:          user.LastLoginAt,
+		CreatedAt:            user.CreatedAt,
+		UpdatedAt:            user.UpdatedAt,
 	}
 }

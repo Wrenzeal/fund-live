@@ -17,17 +17,18 @@ const (
 
 // User represents a system user in the domain layer.
 type User struct {
-	ID            string       `json:"id"`
-	Email         string       `json:"email"`
-	DisplayName   string       `json:"display_name"`
-	AvatarURL     string       `json:"avatar_url"`
-	PasswordHash  string       `json:"-"`
-	GoogleSub     string       `json:"-"`
-	Provider      AuthProvider `json:"provider"`
-	EmailVerified bool         `json:"email_verified"`
-	LastLoginAt   *time.Time   `json:"last_login_at,omitempty"`
-	CreatedAt     time.Time    `json:"created_at"`
-	UpdatedAt     time.Time    `json:"updated_at"`
+	ID                   string       `json:"id"`
+	Email                string       `json:"email"`
+	DisplayName          string       `json:"display_name"`
+	AvatarURL            string       `json:"avatar_url"`
+	PreferredQuoteSource QuoteSource  `json:"preferred_quote_source"`
+	PasswordHash         string       `json:"-"`
+	GoogleSub            string       `json:"-"`
+	Provider             AuthProvider `json:"provider"`
+	EmailVerified        bool         `json:"email_verified"`
+	LastLoginAt          *time.Time   `json:"last_login_at,omitempty"`
+	CreatedAt            time.Time    `json:"created_at"`
+	UpdatedAt            time.Time    `json:"updated_at"`
 }
 
 // UserSession represents a server-side authenticated session.

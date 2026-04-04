@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2024.4.3] - 2026-04-03
+
+### Added
+- **用户级行情数据源切换**
+  - 后端新增 `sina` / `tencent` 双行情源支持，未登录用户默认使用 `fundlive.yaml` 中的 `quote.default_source`
+  - 用户模型新增 `preferred_quote_source` 字段，登录用户可绑定自己的默认行情源
+  - 新增受保护接口 `GET /api/v1/user/quote-source` 与 `PUT /api/v1/user/quote-source`
+  - 前端账户菜单新增行情源切换入口，支持登录用户在 `Sina` / `Tencent` 之间切换并即时生效
+
+### Changed
+- **估值与分时缓存按数据源隔离**
+  - 实时行情缓存 key 改为包含数据源维度，避免不同用户的行情源选择互相污染
+  - 分时采集跟踪目标与内存分时 key 改为包含数据源维度，保证同一基金在不同源下独立维护时间序列
+  - 后端 viewer 中间件会在每次请求中解析当前生效的数据源，并注入到估值、持仓和分时链路
+
+### Fixed
+- **盘前实时估值异常归零**
+  - 修复新浪实时快照在盘前 `current=0` 时被直接当作现价使用，导致基金估值显示 `-100%` 的问题
+  - 对新浪行情增加现价回退逻辑：`买一价 -> 卖一价 -> 今开 -> 昨收`
+
+- **用户级行情源切换的持久化缺口**
+  - 为现有 PostgreSQL `tb_user` 表补充 `preferred_quote_source` 列并设置默认值 `sina`
+  - 修复用户登录后切换行情源无法持久化的问题，后续请求会按账号绑定的数据源返回估值结果
+
 ## [2026.4.1] - 2026-04-01
 
 ### Changed

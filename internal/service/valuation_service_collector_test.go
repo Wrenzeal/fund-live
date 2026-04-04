@@ -101,7 +101,10 @@ func TestTrackFundIDsDeduplicatesEntries(t *testing.T) {
 	if len(tracked) != 2 {
 		t.Fatalf("tracked funds len = %d, want 2", len(tracked))
 	}
-	if tracked[0] != "005827" || tracked[1] != "003095" {
+	if tracked[0].FundID != "005827" || tracked[1].FundID != "003095" {
 		t.Fatalf("tracked funds = %#v", tracked)
+	}
+	if tracked[0].Source != domain.QuoteSourceSina || tracked[1].Source != domain.QuoteSourceSina {
+		t.Fatalf("tracked sources = %#v", tracked)
 	}
 }

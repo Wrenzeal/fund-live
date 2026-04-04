@@ -36,6 +36,7 @@ type AuthConfig struct {
 	SessionTouchInterval time.Duration
 	BcryptCost           int
 	GoogleClientID       string
+	DefaultQuoteSource   domain.QuoteSource
 }
 
 // DefaultAuthConfig returns the default authentication configuration.
@@ -46,6 +47,7 @@ func DefaultAuthConfig() AuthConfig {
 		SessionTTL:           30 * 24 * time.Hour,
 		SessionTouchInterval: 5 * time.Minute,
 		BcryptCost:           bcrypt.DefaultCost,
+		DefaultQuoteSource:   domain.QuoteSourceSina,
 	}
 }
 
@@ -76,6 +78,7 @@ func NewAuthService(
 	if config.BcryptCost == 0 {
 		config.BcryptCost = DefaultAuthConfig().BcryptCost
 	}
+	config.DefaultQuoteSource = domain.ResolveQuoteSource(config.DefaultQuoteSource, DefaultAuthConfig().DefaultQuoteSource)
 
 	return &AuthService{
 		userRepo:       userRepo,
@@ -113,15 +116,16 @@ func (s *AuthService) RegisterWithPassword(ctx context.Context, input domain.Pas
 
 	now := s.now()
 	user := &domain.User{
-		ID:            generateID("usr"),
-		Email:         email,
-		DisplayName:   sanitizeDisplayName(input.DisplayName, email),
-		PasswordHash:  string(passwordHash),
-		Provider:      domain.AuthProviderPassword,
-		EmailVerified: false,
-		LastLoginAt:   &now,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ID:                   generateID("usr"),
+		Email:                email,
+		DisplayName:          sanitizeDisplayName(input.DisplayName, email),
+		PreferredQuoteSource: s.config.DefaultQuoteSource,
+		PasswordHash:         string(passwordHash),
+		Provider:             domain.AuthProviderPassword,
+		EmailVerified:        false,
+		LastLoginAt:          &now,
+		CreatedAt:            now,
+		UpdatedAt:            now,
 	}
 
 	if err := s.userRepo.SaveUser(ctx, user); err != nil {
@@ -192,16 +196,17 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, input domain.GoogleLo
 	now := s.now()
 	if user == nil {
 		user = &domain.User{
-			ID:            generateID("usr"),
-			Email:         claims.Email,
-			DisplayName:   sanitizeDisplayName(claims.Name, claims.Email),
-			AvatarURL:     strings.TrimSpace(claims.Picture),
-			GoogleSub:     claims.Subject,
-			Provider:      domain.AuthProviderGoogle,
-			EmailVerified: true,
-			LastLoginAt:   &now,
-			CreatedAt:     now,
-			UpdatedAt:     now,
+			ID:                   generateID("usr"),
+			Email:                claims.Email,
+			DisplayName:          sanitizeDisplayName(claims.Name, claims.Email),
+			AvatarURL:            strings.TrimSpace(claims.Picture),
+			PreferredQuoteSource: s.config.DefaultQuoteSource,
+			GoogleSub:            claims.Subject,
+			Provider:             domain.AuthProviderGoogle,
+			EmailVerified:        true,
+			LastLoginAt:          &now,
+			CreatedAt:            now,
+			UpdatedAt:            now,
 		}
 	} else {
 		user.Email = claims.Email

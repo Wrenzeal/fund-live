@@ -89,6 +89,7 @@ func main() {
 
 	// Initialize cache repository
 	cacheRepo := repository.NewMemoryCacheRepository(60*time.Second, 5*time.Minute)
+	defaultQuoteSource := loadDefaultQuoteSource(fileCfg)
 
 	// Initialize quote provider (Sina Finance)
 	quoteProvider := adapter.NewSinaFinanceProvider()
@@ -96,8 +97,12 @@ func main() {
 
 	// Initialize services
 	valuationService := service.NewValuationService(fundRepo, quoteProvider, cacheRepo)
+	valuationService.SetQuoteProvider(domain.QuoteSourceSina, quoteProvider)
+	valuationService.SetQuoteProvider(domain.QuoteSourceTencent, adapter.NewTencentQuoteProvider())
+	valuationService.SetDefaultQuoteSource(defaultQuoteSource)
 	valuationService.SetFundDataLoader(fundDataLoader)
 	authConfig := loadAuthConfig(fileCfg)
+	authConfig.DefaultQuoteSource = defaultQuoteSource
 	authService := service.NewAuthService(userRepo, sessionRepo, authConfig)
 	userPreferenceService := service.NewUserPreferenceService(fundRepo, favoriteRepo, watchlistRepo, fundHoldingRepo, overrideRepo)
 
@@ -126,7 +131,7 @@ func main() {
 	fundHandler := handler.NewFundHandler(valuationService, fundRepo, fundResolver)
 	fundHandler.SetTransientFundDataLoader(fundDataLoader)
 	authHandler := handler.NewAuthHandler(authService, authConfig.CookieName, authConfig.CookieSecure)
-	userHandler := handler.NewUserHandler(userPreferenceService)
+	userHandler := handler.NewUserHandler(userPreferenceService, userRepo, defaultQuoteSource)
 
 	// Setup Gin router
 	gin.SetMode(gin.ReleaseMode)
@@ -137,6 +142,7 @@ func main() {
 	router.Use(middleware.Logger())
 	router.Use(middleware.Recovery())
 	router.Use(middleware.CORS(allowedOrigins))
+	router.Use(middleware.ResolveViewer(authService, authConfig.CookieName, defaultQuoteSource))
 
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
@@ -168,6 +174,8 @@ func main() {
 		user.Use(middleware.RequireAuth(authService, authConfig.CookieName))
 		{
 			user.GET("/watchlist/groups", userHandler.ListWatchlistGroups)
+			user.GET("/quote-source", userHandler.GetQuoteSource)
+			user.PUT("/quote-source", userHandler.UpdateQuoteSource)
 			user.POST("/watchlist/groups", userHandler.CreateWatchlistGroup)
 			user.DELETE("/watchlist/groups/:groupId", userHandler.DeleteWatchlistGroup)
 			user.POST("/watchlist/groups/:groupId/funds", userHandler.AddWatchlistFund)
@@ -207,8 +215,12 @@ func main() {
 		port = appconfig.NormalizePort(envPort)
 	}
 	server := &http.Server{
-		Addr:    port,
-		Handler: router,
+		Addr:              port,
+		Handler:           router,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      90 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Start server in goroutine
@@ -303,6 +315,17 @@ func loadAuthConfig(fileCfg *appconfig.Config) service.AuthConfig {
 	}
 
 	return cfg
+}
+
+func loadDefaultQuoteSource(fileCfg *appconfig.Config) domain.QuoteSource {
+	source := domain.QuoteSourceSina
+	if fileCfg != nil {
+		source = domain.ResolveQuoteSource(domain.NormalizeQuoteSource(fileCfg.Quote.DefaultSource), source)
+	}
+	if env := os.Getenv("QUOTE_DEFAULT_SOURCE"); env != "" {
+		source = domain.ResolveQuoteSource(domain.NormalizeQuoteSource(env), source)
+	}
+	return source
 }
 
 func loadCORSAllowedOrigins(fileCfg *appconfig.Config) []string {

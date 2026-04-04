@@ -204,6 +204,14 @@ func (s *SinaFinanceProvider) parseBJQuote(stockCode string, fields []string) (d
 		quote.Turnover, _ = parseDecimal(fields[9])
 	}
 
+	quote.CurrentPrice = firstNonZeroDecimal(quote.CurrentPrice, quote.OpenPrice, quote.PrevClose)
+	if quote.HighPrice.IsZero() {
+		quote.HighPrice = quote.CurrentPrice
+	}
+	if quote.LowPrice.IsZero() {
+		quote.LowPrice = quote.CurrentPrice
+	}
+
 	// Calculate change percent and amount
 	if !quote.PrevClose.IsZero() && !quote.CurrentPrice.IsZero() {
 		quote.ChangeAmount = quote.CurrentPrice.Sub(quote.PrevClose)
@@ -271,6 +279,24 @@ func (s *SinaFinanceProvider) parseQuote(stockCode string, fields []string) (dom
 		return quote, err
 	}
 
+	bidPrice, err := parseDecimal(fields[6])
+	if err != nil {
+		return quote, err
+	}
+
+	askPrice, err := parseDecimal(fields[7])
+	if err != nil {
+		return quote, err
+	}
+
+	quote.CurrentPrice = firstNonZeroDecimal(quote.CurrentPrice, bidPrice, askPrice, quote.OpenPrice, quote.PrevClose)
+	if quote.HighPrice.IsZero() {
+		quote.HighPrice = quote.CurrentPrice
+	}
+	if quote.LowPrice.IsZero() {
+		quote.LowPrice = quote.CurrentPrice
+	}
+
 	// Calculate change percent and amount
 	if !quote.PrevClose.IsZero() {
 		quote.ChangeAmount = quote.CurrentPrice.Sub(quote.PrevClose)
@@ -287,4 +313,13 @@ func parseDecimal(s string) (decimal.Decimal, error) {
 		return decimal.Zero, nil
 	}
 	return decimal.NewFromString(s)
+}
+
+func firstNonZeroDecimal(values ...decimal.Decimal) decimal.Decimal {
+	for _, value := range values {
+		if !value.IsZero() {
+			return value
+		}
+	}
+	return decimal.Zero
 }

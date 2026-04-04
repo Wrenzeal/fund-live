@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { ChevronDown, Layers3, Loader2, LogOut, ShieldCheck, Wallet } from 'lucide-react'
+import { Check, ChevronDown, Layers3, Loader2, LogOut, Radio, ShieldCheck, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { logout, useCurrentUser } from '@/hooks/use-auth'
+import { logout, updateQuoteSourcePreference, useCurrentUser, type QuoteSource } from '@/hooks/use-auth'
 
 function getInitials(name: string) {
   const normalized = name.trim()
@@ -24,6 +24,7 @@ export function UserAccountMenu() {
   const { user, isLoading, mutate } = useCurrentUser()
   const [isOpen, setIsOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isUpdatingQuoteSource, setIsUpdatingQuoteSource] = useState(false)
 
   if (isLoading) {
     return (
@@ -73,6 +74,34 @@ export function UserAccountMenu() {
       setIsLoggingOut(false)
     }
   }
+
+  const handleQuoteSourceChange = async (quoteSource: QuoteSource) => {
+    if (isUpdatingQuoteSource || user.preferred_quote_source === quoteSource) {
+      return
+    }
+
+    setIsUpdatingQuoteSource(true)
+    try {
+      const updated = await updateQuoteSourcePreference(quoteSource)
+      await mutate((current) => {
+        if (!current) return current
+        return {
+          ...current,
+          user: {
+            ...current.user,
+            preferred_quote_source: updated.effective_quote_source,
+          },
+        }
+      }, { revalidate: false })
+    } finally {
+      setIsUpdatingQuoteSource(false)
+    }
+  }
+
+  const quoteSources: { id: QuoteSource; label: string; description: string }[] = [
+    { id: 'sina', label: 'Sina', description: '当前默认源，盘口回退更稳' },
+    { id: 'tencent', label: 'Tencent', description: '盘前现价更完整' },
+  ]
 
   return (
     <div className="relative">
@@ -167,6 +196,39 @@ export function UserAccountMenu() {
                     <div className="text-xs text-theme-muted">查看持仓金额与实时预估涨跌额</div>
                   </div>
                 </Link>
+              </div>
+
+              <div className="border-b border-[var(--card-border)] p-2">
+                <div className="px-3 py-2">
+                  <div className="text-xs font-medium tracking-[0.16em] text-theme-muted">行情数据源</div>
+                </div>
+
+                {quoteSources.map((source) => {
+                  const active = user.preferred_quote_source === source.id
+                  return (
+                    <button
+                      key={source.id}
+                      type="button"
+                      onClick={() => void handleQuoteSourceChange(source.id)}
+                      disabled={isUpdatingQuoteSource}
+                      className="flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left transition-colors hover:bg-[var(--input-bg)] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          'rounded-xl p-2',
+                          active ? 'bg-cyan-500/15 text-cyan-300' : 'bg-[var(--input-bg)] text-theme-muted'
+                        )}>
+                          {active ? <Check className="h-4 w-4" /> : <Radio className="h-4 w-4" />}
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-theme-primary">{source.label}</div>
+                          <div className="text-xs text-theme-muted">{source.description}</div>
+                        </div>
+                      </div>
+                      {active && <span className="text-xs text-cyan-300">当前</span>}
+                    </button>
+                  )
+                })}
               </div>
 
               <button

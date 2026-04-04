@@ -10,6 +10,7 @@ import (
 
 	"github.com/RomaticDOG/fund/internal/crawler"
 	"github.com/RomaticDOG/fund/internal/domain"
+	"golang.org/x/sync/singleflight"
 )
 
 type fundDataFetcher interface {
@@ -28,28 +29,34 @@ type FundDataLoader struct {
 	fundRepo domain.FundRepository
 	fetcher  fundDataFetcher
 	cacheTTL time.Duration
+	fetchTTL time.Duration
 
 	cacheMu sync.RWMutex
 	cache   map[string]cachedFundData
+	group   singleflight.Group
 }
 
 // NewFundDataLoader creates a loader for on-demand fund hydration.
 func NewFundDataLoader(fundRepo domain.FundRepository) *FundDataLoader {
-	return NewFundDataLoaderWithFetcher(fundRepo, crawler.NewCrawlService(1), 10*time.Minute)
+	return NewFundDataLoaderWithFetcher(fundRepo, crawler.NewCrawlService(1), 10*time.Minute, 20*time.Second)
 }
 
-// NewFundDataLoaderWithFetcher creates a loader with an injected fetcher and cache TTL.
-func NewFundDataLoaderWithFetcher(fundRepo domain.FundRepository, fetcher fundDataFetcher, cacheTTL time.Duration) *FundDataLoader {
+// NewFundDataLoaderWithFetcher creates a loader with an injected fetcher, cache TTL and fetch timeout.
+func NewFundDataLoaderWithFetcher(fundRepo domain.FundRepository, fetcher fundDataFetcher, cacheTTL, fetchTTL time.Duration) *FundDataLoader {
 	if fetcher == nil {
 		fetcher = crawler.NewCrawlService(1)
 	}
 	if cacheTTL <= 0 {
 		cacheTTL = 10 * time.Minute
 	}
+	if fetchTTL <= 0 {
+		fetchTTL = 20 * time.Second
+	}
 	return &FundDataLoader{
 		fundRepo: fundRepo,
 		fetcher:  fetcher,
 		cacheTTL: cacheTTL,
+		fetchTTL: fetchTTL,
 		cache:    make(map[string]cachedFundData),
 	}
 }
@@ -71,16 +78,38 @@ func (l *FundDataLoader) FetchTransientFundData(ctx context.Context, fundID stri
 		return fund, holdings, nil
 	}
 
-	fund, holdings, err := l.fetcher.FetchFundData(ctx, fundID)
+	type result struct {
+		fund     *domain.Fund
+		holdings []domain.StockHolding
+	}
+	loaded, err, _ := l.group.Do(fundID, func() (interface{}, error) {
+		if cachedFund, cachedHoldings, ok := l.loadCached(fundID, time.Now()); ok {
+			return result{fund: cachedFund, holdings: cachedHoldings}, nil
+		}
+
+		fetchCtx := ctx
+		cancel := func() {}
+		if l.fetchTTL > 0 {
+			fetchCtx, cancel = context.WithTimeout(ctx, l.fetchTTL)
+		}
+		defer cancel()
+
+		fund, holdings, err := l.fetcher.FetchFundData(fetchCtx, fundID)
+		if err != nil {
+			return nil, err
+		}
+		if fund == nil {
+			return nil, fmt.Errorf("crawler returned nil fund for %s", fundID)
+		}
+
+		l.storeCache(fundID, fund, holdings, time.Now())
+		return result{fund: cloneFund(fund), holdings: cloneHoldings(holdings)}, nil
+	})
 	if err != nil {
 		return nil, nil, err
 	}
-	if fund == nil {
-		return nil, nil, fmt.Errorf("crawler returned nil fund for %s", fundID)
-	}
-
-	l.storeCache(fundID, fund, holdings, now)
-	return cloneFund(fund), cloneHoldings(holdings), nil
+	typed := loaded.(result)
+	return cloneFund(typed.fund), cloneHoldings(typed.holdings), nil
 }
 
 // EnsureFundData fetches the latest fund profile and holdings, then stores them in the repository.

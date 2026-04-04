@@ -15,12 +15,20 @@ import (
 // UserHandler handles authenticated user preference requests.
 type UserHandler struct {
 	userPreferenceService domain.UserPreferenceService
+	userRepo              domain.UserRepository
+	defaultQuoteSource    domain.QuoteSource
 }
 
 // NewUserHandler creates a new UserHandler instance.
-func NewUserHandler(userPreferenceService domain.UserPreferenceService) *UserHandler {
+func NewUserHandler(
+	userPreferenceService domain.UserPreferenceService,
+	userRepo domain.UserRepository,
+	defaultQuoteSource domain.QuoteSource,
+) *UserHandler {
 	return &UserHandler{
 		userPreferenceService: userPreferenceService,
+		userRepo:              userRepo,
+		defaultQuoteSource:    domain.ResolveQuoteSource(defaultQuoteSource, domain.QuoteSourceSina),
 	}
 }
 
@@ -58,6 +66,15 @@ type replaceHoldingOverridesRequest struct {
 	Overrides []holdingOverrideRequest `json:"overrides"`
 }
 
+type updateQuoteSourceRequest struct {
+	QuoteSource string `json:"quote_source"`
+}
+
+type quoteSourcePreferenceResponse struct {
+	PreferredQuoteSource domain.QuoteSource `json:"preferred_quote_source"`
+	EffectiveQuoteSource domain.QuoteSource `json:"effective_quote_source"`
+}
+
 // ListWatchlistGroups returns the authenticated user's grouped watchlists.
 func (h *UserHandler) ListWatchlistGroups(c *gin.Context) {
 	user, ok := middleware.CurrentUser(c)
@@ -77,6 +94,96 @@ func (h *UserHandler) ListWatchlistGroups(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, APIResponse{Success: true, Data: groups})
+}
+
+// GetQuoteSource returns the authenticated user's quote source preference.
+func (h *UserHandler) GetQuoteSource(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{
+		Success: true,
+		Data: quoteSourcePreferenceResponse{
+			PreferredQuoteSource: domain.NormalizeQuoteSource(string(user.PreferredQuoteSource)),
+			EffectiveQuoteSource: domain.ResolveQuoteSource(user.PreferredQuoteSource, h.defaultQuoteSource),
+		},
+	})
+}
+
+// UpdateQuoteSource updates the authenticated user's preferred quote source.
+func (h *UserHandler) UpdateQuoteSource(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"},
+		})
+		return
+	}
+
+	var req updateQuoteSourceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_REQUEST", Message: "Invalid quote source payload"},
+		})
+		return
+	}
+
+	quoteSource := domain.NormalizeQuoteSource(req.QuoteSource)
+	if quoteSource == "" {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_QUOTE_SOURCE", Message: "Unsupported quote source"},
+		})
+		return
+	}
+	if h.userRepo == nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "SETTINGS_UNAVAILABLE", Message: "User settings storage is unavailable"},
+		})
+		return
+	}
+
+	currentUser, err := h.userRepo.GetUserByID(c.Request.Context(), user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UPDATE_FAILED", Message: err.Error()},
+		})
+		return
+	}
+	if currentUser == nil {
+		c.JSON(http.StatusNotFound, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "USER_NOT_FOUND", Message: "User not found"},
+		})
+		return
+	}
+
+	currentUser.PreferredQuoteSource = quoteSource
+	if err := h.userRepo.SaveUser(c.Request.Context(), currentUser); err != nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UPDATE_FAILED", Message: err.Error()},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{
+		Success: true,
+		Data: quoteSourcePreferenceResponse{
+			PreferredQuoteSource: quoteSource,
+			EffectiveQuoteSource: domain.ResolveQuoteSource(quoteSource, h.defaultQuoteSource),
+		},
+	})
 }
 
 // CreateWatchlistGroup creates a named watchlist bucket for the authenticated user.

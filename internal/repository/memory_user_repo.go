@@ -93,6 +93,7 @@ func (r *MemoryUserRepository) SaveUser(ctx context.Context, user *domain.User) 
 	user.UpdatedAt = now
 
 	copyUser := *user
+	copyUser.PreferredQuoteSource = domain.ResolveQuoteSource(user.PreferredQuoteSource, domain.QuoteSourceSina)
 	r.users[user.ID] = &copyUser
 	r.usersByEmail[strings.ToLower(user.Email)] = user.ID
 	if user.GoogleSub != "" {

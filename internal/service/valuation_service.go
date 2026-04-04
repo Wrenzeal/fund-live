@@ -16,11 +16,13 @@ import (
 
 // ValuationServiceImpl implements the ValuationService interface.
 type ValuationServiceImpl struct {
-	fundRepo      domain.FundRepository
-	quoteProvider domain.QuoteProvider
-	cache         domain.CacheRepository
-	dataLoader    *FundDataLoader
-	profileStore  *ValuationProfileStore
+	fundRepo           domain.FundRepository
+	quoteProvider      domain.QuoteProvider
+	quoteProviders     map[domain.QuoteSource]domain.QuoteProvider
+	defaultQuoteSource domain.QuoteSource
+	cache              domain.CacheRepository
+	dataLoader         *FundDataLoader
+	profileStore       *ValuationProfileStore
 
 	// FundResolver handles feeder fund to ETF resolution
 	fundResolver *FundResolver
@@ -35,8 +37,13 @@ type ValuationServiceImpl struct {
 	collectorOnce sync.Once
 
 	// Fund IDs to track (set by StartBackgroundCollector)
-	trackedFunds   []string
+	trackedFunds   []trackedFundTarget
 	trackedFundsMu sync.RWMutex
+}
+
+type trackedFundTarget struct {
+	FundID string
+	Source domain.QuoteSource
 }
 
 // NewValuationService creates a new ValuationService instance.
@@ -46,13 +53,15 @@ func NewValuationService(
 	cache domain.CacheRepository,
 ) *ValuationServiceImpl {
 	return &ValuationServiceImpl{
-		fundRepo:      fundRepo,
-		quoteProvider: quoteProvider,
-		cache:         cache,
-		dataLoader:    NewFundDataLoader(fundRepo),
-		timeSeries:    make(map[string][]domain.TimeSeriesPoint),
-		stopCollector: make(chan struct{}),
-		trackedFunds:  []string{},
+		fundRepo:           fundRepo,
+		quoteProvider:      quoteProvider,
+		quoteProviders:     map[domain.QuoteSource]domain.QuoteProvider{domain.QuoteSourceSina: quoteProvider},
+		defaultQuoteSource: domain.QuoteSourceSina,
+		cache:              cache,
+		dataLoader:         NewFundDataLoader(fundRepo),
+		timeSeries:         make(map[string][]domain.TimeSeriesPoint),
+		stopCollector:      make(chan struct{}),
+		trackedFunds:       []trackedFundTarget{},
 	}
 }
 
@@ -65,6 +74,34 @@ func (s *ValuationServiceImpl) SetValuationProfileStore(store *ValuationProfileS
 func (s *ValuationServiceImpl) SetFundDataLoader(loader *FundDataLoader) {
 	if loader != nil {
 		s.dataLoader = loader
+	}
+}
+
+// SetQuoteProvider registers a quote provider for a specific source.
+func (s *ValuationServiceImpl) SetQuoteProvider(source domain.QuoteSource, provider domain.QuoteProvider) {
+	if s == nil || provider == nil {
+		return
+	}
+
+	source = domain.ResolveQuoteSource(source, s.defaultQuoteSource)
+	if s.quoteProviders == nil {
+		s.quoteProviders = make(map[domain.QuoteSource]domain.QuoteProvider)
+	}
+	s.quoteProviders[source] = provider
+	if source == s.defaultQuoteSource || s.quoteProvider == nil {
+		s.quoteProvider = provider
+	}
+}
+
+// SetDefaultQuoteSource overrides the fallback source used when the request has no user-specific preference.
+func (s *ValuationServiceImpl) SetDefaultQuoteSource(source domain.QuoteSource) {
+	if s == nil {
+		return
+	}
+
+	s.defaultQuoteSource = domain.ResolveQuoteSource(source, domain.QuoteSourceSina)
+	if provider, ok := s.quoteProviders[s.defaultQuoteSource]; ok {
+		s.quoteProvider = provider
 	}
 }
 
@@ -88,7 +125,7 @@ func (s *ValuationServiceImpl) StartBackgroundCollector(ctx context.Context, fun
 			log.Printf("🔄 Background data collector started idle (interval: %s, tracked funds: 0)", interval)
 			return
 		}
-		log.Printf("🔄 Background data collector started (interval: %s, tracked funds: %d)", interval, trackedCount)
+		log.Printf("🔄 Background data collector started (interval: %s, tracked targets: %d)", interval, trackedCount)
 	})
 }
 
@@ -125,11 +162,12 @@ func (s *ValuationServiceImpl) collectDataForAllFunds(ctx context.Context) {
 		return
 	}
 
-	for _, fundID := range funds {
-		_, err := s.CalculateEstimate(ctx, fundID)
+	for _, target := range funds {
+		targetCtx := domain.WithQuoteSource(ctx, target.Source)
+		_, err := s.CalculateEstimate(targetCtx, target.FundID)
 		if err != nil {
 			// Log error but continue with other funds
-			log.Printf("⚠️ Background collector: failed to collect data for %s: %v", fundID, err)
+			log.Printf("⚠️ Background collector: failed to collect data for %s[%s]: %v", target.FundID, target.Source, err)
 		}
 	}
 }
@@ -187,13 +225,14 @@ func (s *ValuationServiceImpl) CalculateEstimate(ctx context.Context, fundID str
 	if len(holdings) == 0 {
 		// 特殊情况：如果是联接基金，且已解析出目标 ETF，但该 ETF 无持仓（如黄金ETF、QDII ETF）
 		// 此时直接使用目标 ETF 的实时行情作为预估值
+		quoteSource, _ := s.resolveQuoteProvider(ctx)
 		if holdingsSource != fundID && holdingsSource != "" {
 			log.Printf("📊 Fund %s has no holdings, but tracks ETF %s. Using ETF quote directly.", fundID, holdingsSource)
-			estimate, targetErr := s.calculateEstimateFromTargetETF(ctx, fund, holdingsSource)
+			estimate, targetErr := s.calculateEstimateFromTargetETF(ctx, fund, holdingsSource, quoteSource)
 			if targetErr != nil {
 				return nil, targetErr
 			}
-			s.recordTimeSeriesPoint(fundID, estimate)
+			s.recordTimeSeriesPoint(fundID, quoteSource, estimate)
 			return estimate, nil
 		}
 
@@ -201,7 +240,7 @@ func (s *ValuationServiceImpl) CalculateEstimate(ctx context.Context, fundID str
 			if profileErr != nil {
 				return nil, profileErr
 			}
-			s.recordTimeSeriesPoint(fundID, estimate)
+			s.recordTimeSeriesPoint(fundID, domain.QuoteSourceFromContext(ctx), estimate)
 			return estimate, nil
 		}
 
@@ -228,19 +267,25 @@ func (s *ValuationServiceImpl) CalculateEstimate(ctx context.Context, fundID str
 		return nil, fmt.Errorf("failed to fetch quotes: %w", err)
 	}
 
+	quoteSource, _ := s.resolveQuoteProvider(ctx)
+
 	// Step 5: Calculate the estimate using precise decimal arithmetic
-	estimate := s.calculateWeightedEstimate(fund, holdings, quotes)
+	estimate := s.calculateWeightedEstimate(fund, holdings, quotes, quoteSource)
 
 	// Step 6: Store time series point for intraday chart
-	s.recordTimeSeriesPoint(fundID, estimate)
+	s.recordTimeSeriesPoint(fundID, quoteSource, estimate)
 
 	return estimate, nil
 }
 
 // fetchQuotesWithCache fetches quotes with caching support.
 func (s *ValuationServiceImpl) fetchQuotesWithCache(ctx context.Context, stockCodes []string) (map[string]domain.StockQuote, error) {
-	const cacheKeyPrefix = "quote:"
 	const cacheTTL = 60 // 60 seconds
+	source, provider := s.resolveQuoteProvider(ctx)
+	if provider == nil {
+		return nil, fmt.Errorf("quote provider not configured for source %s", source)
+	}
+	cacheKeyPrefix := fmt.Sprintf("quote:%s:", source)
 
 	result := make(map[string]domain.StockQuote)
 	var uncachedCodes []string
@@ -262,7 +307,7 @@ func (s *ValuationServiceImpl) fetchQuotesWithCache(ctx context.Context, stockCo
 	}
 
 	// Fetch uncached quotes
-	freshQuotes, err := s.quoteProvider.GetRealTimeQuotes(ctx, uncachedCodes)
+	freshQuotes, err := provider.GetRealTimeQuotes(ctx, uncachedCodes)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +323,7 @@ func (s *ValuationServiceImpl) fetchQuotesWithCache(ctx context.Context, stockCo
 
 // calculateEstimateFromTargetETF estimates fund value using the target ETF's direct quote.
 // This is used for feeder funds tracking ETFs that don't have stock holdings (e.g. Gold ETFs).
-func (s *ValuationServiceImpl) calculateEstimateFromTargetETF(ctx context.Context, fund *domain.Fund, targetCode string) (*domain.FundEstimate, error) {
+func (s *ValuationServiceImpl) calculateEstimateFromTargetETF(ctx context.Context, fund *domain.Fund, targetCode string, source domain.QuoteSource) (*domain.FundEstimate, error) {
 	// Fetch quote for the target ETF
 	quotes, err := s.fetchQuotesWithCache(ctx, []string{targetCode})
 	if err != nil {
@@ -335,13 +380,14 @@ func (s *ValuationServiceImpl) calculateWeightedEstimate(
 	fund *domain.Fund,
 	holdings []domain.StockHolding,
 	quotes map[string]domain.StockQuote,
+	source domain.QuoteSource,
 ) *domain.FundEstimate {
 	estimate := &domain.FundEstimate{
 		FundID:       fund.ID,
 		FundName:     fund.Name,
 		PrevNav:      fund.NetAssetVal,
 		CalculatedAt: time.Now(),
-		DataSource:   "SinaFinance",
+		DataSource:   string(source),
 	}
 
 	// Use decimal for all calculations
@@ -402,15 +448,15 @@ func (s *ValuationServiceImpl) calculateWeightedEstimate(
 
 // makeTimeSeriesKey creates a composite key for time series storage.
 // Format: "fundID:YYYY-MM-DD"
-func makeTimeSeriesKey(fundID string, date time.Time) string {
-	return fmt.Sprintf("%s:%s", fundID, date.Format("2006-01-02"))
+func makeTimeSeriesKey(source domain.QuoteSource, fundID string, date time.Time) string {
+	return fmt.Sprintf("%s:%s:%s", source, fundID, date.Format("2006-01-02"))
 }
 
 // recordTimeSeriesPoint stores an aligned in-memory time series point for intraday charting.
 // Estimate requests can be much more frequent than the 5-minute chart granularity, so
 // we collapse multiple updates within the same bucket instead of appending raw points.
-func (s *ValuationServiceImpl) recordTimeSeriesPoint(fundID string, estimate *domain.FundEstimate) {
-	s.TrackFundIDs(fundID)
+func (s *ValuationServiceImpl) recordTimeSeriesPoint(fundID string, source domain.QuoteSource, estimate *domain.FundEstimate) {
+	s.TrackFundsForSource(source, fundID)
 
 	alignedTimestamp := alignTimeSeriesTimestamp(estimate.CalculatedAt)
 	point := domain.TimeSeriesPoint{
@@ -420,7 +466,7 @@ func (s *ValuationServiceImpl) recordTimeSeriesPoint(fundID string, estimate *do
 	}
 
 	s.timeSeriesMu.Lock()
-	key := makeTimeSeriesKey(fundID, alignedTimestamp)
+	key := makeTimeSeriesKey(source, fundID, alignedTimestamp)
 	if s.timeSeries[key] == nil {
 		s.timeSeries[key] = make([]domain.TimeSeriesPoint, 0, 72) // ~6 hours of 5-minute buckets
 	}
@@ -458,7 +504,8 @@ func (s *ValuationServiceImpl) cleanupOldDates() {
 func (s *ValuationServiceImpl) GetIntradayTimeSeries(ctx context.Context, fundID string) ([]domain.TimeSeriesPoint, error) {
 	now := time.Now()
 	targetDate := s.preferredTimeSeriesDate(now)
-	targetKey := makeTimeSeriesKey(fundID, targetDate)
+	quoteSource, _ := s.resolveQuoteProvider(ctx)
+	targetKey := makeTimeSeriesKey(quoteSource, fundID, targetDate)
 
 	if points := s.getTimeSeriesForKey(targetKey); len(points) > 0 && !needsTimeSeriesBackfill(points, targetDate, now) {
 		return ensureLunchBreakResumePoint(points), nil
@@ -466,13 +513,13 @@ func (s *ValuationServiceImpl) GetIntradayTimeSeries(ctx context.Context, fundID
 
 	if points, err := s.fundRepo.GetTimeSeriesByDate(ctx, fundID, targetDate); err == nil && len(points) > 0 {
 		if !needsTimeSeriesBackfill(points, targetDate, now) {
-			s.cacheTimeSeriesPoints(fundID, points)
+			s.cacheTimeSeriesPoints(fundID, quoteSource, points)
 			return ensureLunchBreakResumePoint(points), nil
 		}
 	}
 
 	if points, err := s.backfillTimeSeries(ctx, fundID, targetDate); err == nil && len(points) > 0 {
-		s.cacheTimeSeriesPoints(fundID, points)
+		s.cacheTimeSeriesPoints(fundID, quoteSource, points)
 		if err := s.fundRepo.ReplaceTimeSeriesByDate(ctx, fundID, targetDate, points); err != nil {
 			log.Printf("⚠️ Failed to persist backfilled time series for %s: %v", fundID, err)
 		}
@@ -482,12 +529,12 @@ func (s *ValuationServiceImpl) GetIntradayTimeSeries(ctx context.Context, fundID
 	// Fallback: search backwards for up to 7 days to find valid data
 	for i := 1; i <= 7; i++ {
 		prevDate := targetDate.AddDate(0, 0, -i)
-		prevKey := makeTimeSeriesKey(fundID, prevDate)
+		prevKey := makeTimeSeriesKey(quoteSource, fundID, prevDate)
 		if points := s.getTimeSeriesForKey(prevKey); len(points) > 0 {
 			return ensureLunchBreakResumePoint(points), nil
 		}
 		if points, err := s.fundRepo.GetTimeSeriesByDate(ctx, fundID, prevDate); err == nil && len(points) > 0 {
-			s.cacheTimeSeriesPoints(fundID, points)
+			s.cacheTimeSeriesPoints(fundID, quoteSource, points)
 			return ensureLunchBreakResumePoint(points), nil
 		}
 	}
@@ -496,7 +543,7 @@ func (s *ValuationServiceImpl) GetIntradayTimeSeries(ctx context.Context, fundID
 }
 
 // cacheTimeSeriesPoints caches time series points in memory for fast access.
-func (s *ValuationServiceImpl) cacheTimeSeriesPoints(fundID string, points []domain.TimeSeriesPoint) {
+func (s *ValuationServiceImpl) cacheTimeSeriesPoints(fundID string, source domain.QuoteSource, points []domain.TimeSeriesPoint) {
 	if len(points) == 0 {
 		return
 	}
@@ -504,7 +551,7 @@ func (s *ValuationServiceImpl) cacheTimeSeriesPoints(fundID string, points []dom
 	s.timeSeriesMu.Lock()
 	defer s.timeSeriesMu.Unlock()
 
-	key := makeTimeSeriesKey(fundID, points[0].Timestamp)
+	key := makeTimeSeriesKey(source, fundID, points[0].Timestamp)
 	s.timeSeries[key] = points
 }
 
@@ -530,16 +577,22 @@ func alignTimeSeriesTimestamp(ts time.Time) time.Time {
 
 // TrackFundIDs adds funds to the background collector tracking set.
 func (s *ValuationServiceImpl) TrackFundIDs(fundIDs ...string) {
+	s.TrackFundsForSource(s.defaultQuoteSource, fundIDs...)
+}
+
+// TrackFundsForSource adds funds for a specific quote source to the background collector tracking set.
+func (s *ValuationServiceImpl) TrackFundsForSource(source domain.QuoteSource, fundIDs ...string) {
 	if s == nil {
 		return
 	}
 
+	source = domain.ResolveQuoteSource(source, s.defaultQuoteSource)
 	s.trackedFundsMu.Lock()
 	defer s.trackedFundsMu.Unlock()
 
 	seen := make(map[string]struct{}, len(s.trackedFunds))
-	for _, fundID := range s.trackedFunds {
-		seen[fundID] = struct{}{}
+	for _, target := range s.trackedFunds {
+		seen[string(target.Source)+"|"+target.FundID] = struct{}{}
 	}
 
 	for _, fundID := range fundIDs {
@@ -547,15 +600,16 @@ func (s *ValuationServiceImpl) TrackFundIDs(fundIDs ...string) {
 		if fundID == "" {
 			continue
 		}
-		if _, ok := seen[fundID]; ok {
+		seenKey := string(source) + "|" + fundID
+		if _, ok := seen[seenKey]; ok {
 			continue
 		}
-		seen[fundID] = struct{}{}
-		s.trackedFunds = append(s.trackedFunds, fundID)
+		seen[seenKey] = struct{}{}
+		s.trackedFunds = append(s.trackedFunds, trackedFundTarget{FundID: fundID, Source: source})
 	}
 }
 
-func (s *ValuationServiceImpl) snapshotTrackedFunds() []string {
+func (s *ValuationServiceImpl) snapshotTrackedFunds() []trackedFundTarget {
 	s.trackedFundsMu.RLock()
 	defer s.trackedFundsMu.RUnlock()
 
@@ -563,7 +617,18 @@ func (s *ValuationServiceImpl) snapshotTrackedFunds() []string {
 		return nil
 	}
 
-	funds := make([]string, len(s.trackedFunds))
+	funds := make([]trackedFundTarget, len(s.trackedFunds))
 	copy(funds, s.trackedFunds)
 	return funds
+}
+
+func (s *ValuationServiceImpl) resolveQuoteProvider(ctx context.Context) (domain.QuoteSource, domain.QuoteProvider) {
+	source := domain.ResolveQuoteSource(domain.QuoteSourceFromContext(ctx), s.defaultQuoteSource)
+	if provider, ok := s.quoteProviders[source]; ok && provider != nil {
+		return source, provider
+	}
+	if s.quoteProvider != nil {
+		return source, s.quoteProvider
+	}
+	return source, nil
 }

@@ -10,13 +10,21 @@ import (
 )
 
 const (
-	currentUserKey    = "current_user"
-	currentSessionKey = "current_session"
+	currentUserKey        = "current_user"
+	currentSessionKey     = "current_session"
+	currentQuoteSourceKey = "current_quote_source"
 )
 
 // RequireAuth validates the session cookie and injects the user into the request context.
 func RequireAuth(authService domain.AuthenticationService, cookieName string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if user, ok := CurrentUser(c); ok && user != nil {
+			if session, ok := CurrentSession(c); ok && session != nil {
+				c.Next()
+				return
+			}
+		}
+
 		sessionToken, err := c.Cookie(cookieName)
 		if err != nil || sessionToken == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
@@ -73,4 +81,15 @@ func CurrentSession(c *gin.Context) (*domain.UserSession, bool) {
 
 	session, ok := value.(*domain.UserSession)
 	return session, ok
+}
+
+// CurrentQuoteSource extracts the resolved quote source from Gin context.
+func CurrentQuoteSource(c *gin.Context) (domain.QuoteSource, bool) {
+	value, ok := c.Get(currentQuoteSourceKey)
+	if !ok {
+		return domain.QuoteSourceSina, false
+	}
+
+	source, ok := value.(domain.QuoteSource)
+	return source, ok
 }

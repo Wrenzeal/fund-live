@@ -1,0 +1,41 @@
+# --- 编译产物 (重点：解决你报错的原因) ---
+target/
+bin/
+build/
+out/
+*.tar.gz
+*.zip
+*.war
+*.ear
+*.jar
+
+# --- 操作系统临时文件 ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- IDE / 编辑器配置 ---
+.idea/
+*.iml
+.vscode/
+.settings/
+.project/
+.classpath/
+*.sublime-workspace
+*.sublime-project
+
+# --- 日志文件 ---
+*.log
+logs/
+temp/
+
+# --- 依赖包 (如果是 Node.js 项目) ---
+node_modules/
+dist/
+
+# --- 环境配置文件 (敏感信息) ---
+.env
+.env.local
+*.properties
+!src/main/resources/*.properties
+fundlive.yaml

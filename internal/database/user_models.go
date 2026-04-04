@@ -8,17 +8,18 @@ import (
 
 // User is the GORM model for application users.
 type User struct {
-	ID            string     `gorm:"primaryKey;type:varchar(40)" json:"id"`
-	Email         string     `gorm:"type:varchar(255);uniqueIndex;not null" json:"email"`
-	DisplayName   string     `gorm:"type:varchar(100);not null" json:"display_name"`
-	AvatarURL     string     `gorm:"type:text" json:"avatar_url"`
-	PasswordHash  string     `gorm:"type:varchar(255)" json:"-"`
-	GoogleSub     *string    `gorm:"type:varchar(255);uniqueIndex" json:"-"`
-	Provider      string     `gorm:"type:varchar(20);index;not null" json:"provider"`
-	EmailVerified bool       `gorm:"default:false" json:"email_verified"`
-	LastLoginAt   *time.Time `json:"last_login_at,omitempty"`
-	CreatedAt     time.Time  `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt     time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
+	ID                   string     `gorm:"primaryKey;type:varchar(40)" json:"id"`
+	Email                string     `gorm:"type:varchar(255);uniqueIndex;not null" json:"email"`
+	DisplayName          string     `gorm:"type:varchar(100);not null" json:"display_name"`
+	AvatarURL            string     `gorm:"type:text" json:"avatar_url"`
+	PreferredQuoteSource string     `gorm:"type:varchar(20);default:'sina'" json:"preferred_quote_source"`
+	PasswordHash         string     `gorm:"type:varchar(255)" json:"-"`
+	GoogleSub            *string    `gorm:"type:varchar(255);uniqueIndex" json:"-"`
+	Provider             string     `gorm:"type:varchar(20);index;not null" json:"provider"`
+	EmailVerified        bool       `gorm:"default:false" json:"email_verified"`
+	LastLoginAt          *time.Time `json:"last_login_at,omitempty"`
+	CreatedAt            time.Time  `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt            time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 func (User) TableName() string {

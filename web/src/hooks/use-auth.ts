@@ -4,11 +4,14 @@ import useSWR from 'swr'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
+export type QuoteSource = 'sina' | 'tencent'
+
 export interface AuthUser {
   id: string
   email: string
   display_name: string
   avatar_url: string
+  preferred_quote_source: QuoteSource
   provider: 'password' | 'google' | 'hybrid'
   email_verified: boolean
   last_login_at?: string
@@ -34,6 +37,11 @@ interface PasswordAuthPayload {
   email: string
   password: string
   display_name?: string
+}
+
+interface QuoteSourcePreferenceResponse {
+  preferred_quote_source: QuoteSource
+  effective_quote_source: QuoteSource
 }
 
 async function fetchAuth<T>(url: string): Promise<T | null> {
@@ -108,5 +116,11 @@ export async function logout() {
   await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
     method: 'POST',
     credentials: 'include',
+  })
+}
+
+export function updateQuoteSourcePreference(quoteSource: QuoteSource) {
+  return postAuth<QuoteSourcePreferenceResponse>('/api/v1/user/quote-source', {
+    quote_source: quoteSource,
   })
 }
