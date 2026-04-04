@@ -113,13 +113,13 @@ type FundTimeSeries struct {
 	ID uint `gorm:"primaryKey;autoIncrement" json:"id"`
 
 	// FundID 基金代码
-	FundID string `gorm:"type:varchar(10);index:idx_fund_time,priority:1;not null" json:"fund_id"`
+	FundID string `gorm:"type:varchar(10);index:idx_fund_time,priority:1;uniqueIndex:uq_fund_time_series_fund_id_time,priority:1;not null" json:"fund_id"`
 
 	// Date 交易日期
 	Date time.Time `gorm:"type:date;index:idx_fund_time,priority:2;not null" json:"date"`
 
 	// Time 采集时间点
-	Time time.Time `gorm:"index:idx_fund_time,priority:3;not null" json:"time"`
+	Time time.Time `gorm:"index:idx_fund_time,priority:3;uniqueIndex:uq_fund_time_series_fund_id_time,priority:2;not null" json:"time"`
 
 	// ChangePercent 该时间点的预估涨跌幅（%）
 	ChangePercent decimal.Decimal `gorm:"type:decimal(8,4)" json:"change_percent"`
@@ -139,8 +139,8 @@ func (FundTimeSeries) TableName() string {
 // FundHistory stores official end-of-day NAV snapshots and daily returns.
 type FundHistory struct {
 	ID          uint            `gorm:"primaryKey;autoIncrement" json:"id"`
-	FundID      string          `gorm:"type:varchar(10);index:idx_fund_date,priority:1;not null" json:"fund_id"`
-	Date        time.Time       `gorm:"type:date;index:idx_fund_date,priority:2;not null" json:"date"`
+	FundID      string          `gorm:"type:varchar(10);index:idx_fund_date,priority:1;uniqueIndex:uq_fund_history_fund_id_date,priority:1;not null" json:"fund_id"`
+	Date        time.Time       `gorm:"type:date;index:idx_fund_date,priority:2;uniqueIndex:uq_fund_history_fund_id_date,priority:2;not null" json:"date"`
 	NetAssetVal decimal.Decimal `gorm:"type:decimal(10,4)" json:"net_asset_val"`
 	AccumVal    decimal.Decimal `gorm:"type:decimal(10,4)" json:"accum_val"`
 	DailyReturn decimal.Decimal `gorm:"type:decimal(8,4)" json:"daily_return"`

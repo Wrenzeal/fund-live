@@ -61,7 +61,7 @@ async function fetchAuth<T>(url: string): Promise<T | null> {
   return json.data ?? null
 }
 
-async function postAuth<T>(path: string, payload?: object, method: 'POST' | 'GET' = 'POST'): Promise<T> {
+async function postAuth<T>(path: string, payload?: object, method: 'POST' | 'PUT' | 'GET' = 'POST'): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method,
     credentials: 'include',
@@ -122,5 +122,5 @@ export async function logout() {
 export function updateQuoteSourcePreference(quoteSource: QuoteSource) {
   return postAuth<QuoteSourcePreferenceResponse>('/api/v1/user/quote-source', {
     quote_source: quoteSource,
-  })
+  }, 'PUT')
 }

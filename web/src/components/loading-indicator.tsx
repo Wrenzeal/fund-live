@@ -66,9 +66,10 @@ export function LoadingOverlay({ isLoading, text = '加载中...', children }: L
 interface FundLoadingIndicatorProps {
     isVisible: boolean
     fundName?: string
+    detailText?: string
 }
 
-export function FundLoadingIndicator({ isVisible, fundName }: FundLoadingIndicatorProps) {
+export function FundLoadingIndicator({ isVisible, fundName, detailText }: FundLoadingIndicatorProps) {
     if (!isVisible) return null
 
     return (
@@ -106,7 +107,7 @@ export function FundLoadingIndicator({ isVisible, fundName }: FundLoadingIndicat
                     {fundName ? `正在加载 ${fundName}` : '正在加载基金数据'}
                 </h3>
                 <p className="text-sm text-theme-secondary mb-4">
-                    正在获取实时估值和持仓数据...
+                    {detailText || '正在获取实时估值和持仓数据...'}
                 </p>
 
                 {/* Progress dots */}

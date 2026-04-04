@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.4.4] - 2026-04-04
+
+### Added
+- **受控数据库 migration 与唯一约束**
+  - 新增 `schema_migrations` 记录表，用于追踪已应用的 SQL migration
+  - 新增基金搜索 migration，统一保障 `pg_trgm` 扩展、基金代码 pattern 索引和名称 / 经理 trigram 索引
+  - 新增 `fund_history(fund_id, date)` 与 `fund_time_series(fund_id, time)` 的唯一索引 migration
+
+### Changed
+- **冷数据补全切换为后台预热**
+  - 读路径不再同步触发外部基金抓取，改为优先读取 warm cache，不命中时调度后台预热
+  - `/api/v1/fund/:id/estimate` 与 `/api/v1/fund/:id/timeseries` 在关键数据未就绪时返回 `FUND_DATA_WARMING`，并携带 `Retry-After`
+  - 前端首页新增预热提示与自动重试，切换到冷基金时不再因为预热中的 503 回滚到上一只基金
+
+### Fixed
+- **自动迁移与约束缺失**
+  - 默认数据库配置改为关闭 `AutoMigrate`，避免共享环境在启动期做隐式 schema 变更
+  - `fund_history` 与 `fund_time_series` 写入改为基于唯一键 upsert，消除“先查再写”的竞争窗口
+  - 当前运行库中的重复 `fund_time_series` 记录已完成去重，再补上唯一约束
+
+- **前端遗留双数据流**
+  - 删除未接入主链路的 Zustand `fund-store` 与 `refresh-timer` 旧轮询实现，避免后续误接回造成重复请求
+
+- **行情源切换接口方法错误**
+  - 修复前端切换用户级行情源时错误使用 `POST /api/v1/user/quote-source` 的问题
+  - 前端现已按后端路由改为调用 `PUT /api/v1/user/quote-source`，解决切换 `Tencent` 来源时报 `404` 的问题
+
 ## [2024.4.3] - 2026-04-03
 
 ### Added

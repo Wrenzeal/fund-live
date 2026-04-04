@@ -108,3 +108,45 @@ func TestTrackFundIDsDeduplicatesEntries(t *testing.T) {
 		t.Fatalf("tracked sources = %#v", tracked)
 	}
 }
+
+func TestTrackFundIDsRefreshesLastTrackedAt(t *testing.T) {
+	service := NewValuationService(&countingCollectorFundRepository{}, noopQuoteProvider{}, noopCacheRepository{})
+	baseTime := time.Date(2026, 4, 4, 9, 30, 0, 0, time.UTC)
+	service.now = func() time.Time { return baseTime }
+
+	service.TrackFundIDs("005827")
+	first := service.snapshotTrackedFunds()
+	if len(first) != 1 {
+		t.Fatalf("tracked funds len = %d, want 1", len(first))
+	}
+
+	refreshedTime := baseTime.Add(10 * time.Minute)
+	service.now = func() time.Time { return refreshedTime }
+	service.TrackFundIDs("005827")
+
+	tracked := service.snapshotTrackedFunds()
+	if len(tracked) != 1 {
+		t.Fatalf("tracked funds len = %d, want 1", len(tracked))
+	}
+	if !tracked[0].LastTrackedAt.Equal(refreshedTime) {
+		t.Fatalf("LastTrackedAt = %v, want %v", tracked[0].LastTrackedAt, refreshedTime)
+	}
+}
+
+func TestSnapshotTrackedFundsSkipsExpiredTargets(t *testing.T) {
+	service := NewValuationService(&countingCollectorFundRepository{}, noopQuoteProvider{}, noopCacheRepository{})
+	baseTime := time.Date(2026, 4, 4, 9, 30, 0, 0, time.UTC)
+	service.now = func() time.Time { return baseTime }
+	service.trackedFundTTL = time.Hour
+
+	service.TrackFundIDs("005827")
+
+	service.now = func() time.Time { return baseTime.Add(2 * time.Hour) }
+	tracked := service.snapshotTrackedFunds()
+	if len(tracked) != 0 {
+		t.Fatalf("tracked funds = %#v, want empty after ttl", tracked)
+	}
+	if len(service.trackedFunds) != 0 {
+		t.Fatalf("service.trackedFunds len = %d, want 0 after cleanup", len(service.trackedFunds))
+	}
+}

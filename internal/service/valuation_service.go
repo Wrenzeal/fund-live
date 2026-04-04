@@ -12,6 +12,7 @@ import (
 	"github.com/RomaticDOG/fund/internal/domain"
 	"github.com/RomaticDOG/fund/internal/trading"
 	"github.com/shopspring/decimal"
+	"golang.org/x/sync/errgroup"
 )
 
 // ValuationServiceImpl implements the ValuationService interface.
@@ -37,13 +38,17 @@ type ValuationServiceImpl struct {
 	collectorOnce sync.Once
 
 	// Fund IDs to track (set by StartBackgroundCollector)
-	trackedFunds   []trackedFundTarget
-	trackedFundsMu sync.RWMutex
+	trackedFunds         []trackedFundTarget
+	trackedFundsMu       sync.RWMutex
+	trackedFundTTL       time.Duration
+	collectorConcurrency int
+	now                  func() time.Time
 }
 
 type trackedFundTarget struct {
-	FundID string
-	Source domain.QuoteSource
+	FundID        string
+	Source        domain.QuoteSource
+	LastTrackedAt time.Time
 }
 
 // NewValuationService creates a new ValuationService instance.
@@ -53,15 +58,18 @@ func NewValuationService(
 	cache domain.CacheRepository,
 ) *ValuationServiceImpl {
 	return &ValuationServiceImpl{
-		fundRepo:           fundRepo,
-		quoteProvider:      quoteProvider,
-		quoteProviders:     map[domain.QuoteSource]domain.QuoteProvider{domain.QuoteSourceSina: quoteProvider},
-		defaultQuoteSource: domain.QuoteSourceSina,
-		cache:              cache,
-		dataLoader:         NewFundDataLoader(fundRepo),
-		timeSeries:         make(map[string][]domain.TimeSeriesPoint),
-		stopCollector:      make(chan struct{}),
-		trackedFunds:       []trackedFundTarget{},
+		fundRepo:             fundRepo,
+		quoteProvider:        quoteProvider,
+		quoteProviders:       map[domain.QuoteSource]domain.QuoteProvider{domain.QuoteSourceSina: quoteProvider},
+		defaultQuoteSource:   domain.QuoteSourceSina,
+		cache:                cache,
+		dataLoader:           NewFundDataLoader(fundRepo),
+		timeSeries:           make(map[string][]domain.TimeSeriesPoint),
+		stopCollector:        make(chan struct{}),
+		trackedFunds:         []trackedFundTarget{},
+		trackedFundTTL:       6 * time.Hour,
+		collectorConcurrency: 4,
+		now:                  time.Now,
 	}
 }
 
@@ -162,13 +170,26 @@ func (s *ValuationServiceImpl) collectDataForAllFunds(ctx context.Context) {
 		return
 	}
 
+	group, groupCtx := errgroup.WithContext(ctx)
+	if s.collectorConcurrency > 0 {
+		group.SetLimit(s.collectorConcurrency)
+	}
+
 	for _, target := range funds {
-		targetCtx := domain.WithQuoteSource(ctx, target.Source)
-		_, err := s.CalculateEstimate(targetCtx, target.FundID)
-		if err != nil {
-			// Log error but continue with other funds
-			log.Printf("⚠️ Background collector: failed to collect data for %s[%s]: %v", target.FundID, target.Source, err)
-		}
+		target := target
+		group.Go(func() error {
+			targetCtx := domain.WithQuoteSource(groupCtx, target.Source)
+			_, err := s.CalculateEstimate(targetCtx, target.FundID)
+			if err != nil {
+				// Log error but continue with other funds
+				log.Printf("⚠️ Background collector: failed to collect data for %s[%s]: %v", target.FundID, target.Source, err)
+			}
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		log.Printf("⚠️ Background collector group wait failed: %v", err)
 	}
 }
 
@@ -198,20 +219,7 @@ func (s *ValuationServiceImpl) CalculateEstimate(ctx context.Context, fundID str
 		return nil, fmt.Errorf("failed to get holdings: %w", err)
 	}
 
-	// Hydrate valuation-critical data on demand without mutating the database from read requests.
-	if s.dataLoader != nil && needsRuntimeFundData(fund, holdings) {
-		hydratedFund, hydratedHoldings, hydrateErr := s.dataLoader.FetchTransientFundData(ctx, fundID)
-		if hydrateErr != nil {
-			log.Printf("⚠️ On-demand fund hydration failed for %s: %v", fundID, hydrateErr)
-		} else {
-			if hydratedFund != nil {
-				fund = hydratedFund
-			}
-			if len(hydratedHoldings) > 0 {
-				holdings = hydratedHoldings
-			}
-		}
-	}
+	fund, holdings, warmupScheduled := useCachedFundDataOrScheduleWarmup(s.dataLoader, fundID, fund, holdings)
 
 	// If no holdings and we have a fund resolver, try feeder fund resolution
 	if len(holdings) == 0 && s.fundResolver != nil {
@@ -245,9 +253,19 @@ func (s *ValuationServiceImpl) CalculateEstimate(ctx context.Context, fundID str
 		}
 
 		if IsFeederFund(fund.Name) {
+			if warmupScheduled {
+				return nil, ErrFundDataWarmupInProgress
+			}
 			return nil, fmt.Errorf("no holdings found for feeder fund %s (target ETF resolution may have failed)", fundID)
 		}
+		if warmupScheduled {
+			return nil, ErrFundDataWarmupInProgress
+		}
 		return nil, fmt.Errorf("no holdings found for fund: %s", fundID)
+	}
+
+	if fund.NetAssetVal.IsZero() && warmupScheduled {
+		return nil, ErrFundDataWarmupInProgress
 	}
 
 	// Log if using fallback holdings
@@ -587,13 +605,23 @@ func (s *ValuationServiceImpl) TrackFundsForSource(source domain.QuoteSource, fu
 	}
 
 	source = domain.ResolveQuoteSource(source, s.defaultQuoteSource)
+	now := time.Now()
+	if s.now != nil {
+		now = s.now()
+	}
 	s.trackedFundsMu.Lock()
 	defer s.trackedFundsMu.Unlock()
 
-	seen := make(map[string]struct{}, len(s.trackedFunds))
+	seen := make(map[string]int, len(s.trackedFunds))
+	activeTargets := s.trackedFunds[:0]
 	for _, target := range s.trackedFunds {
-		seen[string(target.Source)+"|"+target.FundID] = struct{}{}
+		if s.isTrackedFundExpired(target, now) {
+			continue
+		}
+		seen[string(target.Source)+"|"+target.FundID] = len(activeTargets)
+		activeTargets = append(activeTargets, target)
 	}
+	s.trackedFunds = activeTargets
 
 	for _, fundID := range fundIDs {
 		fundID = strings.TrimSpace(fundID)
@@ -601,15 +629,22 @@ func (s *ValuationServiceImpl) TrackFundsForSource(source domain.QuoteSource, fu
 			continue
 		}
 		seenKey := string(source) + "|" + fundID
-		if _, ok := seen[seenKey]; ok {
+		if idx, ok := seen[seenKey]; ok {
+			s.trackedFunds[idx].LastTrackedAt = now
 			continue
 		}
-		seen[seenKey] = struct{}{}
-		s.trackedFunds = append(s.trackedFunds, trackedFundTarget{FundID: fundID, Source: source})
+		seen[seenKey] = len(s.trackedFunds)
+		s.trackedFunds = append(s.trackedFunds, trackedFundTarget{
+			FundID:        fundID,
+			Source:        source,
+			LastTrackedAt: now,
+		})
 	}
 }
 
 func (s *ValuationServiceImpl) snapshotTrackedFunds() []trackedFundTarget {
+	s.cleanupExpiredTrackedFunds()
+
 	s.trackedFundsMu.RLock()
 	defer s.trackedFundsMu.RUnlock()
 
@@ -617,9 +652,56 @@ func (s *ValuationServiceImpl) snapshotTrackedFunds() []trackedFundTarget {
 		return nil
 	}
 
-	funds := make([]trackedFundTarget, len(s.trackedFunds))
-	copy(funds, s.trackedFunds)
+	now := time.Now()
+	if s.now != nil {
+		now = s.now()
+	}
+
+	funds := make([]trackedFundTarget, 0, len(s.trackedFunds))
+	for _, target := range s.trackedFunds {
+		if s.isTrackedFundExpired(target, now) {
+			continue
+		}
+		funds = append(funds, target)
+	}
 	return funds
+}
+
+func (s *ValuationServiceImpl) isTrackedFundExpired(target trackedFundTarget, now time.Time) bool {
+	if s == nil || s.trackedFundTTL <= 0 {
+		return false
+	}
+	if target.LastTrackedAt.IsZero() {
+		return false
+	}
+	return now.After(target.LastTrackedAt.Add(s.trackedFundTTL))
+}
+
+func (s *ValuationServiceImpl) cleanupExpiredTrackedFunds() {
+	if s == nil {
+		return
+	}
+
+	now := time.Now()
+	if s.now != nil {
+		now = s.now()
+	}
+
+	s.trackedFundsMu.Lock()
+	defer s.trackedFundsMu.Unlock()
+
+	if len(s.trackedFunds) == 0 {
+		return
+	}
+
+	activeTargets := s.trackedFunds[:0]
+	for _, target := range s.trackedFunds {
+		if s.isTrackedFundExpired(target, now) {
+			continue
+		}
+		activeTargets = append(activeTargets, target)
+	}
+	s.trackedFunds = activeTargets
 }
 
 func (s *ValuationServiceImpl) resolveQuoteProvider(ctx context.Context) (domain.QuoteSource, domain.QuoteProvider) {

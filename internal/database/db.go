@@ -40,7 +40,7 @@ func DefaultConfig() Config {
 		SSLMode:     "disable",
 		TimeZone:    "Asia/Shanghai",
 		LogLevel:    "warn",
-		AutoMigrate: true,
+		AutoMigrate: false,
 	}
 
 	if fileCfg, err := appconfig.LoadConfig(); err == nil && fileCfg != nil {
@@ -143,6 +143,12 @@ func InitDB(cfg Config, models ...interface{}) (*gorm.DB, error) {
 		log.Println("✅ Database migration completed successfully")
 	} else if !cfg.AutoMigrate {
 		log.Println("ℹ️ Database auto-migration disabled by configuration")
+	}
+
+	if err := RunDatabaseMigrations(db); err != nil {
+		log.Printf("⚠️ Failed to run database migrations: %v", err)
+	} else {
+		log.Println("🧭 Database migrations checked")
 	}
 
 	// Set global DB instance

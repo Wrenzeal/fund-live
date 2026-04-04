@@ -217,3 +217,58 @@ func TestFundDataLoaderDeduplicatesConcurrentTransientFetches(t *testing.T) {
 		t.Fatalf("fetcher calls = %d, want 1", fetcher.calls)
 	}
 }
+
+func TestFundDataLoaderScheduleEnsureFundDataPersistsInBackground(t *testing.T) {
+	repo := newCountingPersistFundRepository()
+	fetcher := &stubFundDataFetcher{
+		fund: &domain.Fund{
+			ID:          "888888",
+			Name:        "后台预热基金",
+			Type:        "hybrid",
+			NetAssetVal: decimal.RequireFromString("1.2222"),
+			UpdatedAt:   time.Now(),
+		},
+		holdings: []domain.StockHolding{
+			{
+				StockCode:    "600036",
+				StockName:    "招商银行",
+				Exchange:     domain.ExchangeSH,
+				HoldingRatio: decimal.RequireFromString("8.10"),
+			},
+		},
+	}
+	loader := &FundDataLoader{
+		fundRepo:  repo,
+		fetcher:   fetcher,
+		cacheTTL:  time.Minute,
+		fetchTTL:  time.Second,
+		ensureTTL: time.Second,
+		cache:     make(map[string]cachedFundData),
+		warming:   make(map[string]struct{}),
+	}
+
+	if active := loader.ScheduleEnsureFundData("888888"); !active {
+		t.Fatalf("ScheduleEnsureFundData() = false, want true")
+	}
+	if active := loader.ScheduleEnsureFundData("888888"); !active {
+		t.Fatalf("ScheduleEnsureFundData() second call = false, want true")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if repo.saveFundCalls == 1 && repo.saveHoldingsCalls == 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if fetcher.calls != 1 {
+		t.Fatalf("fetcher calls = %d, want 1", fetcher.calls)
+	}
+	if repo.saveFundCalls != 1 {
+		t.Fatalf("SaveFund() calls = %d, want 1", repo.saveFundCalls)
+	}
+	if repo.saveHoldingsCalls != 1 {
+		t.Fatalf("SaveHoldings() calls = %d, want 1", repo.saveHoldingsCalls)
+	}
+}

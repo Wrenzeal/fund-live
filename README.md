@@ -6,7 +6,16 @@
 
 > 通过基金前十大重仓股和联接基金目标 ETF 的实时行情，计算基金盘中预估涨跌幅，并补全分时走势图。
 
-当前文档对应版本：`2024.4.3`
+当前文档对应版本：`2026.4.4`
+
+## 2026.4.4 更新摘要
+
+- 搜索链路已改为“精确 / 前缀优先 + 模糊补充”，并补充 PostgreSQL `pg_trgm` / pattern 索引
+- 冷基金数据补全已改为后台预热，前端会识别 `FUND_DATA_WARMING` 并自动重试
+- 数据库默认自动迁移已关闭，启动时改为执行受控 SQL migration，并记录到 `schema_migrations`
+- 已为 `fund_history(fund_id,date)` 与 `fund_time_series(fund_id,time)` 补充唯一约束；运行库中的重复分时记录已完成去重
+- 前端已移除遗留的 Zustand 轮询实现，当前主数据流统一由 SWR 驱动
+- 修复用户级行情源切换的请求方法错误；切换 `Tencent` 来源不再因为调用错误接口而返回 `404`
 
 ## 2026.4.3 更新摘要
 
@@ -47,7 +56,9 @@
 - 使用新浪 5 分钟 K 线回补盘中走势
 - 午休缺失 `13:00` 点时自动补点
 - 基金详情 / 持仓 / 估值 / 联接基金解析共用只读瞬时补全缓存
+- 冷基金数据改为后台预热，预热状态会通过 `meta.cache_status` / `FUND_DATA_WARMING` 返回前端
 - 用户持仓按交易日和北京时间 `15:00` 截止自动计算确认净值日
+- 受控 SQL migration：启动时会检查 `schema_migrations`、搜索索引与关键唯一约束
 
 ### 前端
 - Next.js 16 App Router
@@ -98,7 +109,7 @@ fund/
 │   ├── adapter/                 # 外部行情适配器（新浪）
 │   ├── appconfig/               # 项目配置加载
 │   ├── crawler/                 # 基金/持仓/分钟 K 线抓取
-│   ├── database/                # GORM 模型、估值配置表与 DB 初始化
+│   ├── database/                # GORM 模型、受控 migration 与 DB 初始化
 │   ├── domain/                  # 领域模型与接口
 │   ├── handler/                 # HTTP Handler
 │   ├── middleware/              # 中间件
@@ -164,7 +175,8 @@ auth:
 - 登录用户可通过前端账户菜单切换自己的行情源偏好，后端会将偏好持久化到用户账号并在后续请求中优先生效
 - 如果前端需要以独立域名或端口直接访问后端，请在 `server.allowed_origins` 或环境变量 `CORS_ALLOWED_ORIGINS` 中显式配置允许的来源
 - `database.log_level` 支持 `silent/error/warn/info`，建议日常运行使用 `warn`
-- `database.auto_migrate` 建议在稳定环境里设为 `false`，仅在你明确需要应用模型变更时临时打开
+- `database.auto_migrate` 默认建议保持 `false`；启动时会执行受控 SQL migration，并将结果记录到 `schema_migrations`
+- 如果是一个全新的空 PostgreSQL 库，首次建表可临时打开 `database.auto_migrate=true` 启动一次；完成后应恢复为 `false`
 - 请不要把真实数据库密码提交到仓库
 - 如果要启用 Google 登录，后端需要配置 `auth.google_client_id` 或环境变量 `GOOGLE_CLIENT_ID`
 - 前端启用 Google 登录时，需要在 `web/.env.local` 中配置 `NEXT_PUBLIC_GOOGLE_CLIENT_ID`

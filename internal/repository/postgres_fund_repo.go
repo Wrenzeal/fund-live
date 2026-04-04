@@ -63,25 +63,53 @@ func (r *PostgresFundRepository) GetFundsByIDs(ctx context.Context, fundIDs []st
 
 // SearchFunds searches for funds by name or code.
 func (r *PostgresFundRepository) SearchFunds(ctx context.Context, query string, limit int) ([]*domain.Fund, error) {
-	var dbFunds []database.Fund
-	searchPattern := "%" + strings.ToLower(query) + "%"
+	trimmedQuery := strings.TrimSpace(query)
+	normalizedQuery := normalizeSearchQuery(trimmedQuery)
+	if normalizedQuery == "" || limit <= 0 {
+		return []*domain.Fund{}, nil
+	}
 
+	candidateLimit := searchCandidateLimit(limit)
+	candidates := make([]*domain.Fund, 0, candidateLimit)
+	seen := make(map[string]struct{}, candidateLimit)
+	appendCandidates := func(records []database.Fund) {
+		for i := range records {
+			fund := r.toDomainFund(&records[i])
+			if _, exists := seen[fund.ID]; exists {
+				continue
+			}
+			seen[fund.ID] = struct{}{}
+			candidates = append(candidates, fund)
+		}
+	}
+
+	var highPriority []database.Fund
+	prefixPattern := trimmedQuery + "%"
 	result := r.db.WithContext(ctx).
-		Where("LOWER(id) LIKE ? OR LOWER(name) LIKE ? OR LOWER(manager) LIKE ?",
-			searchPattern, searchPattern, searchPattern).
-		Limit(limit).
-		Find(&dbFunds)
-
+		Where("id = ? OR id LIKE ? OR name ILIKE ? OR manager ILIKE ?",
+			trimmedQuery, prefixPattern, prefixPattern, prefixPattern).
+		Limit(candidateLimit).
+		Find(&highPriority)
 	if result.Error != nil {
-		return nil, fmt.Errorf("failed to search funds: %w", result.Error)
+		return nil, fmt.Errorf("failed to search funds with prefix strategy: %w", result.Error)
+	}
+	appendCandidates(highPriority)
+
+	if len(candidates) < limit {
+		var fuzzy []database.Fund
+		fuzzyPattern := "%" + trimmedQuery + "%"
+		result = r.db.WithContext(ctx).
+			Where("id LIKE ? OR name ILIKE ? OR manager ILIKE ?",
+				fuzzyPattern, fuzzyPattern, fuzzyPattern).
+			Limit(candidateLimit).
+			Find(&fuzzy)
+		if result.Error != nil {
+			return nil, fmt.Errorf("failed to search funds with fuzzy strategy: %w", result.Error)
+		}
+		appendCandidates(fuzzy)
 	}
 
-	funds := make([]*domain.Fund, len(dbFunds))
-	for i := range dbFunds {
-		funds[i] = r.toDomainFund(&dbFunds[i])
-	}
-
-	return funds, nil
+	return rankAndLimitFunds(candidates, normalizedQuery, limit), nil
 }
 
 // GetFundHoldings retrieves the top holdings for a fund.
@@ -156,7 +184,17 @@ func (r *PostgresFundRepository) SaveTimeSeriesPoint(ctx context.Context, point 
 		EstimateNav:   point.EstimateNav,
 	}
 
-	result := r.db.WithContext(ctx).Create(&dbPoint)
+	result := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "fund_id"},
+			{Name: "time"},
+		},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"date",
+			"change_percent",
+			"estimate_nav",
+		}),
+	}).Create(&dbPoint)
 	if result.Error != nil {
 		return fmt.Errorf("failed to save time series point: %w", result.Error)
 	}
@@ -228,34 +266,25 @@ func (r *PostgresFundRepository) SaveFundHistory(ctx context.Context, history *d
 		return fmt.Errorf("failed to parse fund history date: %w", err)
 	}
 
-	var existing database.FundHistory
-	result := r.db.WithContext(ctx).
-		Where("fund_id = ? AND date = ?", history.FundID, historyDate).
-		First(&existing)
-
-	if result.Error != nil && result.Error != gorm.ErrRecordNotFound {
-		return fmt.Errorf("failed to query existing fund history: %w", result.Error)
+	record := &database.FundHistory{
+		FundID:      history.FundID,
+		Date:        historyDate,
+		NetAssetVal: history.NetAssetVal,
+		AccumVal:    history.AccumVal,
+		DailyReturn: history.DailyReturn,
 	}
-
-	if result.Error == gorm.ErrRecordNotFound {
-		record := &database.FundHistory{
-			FundID:      history.FundID,
-			Date:        historyDate,
-			NetAssetVal: history.NetAssetVal,
-			AccumVal:    history.AccumVal,
-			DailyReturn: history.DailyReturn,
-		}
-		if err := r.db.WithContext(ctx).Create(record).Error; err != nil {
-			return fmt.Errorf("failed to insert fund history: %w", err)
-		}
-		return nil
-	}
-
-	existing.NetAssetVal = history.NetAssetVal
-	existing.AccumVal = history.AccumVal
-	existing.DailyReturn = history.DailyReturn
-	if err := r.db.WithContext(ctx).Save(&existing).Error; err != nil {
-		return fmt.Errorf("failed to update fund history: %w", err)
+	if err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "fund_id"},
+			{Name: "date"},
+		},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"net_asset_val",
+			"accum_val",
+			"daily_return",
+		}),
+	}).Create(record).Error; err != nil {
+		return fmt.Errorf("failed to upsert fund history: %w", err)
 	}
 	return nil
 }

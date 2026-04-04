@@ -137,34 +137,22 @@ func floorToFiveMinute(now, minimum time.Time) time.Time {
 	return floored
 }
 
-func (s *ValuationServiceImpl) loadTimeSeriesInputs(ctx context.Context, fundID string) (*domain.Fund, []domain.StockHolding, string, error) {
+func (s *ValuationServiceImpl) loadTimeSeriesInputs(ctx context.Context, fundID string) (*domain.Fund, []domain.StockHolding, string, bool, error) {
 	fund, err := s.fundRepo.GetFundByID(ctx, fundID)
 	if err != nil {
-		return nil, nil, fundID, fmt.Errorf("failed to get fund: %w", err)
+		return nil, nil, fundID, false, fmt.Errorf("failed to get fund: %w", err)
 	}
 	if fund == nil {
-		return nil, nil, fundID, fmt.Errorf("fund not found: %s", fundID)
+		return nil, nil, fundID, false, fmt.Errorf("fund not found: %s", fundID)
 	}
 
 	holdingsSource := fundID
 	holdings, err := s.fundRepo.GetFundHoldings(ctx, fundID)
 	if err != nil {
-		return nil, nil, fundID, fmt.Errorf("failed to get holdings: %w", err)
+		return nil, nil, fundID, false, fmt.Errorf("failed to get holdings: %w", err)
 	}
 
-	if s.dataLoader != nil && needsRuntimeFundData(fund, holdings) {
-		hydratedFund, hydratedHoldings, hydrateErr := s.dataLoader.FetchTransientFundData(ctx, fundID)
-		if hydrateErr != nil {
-			log.Printf("⚠️ On-demand fund hydration failed for time series %s: %v", fundID, hydrateErr)
-		} else {
-			if hydratedFund != nil {
-				fund = hydratedFund
-			}
-			if len(hydratedHoldings) > 0 {
-				holdings = hydratedHoldings
-			}
-		}
-	}
+	fund, holdings, warmupScheduled := useCachedFundDataOrScheduleWarmup(s.dataLoader, fundID, fund, holdings)
 
 	if len(holdings) == 0 && s.fundResolver != nil {
 		holdings, holdingsSource, err = s.fundResolver.GetHoldingsWithFallback(ctx, fundID, fund.Name)
@@ -173,18 +161,25 @@ func (s *ValuationServiceImpl) loadTimeSeriesInputs(ctx context.Context, fundID 
 		}
 	}
 
-	return fund, holdings, holdingsSource, nil
+	return fund, holdings, holdingsSource, warmupScheduled, nil
 }
 
 func (s *ValuationServiceImpl) backfillTimeSeries(ctx context.Context, fundID string, targetDate time.Time) ([]domain.TimeSeriesPoint, error) {
-	fund, holdings, holdingsSource, err := s.loadTimeSeriesInputs(ctx, fundID)
+	fund, holdings, holdingsSource, warmupScheduled, err := s.loadTimeSeriesInputs(ctx, fundID)
 	if err != nil {
 		return nil, err
+	}
+
+	if fund.NetAssetVal.IsZero() && warmupScheduled {
+		return nil, ErrFundDataWarmupInProgress
 	}
 
 	if len(holdings) == 0 {
 		if holdingsSource != fundID && holdingsSource != "" {
 			return s.buildDirectInstrumentTimeSeries(ctx, fund, holdingsSource, targetDate)
+		}
+		if warmupScheduled {
+			return nil, ErrFundDataWarmupInProgress
 		}
 		return nil, fmt.Errorf("no holdings available to build intraday time series for %s", fundID)
 	}

@@ -3,7 +3,6 @@ package repository
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
@@ -134,21 +133,19 @@ func (r *MemoryFundRepository) SearchFunds(ctx context.Context, query string, li
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	query = strings.ToLower(query)
-	var results []*domain.Fund
+	normalizedQuery := normalizeSearchQuery(query)
+	if normalizedQuery == "" || limit <= 0 {
+		return []*domain.Fund{}, nil
+	}
 
+	candidates := make([]*domain.Fund, 0, len(r.funds))
 	for _, fund := range r.funds {
-		if strings.Contains(strings.ToLower(fund.ID), query) ||
-			strings.Contains(strings.ToLower(fund.Name), query) ||
-			strings.Contains(strings.ToLower(fund.Manager), query) {
-			results = append(results, fund)
-			if len(results) >= limit {
-				break
-			}
+		if _, matched := classifyFundSearchMatch(fund, normalizedQuery); matched {
+			candidates = append(candidates, fund)
 		}
 	}
 
-	return results, nil
+	return rankAndLimitFunds(candidates, normalizedQuery, limit), nil
 }
 
 // GetFundHoldings retrieves the top holdings for a fund.

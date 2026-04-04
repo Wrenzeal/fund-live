@@ -9,20 +9,30 @@ import (
 
 	"github.com/RomaticDOG/fund/internal/domain"
 	"github.com/RomaticDOG/fund/internal/repository"
+	"github.com/RomaticDOG/fund/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 )
 
 type stubTransientFundDataLoader struct {
-	calls    int
-	fund     *domain.Fund
-	holdings []domain.StockHolding
-	err      error
+	cachedCalls   int
+	scheduleCalls int
+	cacheHit      bool
+	fund          *domain.Fund
+	holdings      []domain.StockHolding
 }
 
-func (s *stubTransientFundDataLoader) FetchTransientFundData(ctx context.Context, fundID string) (*domain.Fund, []domain.StockHolding, error) {
-	s.calls++
-	return s.fund, s.holdings, s.err
+func (s *stubTransientFundDataLoader) PeekCachedFundData(fundID string) (*domain.Fund, []domain.StockHolding, bool) {
+	s.cachedCalls++
+	if !s.cacheHit {
+		return nil, nil, false
+	}
+	return s.fund, s.holdings, true
+}
+
+func (s *stubTransientFundDataLoader) ScheduleEnsureFundData(fundID string) bool {
+	s.scheduleCalls++
+	return true
 }
 
 type stubHoldingsFallbackResolver struct {
@@ -40,6 +50,7 @@ func (s *stubHoldingsFallbackResolver) GetHoldingsWithFallback(ctx context.Conte
 type fundResponseEnvelope struct {
 	Success bool        `json:"success"`
 	Data    domain.Fund `json:"data"`
+	Meta    *APIMeta    `json:"meta,omitempty"`
 }
 
 type holdingsResponseEnvelope struct {
@@ -67,6 +78,7 @@ func TestGetFundHydratesMissingProfileFields(t *testing.T) {
 	}
 
 	loader := &stubTransientFundDataLoader{
+		cacheHit: true,
 		fund: &domain.Fund{
 			ID:          "123456",
 			Name:        "目录基金",
@@ -105,8 +117,14 @@ func TestGetFundHydratesMissingProfileFields(t *testing.T) {
 	if response.Data.Company != "测试基金" {
 		t.Fatalf("company = %q, want 测试基金", response.Data.Company)
 	}
-	if loader.calls != 1 {
-		t.Fatalf("loader calls = %d, want 1", loader.calls)
+	if response.Meta == nil || response.Meta.CacheStatus != "warm_cache" {
+		t.Fatalf("meta = %+v, want warm_cache", response.Meta)
+	}
+	if loader.cachedCalls != 1 {
+		t.Fatalf("cached calls = %d, want 1", loader.cachedCalls)
+	}
+	if loader.scheduleCalls != 0 {
+		t.Fatalf("schedule calls = %d, want 0", loader.scheduleCalls)
 	}
 }
 
@@ -126,6 +144,7 @@ func TestGetHoldingsHydratesMissingHoldings(t *testing.T) {
 	}
 
 	loader := &stubTransientFundDataLoader{
+		cacheHit: true,
 		fund: &domain.Fund{
 			ID:          "654321",
 			Name:        "持仓缺失基金",
@@ -175,8 +194,14 @@ func TestGetHoldingsHydratesMissingHoldings(t *testing.T) {
 	if response.Data.Holdings[0].StockCode != "600519" {
 		t.Fatalf("holding stock code = %q, want 600519", response.Data.Holdings[0].StockCode)
 	}
-	if loader.calls != 1 {
-		t.Fatalf("loader calls = %d, want 1", loader.calls)
+	if response.Meta == nil || response.Meta.CacheStatus != "warm_cache" {
+		t.Fatalf("meta = %+v, want warm_cache", response.Meta)
+	}
+	if loader.cachedCalls != 1 {
+		t.Fatalf("cached calls = %d, want 1", loader.cachedCalls)
+	}
+	if loader.scheduleCalls != 0 {
+		t.Fatalf("schedule calls = %d, want 0", loader.scheduleCalls)
 	}
 }
 
@@ -242,5 +267,97 @@ func TestGetHoldingsUsesResolverFallbackForFeederFund(t *testing.T) {
 	}
 	if resolver.calls != 1 {
 		t.Fatalf("resolver calls = %d, want 1", resolver.calls)
+	}
+}
+
+func TestGetFundSchedulesWarmupWhenCacheMissing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	fundRepo := repository.NewMemoryFundRepository()
+	if err := fundRepo.SaveFund(context.Background(), &domain.Fund{
+		ID:          "888888",
+		Name:        "待预热基金",
+		Type:        "hybrid",
+		Manager:     "",
+		Company:     "",
+		NetAssetVal: decimal.RequireFromString("1.0000"),
+	}); err != nil {
+		t.Fatalf("SaveFund() error = %v", err)
+	}
+
+	loader := &stubTransientFundDataLoader{}
+	handler := &FundHandler{
+		fundRepo:   fundRepo,
+		dataLoader: loader,
+	}
+
+	router := gin.New()
+	router.GET("/api/v1/fund/:id", handler.GetFund)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fund/888888", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var response fundResponseEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Meta == nil || response.Meta.CacheStatus != "warming" {
+		t.Fatalf("meta = %+v, want warming", response.Meta)
+	}
+	if loader.cachedCalls != 1 {
+		t.Fatalf("cached calls = %d, want 1", loader.cachedCalls)
+	}
+	if loader.scheduleCalls != 1 {
+		t.Fatalf("schedule calls = %d, want 1", loader.scheduleCalls)
+	}
+}
+
+type stubValuationService struct {
+	estimateErr error
+}
+
+func (s stubValuationService) CalculateEstimate(ctx context.Context, fundID string) (*domain.FundEstimate, error) {
+	return nil, s.estimateErr
+}
+
+func (s stubValuationService) GetIntradayTimeSeries(ctx context.Context, fundID string) ([]domain.TimeSeriesPoint, error) {
+	return nil, nil
+}
+
+func TestGetEstimateReturnsWarmupStatusForColdFunds(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	handler := &FundHandler{
+		valuationService: stubValuationService{estimateErr: service.ErrFundDataWarmupInProgress},
+	}
+
+	router := gin.New()
+	router.GET("/api/v1/fund/:id/estimate", handler.GetEstimate)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fund/123456/estimate", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", rec.Code)
+	}
+
+	var response struct {
+		Success bool      `json:"success"`
+		Error   *APIError `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Error == nil || response.Error.Code != "FUND_DATA_WARMING" {
+		t.Fatalf("error = %+v, want FUND_DATA_WARMING", response.Error)
+	}
+	if retryAfter := rec.Header().Get("Retry-After"); retryAfter != "5" {
+		t.Fatalf("Retry-After = %q, want 5", retryAfter)
 	}
 }

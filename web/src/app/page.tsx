@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { Suspense, useEffect, useRef, useState, useTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { useFundEstimate, useFund, useTimeSeries } from '@/hooks/use-fund-data'
+import { isFundDataWarmingError, useFundEstimate, useFund, useTimeSeries } from '@/hooks/use-fund-data'
 import { useMarketStatus, getSessionLabel, formatTimeUntil } from '@/hooks/use-market-status'
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
 import { FundSearch } from '@/components/fund-search'
@@ -56,6 +56,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   const handleEstimateSuccess = (data: { fund_id?: string }) => {
     if (!data?.fund_id) return
 
+    setSelectionError(null)
     lastStableFundIdRef.current = data.fund_id
     if (switchingFundIdRef.current === data.fund_id) {
       setSwitchingFundId(null)
@@ -65,6 +66,10 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   const handleEstimateError = (err: unknown) => {
     const failedFundId = switchingFundIdRef.current
     if (!failedFundId) return
+
+    if (isFundDataWarmingError(err)) {
+      return
+    }
 
     const message = err instanceof Error ? err.message : '加载失败'
     setSelectionError(`基金 ${failedFundId} 加载失败：${message}`)
@@ -82,18 +87,23 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     isValidating,
     mutate: refreshEstimate,
     isTrading,
-    refreshInterval
+    refreshInterval,
+    isWarming: isEstimateWarming,
+    warmingMessage: estimateWarmingMessage,
+    retryAfterSeconds,
   } = useFundEstimate(currentFundId, {
     onSuccess: handleEstimateSuccess,
     onError: handleEstimateError,
   })
 
-  const { fund } = useFund(currentFundId)
+  const { fund, cacheStatus: fundCacheStatus } = useFund(currentFundId)
   const {
     timeSeries,
     displayDate,
     isHistorical,
-    isLoading: isTimeSeriesLoading
+    isLoading: isTimeSeriesLoading,
+    isWarming: isTimeSeriesWarming,
+    warmingMessage: timeSeriesWarmingMessage,
   } = useTimeSeries(currentFundId)
 
   // 切换基金时使用 transition 避免阻塞
@@ -110,7 +120,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
 
   const isFundSwitching = Boolean(
     switchingFundId &&
-    (isEstimateLoading || estimate?.fund_id !== switchingFundId)
+    (isEstimateLoading || isEstimateWarming || estimate?.fund_id !== switchingFundId)
   )
 
   // 超时自动关闭加载指示器（防止无限加载）
@@ -122,10 +132,10 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     if (isFundSwitching) {
       const timeout = window.setTimeout(() => {
         setSwitchingFundId(null)
-      }, 15000) // 15秒超时
+      }, isEstimateWarming ? 30000 : 15000) // 预热时放宽等待时间
       return () => window.clearTimeout(timeout)
     }
-  }, [isFundSwitching, switchingFundId])
+  }, [isEstimateWarming, isFundSwitching, switchingFundId])
 
   // 手动刷新
   const handleRefresh = () => {
@@ -134,6 +144,17 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   }
 
   const lastUpdated = estimate?.calculated_at ? new Date(estimate.calculated_at) : null
+
+  const warmupNotice = isEstimateWarming
+    ? estimateWarmingMessage || `基金 ${currentFundId} 数据预热中，正在自动重试。`
+    : isTimeSeriesWarming
+      ? timeSeriesWarmingMessage || '分时数据预热中，正在自动重试。'
+      : fundCacheStatus === 'warming'
+        ? `基金 ${currentFundId} 的基础资料正在后台补全，页面会自动刷新。`
+        : ''
+  const warmupDetailText = isEstimateWarming
+    ? `数据预热中，约 ${Math.max(retryAfterSeconds || 5, 1)} 秒后自动重试`
+    : warmupNotice
 
   // 计算 Top 贡献者
   const topContributors = (estimate?.holding_details ?? [])
@@ -152,6 +173,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
       <FundLoadingIndicator
         isVisible={isFundSwitching}
         fundName={fund?.name}
+        detailText={warmupDetailText}
       />
       {/* Header */}
       <header className="sticky top-0 z-50 glass-strong border-b border-[var(--card-border)]">
@@ -239,6 +261,14 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
             >
               <X className="h-4 w-4" />
             </button>
+          </div>
+        )}
+        {warmupNotice && (
+          <div className="mb-6 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-50">
+            <div className="flex items-start gap-3">
+              <RefreshCw className={cn('mt-0.5 h-4 w-4 shrink-0', isEstimateWarming || isTimeSeriesWarming ? 'animate-spin' : '')} />
+              <span>{warmupNotice}</span>
+            </div>
           </div>
         )}
         {/* 加载过渡状态指示 */}

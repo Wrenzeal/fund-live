@@ -152,12 +152,12 @@ func (r *FundResolver) GetHoldingsWithFallback(ctx context.Context, fundID strin
 
 	holdings, err = r.fundRepo.GetFundHoldings(ctx, targetCode)
 	if (err != nil || len(holdings) == 0) && r.dataLoader != nil {
-		_, hydratedHoldings, hydrateErr := r.dataLoader.FetchTransientFundData(ctx, targetCode)
-		if hydrateErr != nil {
-			log.Printf("⚠️ Failed to hydrate target ETF %s: %v", targetCode, hydrateErr)
-		} else if len(hydratedHoldings) > 0 {
-			holdings = hydratedHoldings
+		_, cachedHoldings, cached := r.dataLoader.PeekCachedFundData(targetCode)
+		if cached && len(cachedHoldings) > 0 {
+			holdings = cachedHoldings
 			err = nil
+		} else {
+			r.dataLoader.ScheduleEnsureFundData(targetCode)
 		}
 	}
 

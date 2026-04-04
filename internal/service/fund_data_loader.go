@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -12,6 +13,8 @@ import (
 	"github.com/RomaticDOG/fund/internal/domain"
 	"golang.org/x/sync/singleflight"
 )
+
+var ErrFundDataWarmupInProgress = errors.New("fund data warmup in progress")
 
 type fundDataFetcher interface {
 	FetchFundData(ctx context.Context, fundID string) (*domain.Fund, []domain.StockHolding, error)
@@ -26,14 +29,18 @@ type cachedFundData struct {
 // FundDataLoader fetches missing fund data on demand.
 // Read paths use the transient cache only; explicit hydration persists via FundRepository.
 type FundDataLoader struct {
-	fundRepo domain.FundRepository
-	fetcher  fundDataFetcher
-	cacheTTL time.Duration
-	fetchTTL time.Duration
+	fundRepo  domain.FundRepository
+	fetcher   fundDataFetcher
+	cacheTTL  time.Duration
+	fetchTTL  time.Duration
+	ensureTTL time.Duration
 
 	cacheMu sync.RWMutex
 	cache   map[string]cachedFundData
 	group   singleflight.Group
+
+	warmMu  sync.Mutex
+	warming map[string]struct{}
 }
 
 // NewFundDataLoader creates a loader for on-demand fund hydration.
@@ -52,12 +59,18 @@ func NewFundDataLoaderWithFetcher(fundRepo domain.FundRepository, fetcher fundDa
 	if fetchTTL <= 0 {
 		fetchTTL = 20 * time.Second
 	}
+	ensureTTL := fetchTTL + 10*time.Second
+	if ensureTTL < 30*time.Second {
+		ensureTTL = 30 * time.Second
+	}
 	return &FundDataLoader{
-		fundRepo: fundRepo,
-		fetcher:  fetcher,
-		cacheTTL: cacheTTL,
-		fetchTTL: fetchTTL,
-		cache:    make(map[string]cachedFundData),
+		fundRepo:  fundRepo,
+		fetcher:   fetcher,
+		cacheTTL:  cacheTTL,
+		fetchTTL:  fetchTTL,
+		ensureTTL: ensureTTL,
+		cache:     make(map[string]cachedFundData),
+		warming:   make(map[string]struct{}),
 	}
 }
 
@@ -144,6 +157,69 @@ func (l *FundDataLoader) EnsureFundData(ctx context.Context, fundID string) (*do
 	return freshFund, freshHoldings, nil
 }
 
+// PeekCachedFundData returns transient cached data without triggering upstream fetches.
+func (l *FundDataLoader) PeekCachedFundData(fundID string) (*domain.Fund, []domain.StockHolding, bool) {
+	if l == nil {
+		return nil, nil, false
+	}
+
+	fundID = strings.TrimSpace(fundID)
+	if fundID == "" {
+		return nil, nil, false
+	}
+
+	return l.loadCached(fundID, time.Now())
+}
+
+// ScheduleEnsureFundData enqueues a background hydration job and deduplicates inflight requests.
+// It returns true when a warmup job is active or has just been scheduled.
+func (l *FundDataLoader) ScheduleEnsureFundData(fundID string) bool {
+	if l == nil {
+		return false
+	}
+
+	fundID = strings.TrimSpace(fundID)
+	if fundID == "" {
+		return false
+	}
+
+	l.warmMu.Lock()
+	if l.warming == nil {
+		l.warming = make(map[string]struct{})
+	}
+	if _, exists := l.warming[fundID]; exists {
+		l.warmMu.Unlock()
+		return true
+	}
+	l.warming[fundID] = struct{}{}
+	l.warmMu.Unlock()
+
+	go func() {
+		defer l.finishWarmup(fundID)
+
+		ctx := context.Background()
+		cancel := func() {}
+		if l.ensureTTL > 0 {
+			ctx, cancel = context.WithTimeout(context.Background(), l.ensureTTL)
+		}
+		defer cancel()
+
+		if _, _, err := l.EnsureFundData(ctx, fundID); err != nil {
+			log.Printf("⚠️ Background fund warmup failed for %s: %v", fundID, err)
+			return
+		}
+		log.Printf("✅ Background fund warmup completed for %s", fundID)
+	}()
+
+	return true
+}
+
+func (l *FundDataLoader) finishWarmup(fundID string) {
+	l.warmMu.Lock()
+	delete(l.warming, fundID)
+	l.warmMu.Unlock()
+}
+
 func (l *FundDataLoader) loadCached(fundID string, now time.Time) (*domain.Fund, []domain.StockHolding, bool) {
 	l.cacheMu.RLock()
 	cached, ok := l.cache[fundID]
@@ -197,4 +273,22 @@ func needsRuntimeFundData(fund *domain.Fund, holdings []domain.StockHolding) boo
 		return true
 	}
 	return fund.NetAssetVal.IsZero() || len(holdings) == 0
+}
+
+func useCachedFundDataOrScheduleWarmup(loader *FundDataLoader, fundID string, fund *domain.Fund, holdings []domain.StockHolding) (*domain.Fund, []domain.StockHolding, bool) {
+	if loader == nil || !needsRuntimeFundData(fund, holdings) {
+		return fund, holdings, false
+	}
+
+	if cachedFund, cachedHoldings, ok := loader.PeekCachedFundData(fundID); ok {
+		if cachedFund != nil {
+			fund = cachedFund
+		}
+		if len(cachedHoldings) > 0 {
+			holdings = cachedHoldings
+		}
+		return fund, holdings, false
+	}
+
+	return fund, holdings, loader.ScheduleEnsureFundData(fundID)
 }

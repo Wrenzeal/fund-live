@@ -3,6 +3,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -15,7 +16,8 @@ import (
 )
 
 type transientFundDataLoader interface {
-	FetchTransientFundData(ctx context.Context, fundID string) (*domain.Fund, []domain.StockHolding, error)
+	PeekCachedFundData(fundID string) (*domain.Fund, []domain.StockHolding, bool)
+	ScheduleEnsureFundData(fundID string) bool
 }
 
 type holdingsFallbackResolver interface {
@@ -125,7 +127,11 @@ func (h *FundHandler) GetEstimate(c *gin.Context) {
 		statusCode := http.StatusInternalServerError
 		errorCode := "ESTIMATE_FAILED"
 
-		if strings.Contains(err.Error(), "pricing profile not configured") || strings.Contains(err.Error(), "unsupported pricing method") {
+		if errors.Is(err, service.ErrFundDataWarmupInProgress) {
+			statusCode = http.StatusServiceUnavailable
+			errorCode = "FUND_DATA_WARMING"
+			c.Header("Retry-After", "5")
+		} else if strings.Contains(err.Error(), "pricing profile not configured") || strings.Contains(err.Error(), "unsupported pricing method") {
 			statusCode = http.StatusUnprocessableEntity
 			errorCode = "UNSUPPORTED_PRICING_MODEL"
 		} else if strings.Contains(err.Error(), "not found") {
@@ -203,17 +209,15 @@ func (h *FundHandler) GetHoldings(c *gin.Context) {
 		return
 	}
 
+	cacheStatus := ""
 	if shouldHydrateFundHoldings(fund, holdings) {
-		hydratedFund, hydratedHoldings, hydrateErr := h.fetchTransientFundData(c.Request.Context(), fundID)
-		if hydrateErr != nil {
-			log.Printf("⚠️ Transient fund holdings hydration failed for %s: %v", fundID, hydrateErr)
-		} else {
-			if hydratedFund != nil {
-				fund = hydratedFund
-			}
-			if len(hydratedHoldings) > 0 {
-				holdings = hydratedHoldings
-			}
+		hydratedFund, hydratedHoldings, status := h.cachedFundDataOrScheduleWarmup(fundID)
+		cacheStatus = status
+		if hydratedFund != nil {
+			fund = hydratedFund
+		}
+		if len(hydratedHoldings) > 0 {
+			holdings = hydratedHoldings
 		}
 	}
 	dataSource := ""
@@ -241,7 +245,7 @@ func (h *FundHandler) GetHoldings(c *gin.Context) {
 			Fund:     fund,
 			Holdings: holdings,
 		},
-		Meta: buildDataSourceMeta(dataSource),
+		Meta: buildResponseMeta(dataSource, cacheStatus),
 	})
 }
 
@@ -266,10 +270,17 @@ func (h *FundHandler) GetTimeSeries(c *gin.Context) {
 
 	timeSeries, err := h.valuationService.GetIntradayTimeSeries(c.Request.Context(), fundID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, APIResponse{
+		statusCode := http.StatusInternalServerError
+		errorCode := "FETCH_FAILED"
+		if errors.Is(err, service.ErrFundDataWarmupInProgress) {
+			statusCode = http.StatusServiceUnavailable
+			errorCode = "FUND_DATA_WARMING"
+			c.Header("Retry-After", "5")
+		}
+		c.JSON(statusCode, APIResponse{
 			Success: false,
 			Error: &APIError{
-				Code:    "FETCH_FAILED",
+				Code:    errorCode,
 				Message: err.Error(),
 			},
 		})
@@ -395,35 +406,39 @@ func (h *FundHandler) GetFund(c *gin.Context) {
 		return
 	}
 
-	fund = h.hydrateFundProfile(c.Request.Context(), fundID, fund)
+	cacheStatus := ""
+	fund, cacheStatus = h.hydrateFundProfile(fundID, fund)
 
 	c.JSON(http.StatusOK, APIResponse{
 		Success: true,
 		Data:    fund,
+		Meta:    buildResponseMeta("", cacheStatus),
 	})
 }
 
-func (h *FundHandler) hydrateFundProfile(ctx context.Context, fundID string, fund *domain.Fund) *domain.Fund {
+func (h *FundHandler) hydrateFundProfile(fundID string, fund *domain.Fund) (*domain.Fund, string) {
 	if !shouldHydrateFundProfile(fund) {
-		return fund
+		return fund, ""
 	}
 
-	hydratedFund, _, err := h.fetchTransientFundData(ctx, fundID)
-	if err != nil {
-		log.Printf("⚠️ Transient fund profile hydration failed for %s: %v", fundID, err)
-		return fund
-	}
+	hydratedFund, _, cacheStatus := h.cachedFundDataOrScheduleWarmup(fundID)
 	if hydratedFund != nil {
-		return hydratedFund
+		return hydratedFund, cacheStatus
 	}
-	return fund
+	return fund, cacheStatus
 }
 
-func (h *FundHandler) fetchTransientFundData(ctx context.Context, fundID string) (*domain.Fund, []domain.StockHolding, error) {
+func (h *FundHandler) cachedFundDataOrScheduleWarmup(fundID string) (*domain.Fund, []domain.StockHolding, string) {
 	if h == nil || h.dataLoader == nil {
-		return nil, nil, nil
+		return nil, nil, ""
 	}
-	return h.dataLoader.FetchTransientFundData(ctx, fundID)
+	if fund, holdings, ok := h.dataLoader.PeekCachedFundData(fundID); ok {
+		return fund, holdings, "warm_cache"
+	}
+	if h.dataLoader.ScheduleEnsureFundData(fundID) {
+		return nil, nil, "warming"
+	}
+	return nil, nil, ""
 }
 
 func shouldHydrateFundProfile(fund *domain.Fund) bool {
@@ -437,10 +452,14 @@ func shouldHydrateFundHoldings(fund *domain.Fund, holdings []domain.StockHolding
 	return shouldHydrateFundProfile(fund) || len(holdings) == 0
 }
 
-func buildDataSourceMeta(dataSource string) *APIMeta {
+func buildResponseMeta(dataSource, cacheStatus string) *APIMeta {
 	dataSource = strings.TrimSpace(dataSource)
-	if dataSource == "" {
+	cacheStatus = strings.TrimSpace(cacheStatus)
+	if dataSource == "" && cacheStatus == "" {
 		return nil
 	}
-	return &APIMeta{DataSource: dataSource}
+	return &APIMeta{
+		DataSource:  dataSource,
+		CacheStatus: cacheStatus,
+	}
 }
