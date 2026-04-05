@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, BarChart4, CalendarDays, CheckCircle2, Clock3, LoaderCircle, Plus, Wallet } from 'lucide-react'
+import { AlertTriangle, BarChart4, CalendarDays, CheckCircle2, Clock3, FileStack, LoaderCircle, Plus, Wallet } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
 import { HoldingFundRow } from '@/components/holding-fund-row'
 import { VIPAnalysisEntry } from '@/components/vip-analysis-entry'
@@ -10,6 +11,8 @@ import { useCurrentUser } from '@/hooks/use-auth'
 import { useFundSearch } from '@/hooks/use-fund-data'
 import { useMarketStatus, usePricingDatePreview } from '@/hooks/use-market-status'
 import { useUserPortfolio } from '@/hooks/use-user-portfolio'
+import { useVIPPreview } from '@/hooks/use-vip-preview'
+import { VIP_SAMPLE_REPORT_IDS } from '@/mocks/vip'
 import { cn } from '@/lib/utils'
 
 const BEIJING_OFFSET = '+08:00'
@@ -62,6 +65,7 @@ function resolveTradeTimingFromServerClock(currentTime: Date) {
 }
 
 export default function HoldingsPage() {
+  const router = useRouter()
   const { user, isLoading } = useCurrentUser()
   const marketStatus = useMarketStatus()
   const { holdings, seedDemoData, addHolding, removeHolding } = useUserPortfolio(user?.id ?? null)
@@ -73,10 +77,12 @@ export default function HoldingsPage() {
   const [tradeTiming, setTradeTiming] = useState<TradeTiming>('before_close')
   const [note, setNote] = useState('')
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [vipFeedback, setVipFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [isSeedingDemo, setIsSeedingDemo] = useState(false)
   const [isAddingHolding, setIsAddingHolding] = useState(false)
   const defaultsInitializedRef = useRef(false)
   const { results } = useFundSearch(query)
+  const { membership, remainingQuota, createTask, latestCompletedTask } = useVIPPreview()
   const normalizedQuery = query.trim()
 
   const autoMatchedFund = useMemo(() => {
@@ -206,6 +212,49 @@ export default function HoldingsPage() {
     }
   }
 
+  const handleCreatePortfolioVIPTask = () => {
+    setVipFeedback(null)
+
+    if (!membership.isVip) {
+      router.push('/vip')
+      return
+    }
+
+    if (holdings.length === 0) {
+      setVipFeedback({
+        type: 'error',
+        message: '当前还没有持仓记录，先录入持仓后再发起组合分析。',
+      })
+      return
+    }
+
+    const created = createTask({
+      type: 'portfolio_analysis',
+      targetType: 'holdings_all',
+      targetId: 'all-holdings',
+      targetName: '全部持仓组合',
+    })
+
+    if (!created.ok) {
+      setVipFeedback({
+        type: 'error',
+        message: created.reason === 'quota_exhausted'
+          ? '今日组合分析额度已用完，请明天再试。'
+          : '当前账号尚未开通 VIP。',
+      })
+      if (created.reason === 'not_vip') {
+        router.push('/vip')
+      }
+      return
+    }
+
+    setVipFeedback({
+      type: 'success',
+      message: '组合分析任务已创建，正在跳转到任务中心。',
+    })
+    router.push(`/vip/tasks?focus=${created.taskId}`)
+  }
+
   if (isLoading) {
     return (
       <AccountAreaShell title="持仓明细" description="按基金记录你的持仓金额，并实时查看预估涨跌额。">
@@ -255,9 +304,21 @@ export default function HoldingsPage() {
             <span>{feedback.message}</span>
           </div>
         )}
+        {vipFeedback && (
+          <div
+            className={cn(
+              'flex items-start gap-3 rounded-[28px] border px-4 py-4 text-sm',
+              vipFeedback.type === 'success'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-50'
+                : 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+            )}
+          >
+            <span>{vipFeedback.message}</span>
+          </div>
+        )}
 
         <div className="grid gap-6 xl:grid-cols-[1.65fr_0.85fr]">
-          <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
+          <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass xl:col-span-2">
             <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="text-sm text-theme-muted">持仓总览</div>
@@ -553,9 +614,43 @@ export default function HoldingsPage() {
         )}
 
         <VIPAnalysisEntry
-          title="AI 持仓分析入口"
-          description="这里预留给后续的 VIP 功能，结合你的持仓结构、基金风格和大盘走势生成行情分析与建议。当前版本只保留可见入口，不接实际 AI 能力。"
+          title="VIP 持仓组合分析"
+          description="围绕你的全部持仓组合输出结构化报告，聚合宏观、政策、财报与市场走势后给出可读性更强的结论与建议。"
           accent="amber"
+          badgeLabel={membership.isVip ? 'VIP ACTIVE' : 'VIP'}
+          quotaLabel={membership.isVip
+            ? `今日剩余：组合 ${remainingQuota.portfolioAnalysis} 次 · 板块 ${remainingQuota.sectorAnalysis} 次`
+            : '开通后可用：2 次板块分析 · 2 次组合分析'}
+          note={holdings.length > 0
+            ? '默认分析对象：全部持仓组合'
+            : '当前没有持仓记录，开通后建议先录入组合再发起分析'}
+          actions={membership.isVip ? [
+            {
+              label: '发起组合分析',
+              onClick: handleCreatePortfolioVIPTask,
+              variant: 'primary',
+            },
+            {
+              label: latestCompletedTask?.reportId ? '查看最近报告' : '查看示例报告',
+              href: latestCompletedTask?.reportId
+                ? `/vip/reports/${latestCompletedTask.reportId}`
+                : `/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultPortfolio}`,
+              variant: 'secondary',
+              icon: <FileStack className="h-4 w-4" />,
+            },
+          ] : [
+            {
+              label: '开通 VIP',
+              href: '/vip',
+              variant: 'primary',
+            },
+            {
+              label: '查看示例报告',
+              href: `/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultPortfolio}`,
+              variant: 'secondary',
+              icon: <FileStack className="h-4 w-4" />,
+            },
+          ]}
         />
       </div>
     </AccountAreaShell>

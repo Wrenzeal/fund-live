@@ -2,16 +2,20 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Check, ChevronDown, FolderPlus, Layers3, LoaderCircle, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Check, ChevronDown, FileStack, FolderPlus, Layers3, LoaderCircle, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
 import { VIPAnalysisEntry } from '@/components/vip-analysis-entry'
 import { WatchlistFundCard } from '@/components/watchlist-fund-card'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { useFundSearch } from '@/hooks/use-fund-data'
 import { useUserPortfolio } from '@/hooks/use-user-portfolio'
+import { useVIPPreview } from '@/hooks/use-vip-preview'
+import { VIP_SAMPLE_REPORT_IDS, type VIPTaskType } from '@/mocks/vip'
 import { cn } from '@/lib/utils'
 
 export default function WatchlistPage() {
+  const router = useRouter()
   const { user, isLoading } = useCurrentUser()
   const {
     watchlistGroups,
@@ -30,13 +34,58 @@ export default function WatchlistPage() {
   const [fundQuery, setFundQuery] = useState('')
   const [isCreatingGroup, setIsCreatingGroup] = useState(false)
   const [deletingGroupID, setDeletingGroupID] = useState<string | null>(null)
+  const [vipFeedback, setVipFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const { results } = useFundSearch(fundQuery)
+  const { membership, remainingQuota, createTask, latestCompletedTask } = useVIPPreview()
 
   const selectedGroup = useMemo(
     () => watchlistGroups.find((group) => group.id === selectedGroupID) ?? null,
     [selectedGroupID, watchlistGroups]
   )
   const selectedGroupLabel = selectedGroup?.name || '选择一个分组'
+
+  const handleCreateVIPTask = (type: VIPTaskType) => {
+    setVipFeedback(null)
+
+    if (!membership.isVip) {
+      router.push('/vip')
+      return
+    }
+
+    if (!selectedGroup) {
+      setVipFeedback({
+        type: 'error',
+        message: '请先选择一个自选分组，再发起 VIP 分析。',
+      })
+      return
+    }
+
+    const created = createTask({
+      type,
+      targetType: 'watchlist_group',
+      targetId: selectedGroup.id,
+      targetName: selectedGroup.name,
+    })
+
+    if (!created.ok) {
+      setVipFeedback({
+        type: 'error',
+        message: created.reason === 'quota_exhausted'
+          ? '今日对应类型的分析额度已用完，请明天再试。'
+          : '当前账号尚未开通 VIP。',
+      })
+      if (created.reason === 'not_vip') {
+        router.push('/vip')
+      }
+      return
+    }
+
+    setVipFeedback({
+      type: 'success',
+      message: `${type === 'sector_analysis' ? '板块分析' : '组合分析'}任务已创建，正在跳转到任务中心。`,
+    })
+    router.push(`/vip/tasks?focus=${created.taskId}`)
+  }
 
   const handleCreateGroup = async () => {
     if (isCreatingGroup) {
@@ -101,6 +150,18 @@ export default function WatchlistPage() {
   return (
     <AccountAreaShell title="你的自选" description="按分组整理你的观察基金，并快速看到每只基金的实时预估涨跌幅与迷你走势。数据已改为服务端存储。">
       <div className="space-y-8">
+        {vipFeedback && (
+          <div
+            className={cn(
+              'flex items-start gap-3 rounded-[28px] border px-4 py-4 text-sm',
+              vipFeedback.type === 'success'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-50'
+                : 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+            )}
+          >
+            <span>{vipFeedback.message}</span>
+          </div>
+        )}
         <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
           <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
             <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -373,8 +434,47 @@ export default function WatchlistPage() {
         </div>
 
         <VIPAnalysisEntry
-          title="AI 深度研判入口"
-          description="这里预留给后续的 Deep Research 场景，重点分析当日大盘走势、全球经济变化、宏观风险与接下来可能的演化路径。当前版本只保留 VIP 入口，不接实际分析能力。"
+          title="VIP 分组投研入口"
+          description="围绕当前自选分组识别主导板块，并从宏观环境、政策、财报与市场走势四个维度生成结构化分析。"
+          badgeLabel={membership.isVip ? 'VIP ACTIVE' : 'VIP'}
+          quotaLabel={membership.isVip
+            ? `今日剩余：板块 ${remainingQuota.sectorAnalysis} 次 · 组合 ${remainingQuota.portfolioAnalysis} 次`
+            : '开通后可用：2 次板块分析 · 2 次组合分析'}
+          note={selectedGroup
+            ? `当前目标分组：${selectedGroup.name}`
+            : '先选择一个分组，再从这里发起板块分析或组合分析'}
+          actions={membership.isVip ? [
+            {
+              label: '发起板块分析',
+              onClick: () => handleCreateVIPTask('sector_analysis'),
+              variant: 'primary',
+            },
+            {
+              label: '发起组合分析',
+              onClick: () => handleCreateVIPTask('portfolio_analysis'),
+              variant: 'secondary',
+            },
+            {
+              label: latestCompletedTask?.reportId ? '查看最近报告' : '查看示例报告',
+              href: latestCompletedTask?.reportId
+                ? `/vip/reports/${latestCompletedTask.reportId}`
+                : `/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultSector}`,
+              variant: 'ghost',
+              icon: <FileStack className="h-4 w-4" />,
+            },
+          ] : [
+            {
+              label: '开通 VIP',
+              href: '/vip',
+              variant: 'primary',
+            },
+            {
+              label: '查看示例报告',
+              href: `/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultSector}`,
+              variant: 'secondary',
+              icon: <FileStack className="h-4 w-4" />,
+            },
+          ]}
         />
       </div>
     </AccountAreaShell>

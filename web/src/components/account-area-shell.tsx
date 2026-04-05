@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, ChevronRight, Layers3, Sparkles, Wallet } from 'lucide-react'
+import { Activity, ChevronRight, Crown, Layers3, Sparkles, Wallet } from 'lucide-react'
 import { HeaderFundSearch } from '@/components/header-fund-search'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { UserAccountMenu } from '@/components/user-account-menu'
@@ -18,6 +18,7 @@ interface AccountAreaShellProps {
 const tabs = [
   { href: '/watchlist', label: '你的自选', icon: Layers3 },
   { href: '/holdings', label: '持仓明细', icon: Wallet },
+  { href: '/vip', label: 'VIP 分析', icon: Crown },
 ]
 
 export function AccountAreaShell({ title, description, children }: AccountAreaShellProps) {
@@ -86,7 +87,10 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
             <nav className="flex flex-wrap gap-3">
               {tabs.map((tab) => {
                 const Icon = tab.icon
-                const active = pathname === tab.href
+                const isVIPTab = tab.href === '/vip'
+                const active = tab.href === '/vip'
+                  ? pathname.startsWith('/vip')
+                  : pathname === tab.href
                 return (
                   <Link
                     key={tab.href}
@@ -94,22 +98,34 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
                     className={cn(
                       'group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl border px-4 py-2.5 text-sm transition-all duration-200',
                       'hover:-translate-y-0.5 active:scale-[0.985]',
-                      active
-                        ? 'border-cyan-500/40 bg-cyan-500/15 text-cyan-300 shadow-[0_14px_28px_rgba(34,211,238,0.14)]'
-                        : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-400/35 hover:bg-cyan-400/10 hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)]'
+                      isVIPTab && 'vip-tab-shell',
+                      isVIPTab
+                        ? active
+                          ? 'vip-tab-shell-active'
+                          : 'vip-tab-shell-idle'
+                        : active
+                          ? 'account-standard-tab account-standard-tab-active border-cyan-500/40 bg-cyan-500/15 text-cyan-300 shadow-[0_14px_28px_rgba(34,211,238,0.14)]'
+                          : 'account-standard-tab account-standard-tab-idle border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-400/35 hover:bg-cyan-400/10 hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)]'
                     )}
                   >
-                    <span className="account-tab-shine" />
+                    <span className={cn(isVIPTab ? 'vip-tab-shine' : 'account-tab-shine')} />
+                    {isVIPTab && <span className="vip-tab-glow" />}
                     <span
                       className={cn(
                         'relative z-10 flex items-center gap-2',
-                        active && 'account-tab-active'
+                        active && (isVIPTab ? 'vip-tab-active' : 'account-tab-active')
                       )}
                     >
                       <Icon
                         className={cn(
                           'h-4 w-4 transition-transform duration-300',
-                          active ? 'scale-105' : 'group-hover:-rotate-6 group-hover:scale-110'
+                          isVIPTab
+                            ? active
+                              ? 'scale-110'
+                              : 'group-hover:rotate-6 group-hover:scale-115'
+                            : active
+                              ? 'scale-105'
+                              : 'group-hover:-rotate-6 group-hover:scale-110'
                         )}
                       />
                       {tab.label}

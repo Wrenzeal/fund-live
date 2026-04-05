@@ -150,7 +150,7 @@ func main() {
 			"status":       "ok",
 			"timestamp":    time.Now().Unix(),
 			"service":      "FundLive API",
-			"version":      "2026.4.4",
+			"version":      "2026.4.5",
 			"storage_mode": storageMode,
 		})
 	})
