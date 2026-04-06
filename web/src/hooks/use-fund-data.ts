@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useEffectEvent } from 'react'
 import useSWR, { SWRConfiguration } from 'swr'
 import { useMarketTradingState } from './use-market-status'
 
@@ -211,6 +212,22 @@ export function useFundEstimate(fundId: string | null, options?: SWRConfiguratio
     const estimate = data?.data
     const isWarming = isFundDataWarmingError(error)
     const warmingMessage = isWarming ? error.message : ''
+    const triggerRetry = useEffectEvent(() => {
+        void mutate()
+    })
+
+    useEffect(() => {
+        if (!isWarming) {
+            return
+        }
+
+        const delayMs = getRetryDelayMs(error, 5000)
+        const timer = window.setTimeout(() => {
+            triggerRetry()
+        }, delayMs)
+
+        return () => window.clearTimeout(timer)
+    }, [error, isWarming])
 
     return {
         estimate,
@@ -233,7 +250,7 @@ export function useFundEstimate(fundId: string | null, options?: SWRConfiguratio
 export function useFund(fundId: string | null) {
     const swrKey = fundId ? `${API_BASE_URL}/api/v1/fund/${fundId}` : null
 
-    const { data, error, isLoading } = useSWR<{ data: Fund; meta?: ResponseMeta }>(
+    const { data, error, isLoading, mutate } = useSWR<{ data: Fund; meta?: ResponseMeta }>(
         swrKey,
         fetchEnvelope,
         {
@@ -241,6 +258,22 @@ export function useFund(fundId: string | null) {
             dedupingInterval: 60000, // 基金信息1分钟缓存
         }
     )
+
+    const triggerRetry = useEffectEvent(() => {
+        void mutate()
+    })
+
+    useEffect(() => {
+        if (data?.meta?.cache_status !== 'warming') {
+            return
+        }
+
+        const timer = window.setTimeout(() => {
+            triggerRetry()
+        }, 5000)
+
+        return () => window.clearTimeout(timer)
+    }, [data?.meta?.cache_status])
 
     return {
         fund: data?.data,
@@ -257,7 +290,7 @@ export function useFund(fundId: string | null) {
 export function useFundHoldings(fundId: string | null) {
     const swrKey = fundId ? `${API_BASE_URL}/api/v1/fund/${fundId}/holdings` : null
 
-    const { data, error, isLoading } = useSWR<{ data: { fund: Fund; holdings: HoldingDetail[] }; meta?: ResponseMeta }>(
+    const { data, error, isLoading, mutate } = useSWR<{ data: { fund: Fund; holdings: HoldingDetail[] }; meta?: ResponseMeta }>(
         swrKey,
         fetchEnvelope,
         {
@@ -265,6 +298,22 @@ export function useFundHoldings(fundId: string | null) {
             dedupingInterval: 60000,
         }
     )
+
+    const triggerRetry = useEffectEvent(() => {
+        void mutate()
+    })
+
+    useEffect(() => {
+        if (data?.meta?.cache_status !== 'warming') {
+            return
+        }
+
+        const timer = window.setTimeout(() => {
+            triggerRetry()
+        }, 5000)
+
+        return () => window.clearTimeout(timer)
+    }, [data?.meta?.cache_status])
 
     return {
         fund: data?.data?.fund,
@@ -302,7 +351,7 @@ export function useTimeSeries(fundId: string | null) {
 
     const swrKey = fundId ? `${API_BASE_URL}/api/v1/fund/${fundId}/timeseries` : null
 
-    const { data, error, isLoading } = useSWR<{ data: TimeSeriesResponse; meta?: ResponseMeta }>(
+    const { data, error, isLoading, mutate } = useSWR<{ data: TimeSeriesResponse; meta?: ResponseMeta }>(
         swrKey,
         fetchEnvelope,
         {
@@ -323,6 +372,22 @@ export function useTimeSeries(fundId: string | null) {
 
     const payload = data?.data
     const isWarming = isFundDataWarmingError(error)
+    const triggerRetry = useEffectEvent(() => {
+        void mutate()
+    })
+
+    useEffect(() => {
+        if (!isWarming) {
+            return
+        }
+
+        const delayMs = getRetryDelayMs(error, 5000)
+        const timer = window.setTimeout(() => {
+            triggerRetry()
+        }, delayMs)
+
+        return () => window.clearTimeout(timer)
+    }, [error, isWarming])
 
     return {
         timeSeries: payload?.points || [],

@@ -49,9 +49,22 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   const [selectionError, setSelectionError] = useState<string | null>(null)
   const lastStableFundIdRef = useRef<string>(DEFAULT_FUND_ID)
   const switchingFundIdRef = useRef<string | null>(null)
-
   // 市场状态 hook
   const marketStatus = useMarketStatus()
+
+  const syncFundInUrl = (fundId: string) => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const url = new URL(window.location.href)
+    if (fundId === DEFAULT_FUND_ID) {
+      url.searchParams.delete('fund')
+    } else {
+      url.searchParams.set('fund', fundId)
+    }
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  }
 
   const handleEstimateSuccess = (data: { fund_id?: string }) => {
     if (!data?.fund_id) return
@@ -77,6 +90,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
 
     startTransition(() => {
       setCurrentFundId(lastStableFundIdRef.current)
+      syncFundInUrl(lastStableFundIdRef.current)
     })
   }
 
@@ -89,7 +103,6 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     isTrading,
     refreshInterval,
     isWarming: isEstimateWarming,
-    warmingMessage: estimateWarmingMessage,
     retryAfterSeconds,
   } = useFundEstimate(currentFundId, {
     onSuccess: handleEstimateSuccess,
@@ -103,7 +116,6 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     isHistorical,
     isLoading: isTimeSeriesLoading,
     isWarming: isTimeSeriesWarming,
-    warmingMessage: timeSeriesWarmingMessage,
   } = useTimeSeries(currentFundId)
 
   // 切换基金时使用 transition 避免阻塞
@@ -112,6 +124,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
 
     setSelectionError(null)
     setSwitchingFundId(fundId)
+    syncFundInUrl(fundId)
 
     startTransition(() => {
       setCurrentFundId(fundId)
@@ -129,10 +142,10 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   }, [switchingFundId])
 
   useEffect(() => {
-    if (isFundSwitching) {
+    if (isFundSwitching && !isEstimateWarming) {
       const timeout = window.setTimeout(() => {
         setSwitchingFundId(null)
-      }, isEstimateWarming ? 30000 : 15000) // 预热时放宽等待时间
+      }, 15000)
       return () => window.clearTimeout(timeout)
     }
   }, [isEstimateWarming, isFundSwitching, switchingFundId])
@@ -146,9 +159,9 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   const lastUpdated = estimate?.calculated_at ? new Date(estimate.calculated_at) : null
 
   const warmupNotice = isEstimateWarming
-    ? estimateWarmingMessage || `基金 ${currentFundId} 数据预热中，正在自动重试。`
+    ? `基金 ${currentFundId} 数据预热中，正在自动重试。`
     : isTimeSeriesWarming
-      ? timeSeriesWarmingMessage || '分时数据预热中，正在自动重试。'
+      ? `基金 ${currentFundId} 的分时数据预热中，正在自动重试。`
       : fundCacheStatus === 'warming'
         ? `基金 ${currentFundId} 的基础资料正在后台补全，页面会自动刷新。`
         : ''
