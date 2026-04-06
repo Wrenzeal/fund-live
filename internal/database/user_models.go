@@ -12,6 +12,7 @@ type User struct {
 	Email                string     `gorm:"type:varchar(255);uniqueIndex;not null" json:"email"`
 	DisplayName          string     `gorm:"type:varchar(100);not null" json:"display_name"`
 	AvatarURL            string     `gorm:"type:text" json:"avatar_url"`
+	IsAdmin              bool       `gorm:"not null;default:false;index" json:"is_admin"`
 	PreferredQuoteSource string     `gorm:"type:varchar(20);default:'sina'" json:"preferred_quote_source"`
 	PasswordHash         string     `gorm:"type:varchar(255)" json:"-"`
 	GoogleSub            *string    `gorm:"type:varchar(255);uniqueIndex" json:"-"`
@@ -132,5 +133,8 @@ func UserModels() []interface{} {
 		&AnalysisReport{},
 		&AnalysisReportSource{},
 		&VIPOrder{},
+		&Issue{},
+		&Announcement{},
+		&AnnouncementRead{},
 	}
 }

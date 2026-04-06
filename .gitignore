@@ -39,3 +39,4 @@ dist/
 *.properties
 !src/main/resources/*.properties
 fundlive.yaml
+pgdata/

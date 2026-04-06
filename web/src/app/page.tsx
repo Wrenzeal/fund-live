@@ -198,6 +198,25 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
               <FundSearchWrapper onSelect={handleFundSelect} currentFundId={currentFundId} />
             </div>
 
+            <nav className="hidden items-center gap-2 xl:flex">
+              {[
+                { href: '/issues', label: '我有想法！' },
+                { href: '/announcements', label: '更新公告' },
+              ].map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'group relative overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-theme-secondary transition-all duration-200',
+                    'hover:-translate-y-0.5 hover:border-cyan-400/35 hover:bg-cyan-400/10 hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)] active:scale-[0.97]'
+                  )}
+                >
+                  <span className="action-button-shine" />
+                  <span className="relative z-10">{item.label}</span>
+                </Link>
+              ))}
+            </nav>
+
             {/* Controls */}
             <div className="flex items-center gap-4">
               {/* Market status & refresh controls */}

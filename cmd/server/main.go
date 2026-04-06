@@ -48,6 +48,8 @@ func main() {
 	var watchlistRepo domain.UserWatchlistRepository
 	var fundHoldingRepo domain.UserFundHoldingRepository
 	var overrideRepo domain.UserHoldingOverrideRepository
+	var issueRepo domain.IssueRepository
+	var announcementRepo domain.AnnouncementRepository
 	var vipRepo domain.VIPRepository
 	var dbInstance = database.GetDB() // Will be nil if not initialized
 	var fundResolver *service.FundResolver
@@ -71,6 +73,8 @@ func main() {
 		watchlistRepo = userStore
 		fundHoldingRepo = userStore
 		overrideRepo = userStore
+		issueRepo = repository.NewPostgresIssueRepository(db)
+		announcementRepo = repository.NewPostgresAnnouncementRepository(db)
 		vipRepo = repository.NewPostgresVIPRepository(db)
 		if err := service.SeedDefaultValuationProfiles(context.Background(), db); err != nil {
 			log.Fatalf("❌ Failed to seed valuation profiles: %v", err)
@@ -86,6 +90,8 @@ func main() {
 		watchlistRepo = userStore
 		fundHoldingRepo = userStore
 		overrideRepo = userStore
+		issueRepo = repository.NewMemoryIssueRepository()
+		announcementRepo = repository.NewMemoryAnnouncementRepository()
 		vipRepo = repository.NewMemoryVIPRepository()
 		log.Println("✅ Using in-memory storage (set STORAGE_MODE=postgres to use PostgreSQL)")
 	}
@@ -108,6 +114,8 @@ func main() {
 	authConfig.DefaultQuoteSource = defaultQuoteSource
 	authService := service.NewAuthService(userRepo, sessionRepo, authConfig)
 	userPreferenceService := service.NewUserPreferenceService(fundRepo, favoriteRepo, watchlistRepo, fundHoldingRepo, overrideRepo)
+	issueService := service.NewIssueService(issueRepo)
+	announcementService := service.NewAnnouncementService(announcementRepo)
 	vipService := service.NewVIPService(vipRepo)
 	wechatPayConfig := loadWeChatPayConfig(fileCfg)
 	if wechatPayConfig.Enabled {
@@ -145,6 +153,8 @@ func main() {
 	fundHandler.SetTransientFundDataLoader(fundDataLoader)
 	authHandler := handler.NewAuthHandler(authService, authConfig.CookieName, authConfig.CookieSecure)
 	userHandler := handler.NewUserHandler(userPreferenceService, userRepo, defaultQuoteSource)
+	issueHandler := handler.NewIssueHandler(issueService)
+	announcementHandler := handler.NewAnnouncementHandler(announcementService)
 	vipHandler := handler.NewVIPHandler(vipService)
 
 	// Setup Gin router
@@ -219,6 +229,36 @@ func main() {
 			market.GET("/pricing-date", fundHandler.GetPricingDatePreview)
 		}
 
+		issues := v1.Group("/issues")
+		{
+			issues.GET("", issueHandler.List)
+			issues.GET("/:id", issueHandler.Get)
+			issuesProtected := issues.Group("")
+			issuesProtected.Use(middleware.RequireAuth(authService, authConfig.CookieName))
+			issuesProtected.POST("", issueHandler.Create)
+		}
+
+		announcements := v1.Group("/announcements")
+		{
+			announcements.GET("", announcementHandler.List)
+
+			announcementsProtected := announcements.Group("")
+			announcementsProtected.Use(middleware.RequireAuth(authService, authConfig.CookieName))
+			announcementsProtected.GET("/unread", announcementHandler.ListUnread)
+			announcementsProtected.POST("/:id/read", announcementHandler.MarkRead)
+
+			announcements.GET("/:id", announcementHandler.Get)
+		}
+
+		admin := v1.Group("/admin")
+		admin.Use(middleware.RequireAuth(authService, authConfig.CookieName))
+		admin.Use(middleware.RequireAdmin())
+		{
+			admin.PUT("/issues/:id/status", issueHandler.UpdateStatus)
+			admin.POST("/announcements", announcementHandler.Create)
+			admin.POST("/announcements/import-changelog", announcementHandler.ImportChangelog)
+		}
+
 		vip := v1.Group("/vip")
 		{
 			vip.GET("/reports/:id", vipHandler.GetReport)
@@ -284,6 +324,16 @@ func main() {
 		log.Printf("   GET /api/v1/fund/:id/timeseries - Get intraday time series")
 		log.Printf("   GET /api/v1/market/status - Get A-Share market status")
 		log.Printf("   GET /api/v1/market/pricing-date?trade_at=<RFC3339> - Preview holding pricing date")
+		log.Printf("   GET /api/v1/issues - List public issues")
+		log.Printf("   GET /api/v1/issues/:id - Get issue detail")
+		log.Printf("   POST /api/v1/issues - Create issue (auth required)")
+		log.Printf("   PUT /api/v1/admin/issues/:id/status - Update issue status (admin)")
+		log.Printf("   GET /api/v1/announcements - List announcements")
+		log.Printf("   GET /api/v1/announcements/:id - Get announcement detail")
+		log.Printf("   GET /api/v1/announcements/unread - List unread announcements (auth)")
+		log.Printf("   POST /api/v1/announcements/:id/read - Mark announcement as read (auth)")
+		log.Printf("   POST /api/v1/admin/announcements - Create announcement (admin)")
+		log.Printf("   POST /api/v1/admin/announcements/import-changelog - Import CHANGELOG announcements (admin)")
 		log.Printf("   GET /api/v1/vip/reports/:id - Get VIP report detail")
 		log.Printf("   GET /api/v1/vip/membership - Get VIP membership state")
 		log.Printf("   POST /api/v1/vip/membership/preview-activate - Activate preview VIP membership")

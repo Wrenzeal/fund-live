@@ -21,6 +21,7 @@ type User struct {
 	Email                string       `json:"email"`
 	DisplayName          string       `json:"display_name"`
 	AvatarURL            string       `json:"avatar_url"`
+	IsAdmin              bool         `json:"is_admin"`
 	PreferredQuoteSource QuoteSource  `json:"preferred_quote_source"`
 	PasswordHash         string       `json:"-"`
 	GoogleSub            string       `json:"-"`

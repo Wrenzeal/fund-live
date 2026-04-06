@@ -11,6 +11,7 @@ export interface AuthUser {
   email: string
   display_name: string
   avatar_url: string
+  is_admin: boolean
   preferred_quote_source: QuoteSource
   provider: 'password' | 'google' | 'hybrid'
   email_verified: boolean

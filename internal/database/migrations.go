@@ -17,6 +17,21 @@ type sqlMigration struct {
 
 var managedMigrations = []sqlMigration{
 	{
+		ID:             "20260406_user_admin_flag",
+		RequiredTables: []string{"tb_user"},
+		Statements:     adminUserMigrationStatements,
+	},
+	{
+		ID:             "20260406_issue_tables",
+		RequiredTables: []string{},
+		Statements:     issueMigrationStatements,
+	},
+	{
+		ID:             "20260406_announcement_tables",
+		RequiredTables: []string{},
+		Statements:     announcementMigrationStatements,
+	},
+	{
 		ID:             "20260405_vip_tables",
 		RequiredTables: []string{},
 		Statements:     vipTableMigrationStatements,

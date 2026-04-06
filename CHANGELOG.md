@@ -12,6 +12,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2026.4.5] - 2026-04-05
 
 ### Added
+- **公开“我有想法！”反馈系统**
+  - 新增公开的 `/issues` 列表页与 `/issues/:id` 详情页
+  - 未登录用户可浏览和搜索公开想法；登录用户可提交新的 bug、功能诉求和改进建议
+  - 管理员可将想法状态更新为 `pending` / `accepted` / `completed`
+  - 后端新增 `issues` 表及公开查询、登录提交、管理员改状态接口
+
+- **公告与更新日志系统**
+  - 新增公开的 `/announcements` 历史公告页与 `/announcements/:id` 详情页
+  - 新增 `announcements`、`announcement_reads` 持久化表
+  - 支持管理员手动发布公告
+  - 支持管理员从 `CHANGELOG.md` 导入公告记录
+  - 登录用户存在未读公告时会弹出提醒，并支持标记已读
+
+- **轻量管理员能力**
+  - 用户模型新增 `is_admin` 字段
+  - 新增管理员鉴权中间件，用于 Issue 状态处理和公告发布 / 导入
+
 - **VIP 前端展示版闭环**
   - 新增 `/vip` 会员介绍页
   - 新增 `/vip/checkout` 开通展示页
@@ -33,6 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 新增 `fundlive.yaml` / `fundlive.example.yaml` 中的 `payment.wechat_pay` 配置结构，支持后续补齐商户参数与证书路径
 
 ### Changed
+- **公开反馈与公告页面体验统一**
+  - 公开反馈页面标题统一为“我有想法！”
+  - 反馈页的类型 / 状态 / 想法类型选择器改为站内统一的自定义下拉样式，不再使用原生 `select`
+  - “想法发送”主按钮补充与站内其他 CTA 一致的动效反馈
+  - 站点导航、账户菜单与详情页返回入口的命名统一为“我有想法！”
+
 - **VIP 入口与页面视觉强化**
   - 自选页与持仓页中的 VIP 入口已从禁用占位按钮改成真实可点击入口
   - VIP 导航页签、VIP CTA、会员页 Hero 和开通页价格区做了更明显的高级化视觉增强

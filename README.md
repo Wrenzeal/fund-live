@@ -10,6 +10,10 @@
 
 ## 2026.4.5 更新摘要
 
+- 新增公开“我有想法！”反馈系统：游客可浏览与搜索，登录用户可提交 bug / 功能诉求 / 改进建议，管理员可更新处理状态
+- 新增公告与更新日志系统：支持历史公告页、公告详情页、登录后未读公告弹窗与已读记录
+- 新增轻量管理员能力：用户模型新增 `is_admin` 字段，用于 Issue 状态处理和公告发布 / 导入
+- 公开反馈页已统一命名为“我有想法！”，并将筛选器重写为站内统一风格的自定义下拉，发送按钮补充了动效反馈
 - 新增 VIP 前端页面闭环：会员介绍页、开通页、任务中心、报告详情页，以及自选/持仓页的 VIP 入口
 - 自选页和持仓页中的 VIP 入口已从占位按钮改成真实可点击入口，并接入会员状态、任务与报告流转；报告内容当前仍以模板化样例驱动
 - 新增 VIP 后端基础骨架：`user_memberships`、`vip_usage_daily`、`analysis_tasks`、`analysis_reports`、`analysis_report_sources`
@@ -75,6 +79,8 @@
 - VIP 基础后端：会员状态、每日额度、分析任务、报告详情与来源列表已具备持久化数据结构
 - 支持 VIP 预览开通 / 重置链路，在真实支付接入前先使用后端保存会员状态
 - VIP 支付后端：已支持 `vip_orders`、微信支付 `Native` 下单、订单状态查询、微信回调处理，以及支付成功后自动开通 / 续期会员
+- 公开“我有想法！”系统：支持游客浏览、筛选和搜索；登录用户可提交 bug / 功能诉求 / 改进建议；管理员可更新处理状态
+- 公告系统：支持历史公告展示、管理员手动发布、从 `CHANGELOG.md` 导入，以及登录后未读公告弹窗 / 已读记录
 
 ### 前端
 - Next.js 16 App Router
@@ -96,6 +102,9 @@
   - 本地清空历史搜索
 - 通过同源 `/api/v1/*` 调用后端，避免浏览器直接跨域请求后端
 - 自选页与持仓页已接入 VIP 入口，支持真实会员状态、任务与模板化示例报告流转
+- 新增公开的“我有想法！”页面，可查看全站反馈并在登录后提交新的想法
+- 新增公开的公告 / 更新日志页面，可查看历史更新记录
+- 登录用户如有未读公告，会在进入站点后收到弹窗提醒并可标记已读
 - Dark / Cyber / Classic 三套主题已做专项可读性修正，其中 Classic 针对浅色层次、页签与 VIP 页面做了增强
 - 自选 / 持仓页按钮、切换标签与删除操作增加动画反馈
 
@@ -137,7 +146,6 @@ fund/
 │   ├── service/                 # 估值、联接基金解析、分时回填
 │   └── trading/                 # A 股交易时段判断
 ├── web/                         # Next.js 前端
-├── fundlive.yaml                # 项目实际配置文件
 ├── fundlive.example.yaml        # 项目配置模板
 └── docker-compose.yml           # 本地示例 PostgreSQL 容器配置
 ```
@@ -201,7 +209,7 @@ payment:
 
 说明：
 
-- 运行时以项目根目录的 `fundlive.yaml` 为主；`docker-compose.yml` 仅提供本地示例数据库，不代表当前环境一定使用它
+- 运行时以项目根目录的本地 `fundlive.yaml` 为主；`docker-compose.yml` 仅提供本地示例数据库，不代表当前环境一定使用它
 - 推荐通过 `fundlive.yaml` 启动项目，不要在命令行临时拼接环境变量
 - 环境变量仍然可以覆盖配置文件
 - `quote.default_source` 用于指定未登录用户和未设置偏好的用户默认使用的行情源，当前支持 `sina` / `tencent`
@@ -210,7 +218,7 @@ payment:
 - `database.log_level` 支持 `silent/error/warn/info`，建议日常运行使用 `warn`
 - `database.auto_migrate` 默认建议保持 `false`；启动时会执行受控 SQL migration，并将结果记录到 `schema_migrations`
 - 如果是一个全新的空 PostgreSQL 库，首次建表可临时打开 `database.auto_migrate=true` 启动一次；完成后应恢复为 `false`
-- 请不要把真实数据库密码提交到仓库
+- 请不要把真实数据库密码提交到仓库；本地 `fundlive.yaml` 建议仅保留在开发机，不纳入版本控制
 - 如果要启用 Google 登录，后端需要配置 `auth.google_client_id` 或环境变量 `GOOGLE_CLIENT_ID`
 - 前端启用 Google 登录时，需要在 `web/.env.local` 中配置 `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
 - 如果要启用微信支付，需要补齐 `payment.wechat_pay` 下的商户号、应用 ID、商户私钥、商户证书序列号、API v3 Key 和回调地址

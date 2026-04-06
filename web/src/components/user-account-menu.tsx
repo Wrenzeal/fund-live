@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { Check, ChevronDown, Layers3, Loader2, LogOut, Radio, ShieldCheck, Wallet } from 'lucide-react'
+import { Bell, Bug, Check, ChevronDown, Layers3, Loader2, LogOut, Radio, ShieldCheck, ShieldUser, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { logout, updateQuoteSourcePreference, useCurrentUser, type QuoteSource } from '@/hooks/use-auth'
 
@@ -166,6 +166,12 @@ export function UserAccountMenu() {
                   <ShieldCheck className="h-3.5 w-3.5" />
                   用户 ID: {user.id}
                 </div>
+                {user.is_admin && (
+                  <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
+                    <ShieldUser className="h-3.5 w-3.5" />
+                    管理员
+                  </div>
+                )}
               </div>
 
               <div className="border-b border-[var(--card-border)] p-2">
@@ -194,6 +200,34 @@ export function UserAccountMenu() {
                   <div>
                     <div className="text-sm font-medium text-theme-primary">持仓明细</div>
                     <div className="text-xs text-theme-muted">查看持仓金额与实时预估涨跌额</div>
+                  </div>
+                </Link>
+
+                <Link
+                  href="/issues"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-[var(--input-bg)]"
+                >
+                  <div className="rounded-xl bg-rose-500/15 p-2 text-rose-300">
+                    <Bug className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-theme-primary">我有想法！</div>
+                    <div className="text-xs text-theme-muted">把 bug、功能诉求和改进建议发出来</div>
+                  </div>
+                </Link>
+
+                <Link
+                  href="/announcements"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-[var(--input-bg)]"
+                >
+                  <div className="rounded-xl bg-emerald-500/15 p-2 text-emerald-300">
+                    <Bell className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-theme-primary">更新公告</div>
+                    <div className="text-xs text-theme-muted">查看站点公告和历史更新记录</div>
                   </div>
                 </Link>
               </div>
