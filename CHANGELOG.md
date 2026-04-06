@@ -17,13 +17,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 新增 `/vip/checkout` 开通展示页
   - 新增 `/vip/tasks` 分析任务中心
   - 新增 `/vip/reports/:id` 报告详情页
-  - 新增 VIP mock 数据与前端状态访问层，用于模拟会员状态、额度、任务和报告流转
+  - 新增 VIP 样例报告模板与前端状态访问层，用于承载会员状态、额度、任务和报告展示
+
+- **VIP 后端真实骨架**
+  - 新增 `user_memberships`、`vip_usage_daily`、`analysis_tasks`、`analysis_reports`、`analysis_report_sources`
+  - 新增 `GET /api/v1/vip/membership`、`GET /api/v1/vip/quota`、`GET /api/v1/vip/tasks`、`POST /api/v1/vip/tasks`
+  - 新增 `GET /api/v1/vip/reports/:id`，支持读取公开示例报告和当前用户的持久化报告
+  - 新增 `POST /api/v1/vip/membership/preview-activate` 与 `POST /api/v1/vip/preview/reset`，用于在真实支付接入前保留后端预览开通链路
+
+- **VIP 支付订单与微信支付接入**
+  - 新增 `vip_orders` 持久化表，用于保存 VIP 支付订单、支付状态、微信交易单号和回调原文
+  - 新增 `POST /api/v1/vip/orders` 与 `GET /api/v1/vip/orders/:orderId`
+  - 新增微信支付 `Native` 下单、查单与回调处理，支付成功后会自动开通或续期 VIP 会员
+  - 新增 `POST /api/v1/vip/payments/wechat/notify` 回调入口
+  - 新增 `fundlive.yaml` / `fundlive.example.yaml` 中的 `payment.wechat_pay` 配置结构，支持后续补齐商户参数与证书路径
 
 ### Changed
 - **VIP 入口与页面视觉强化**
   - 自选页与持仓页中的 VIP 入口已从禁用占位按钮改成真实可点击入口
   - VIP 导航页签、VIP CTA、会员页 Hero 和开通页价格区做了更明显的高级化视觉增强
   - 用户空间导航新增 `VIP 分析` 页签
+
+- **VIP 状态读取切到后端**
+  - `useVIPPreview` 已从 `localStorage` mock 状态切到后端接口，会员状态、每日额度、任务列表与报告详情均改为读取后端数据
+  - 自选页与持仓页发起的 VIP 分析任务已改为真实写入 `analysis_tasks`
+  - 报告详情页已改为通过后端接口读取持久化报告；报告内容当前仍复用模板化样例结构
+
+- **VIP Checkout 改为真实订单流**
+  - `/vip/checkout` 已从“直接预览开通”改为优先创建真实订单并轮询订单状态
+  - 当前默认支付方式为微信支付 `Native`；若支付配置未完成，前端会明确提示而不是静默失败
+  - 为开发联调保留“预览开通”后备入口，避免在商户参数未补齐时阻塞其他 VIP 功能验证
 
 - **主题显示专项修复**
   - `classic` 主题补充了更接近 Windows light 风格的卡片层次、页签高亮和浅色背景对比度

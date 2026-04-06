@@ -212,7 +212,7 @@ export default function HoldingsPage() {
     }
   }
 
-  const handleCreatePortfolioVIPTask = () => {
+  const handleCreatePortfolioVIPTask = async () => {
     setVipFeedback(null)
 
     if (!membership.isVip) {
@@ -228,12 +228,21 @@ export default function HoldingsPage() {
       return
     }
 
-    const created = createTask({
-      type: 'portfolio_analysis',
-      targetType: 'holdings_all',
-      targetId: 'all-holdings',
-      targetName: '全部持仓组合',
-    })
+    let created
+    try {
+      created = await createTask({
+        type: 'portfolio_analysis',
+        targetType: 'holdings_all',
+        targetId: 'all-holdings',
+        targetName: '全部持仓组合',
+      })
+    } catch (error) {
+      setVipFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : '创建 VIP 任务失败，请稍后重试。',
+      })
+      return
+    }
 
     if (!created.ok) {
       setVipFeedback({
@@ -627,7 +636,7 @@ export default function HoldingsPage() {
           actions={membership.isVip ? [
             {
               label: '发起组合分析',
-              onClick: handleCreatePortfolioVIPTask,
+              onClick: () => void handleCreatePortfolioVIPTask(),
               variant: 'primary',
             },
             {

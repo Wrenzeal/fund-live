@@ -1,289 +1,356 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import useSWR from 'swr'
+import { useCurrentUser } from '@/hooks/use-auth'
 import {
   VIP_DAILY_QUOTA,
   VIP_PLAN,
-  VIP_SAMPLE_REPORT_IDS,
   VIP_SAMPLE_REPORTS,
   type VIPBillingCycle,
   type VIPMembershipState,
-  type VIPTaskRecord,
+  type VIPReport,
+  type VIPReportSource,
   type VIPTaskType,
   type VIPTargetType,
   type VIPTaskView,
   getVIPSampleReportByID,
 } from '@/mocks/vip'
 
-const MEMBERSHIP_STORAGE_KEY = 'fundlive-vip-preview-membership-v1'
-const TASKS_STORAGE_KEY = 'fundlive-vip-preview-tasks-v1'
-const UPDATE_EVENT = 'fundlive-vip-preview-updated'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
-function isBrowser() {
-  return typeof window !== 'undefined'
+interface ApiEnvelope<T> {
+  success: boolean
+  data?: T
+  error?: {
+    code?: string
+    message?: string
+  }
 }
 
-function shanghaiDateKey(date: Date) {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date)
+interface RawMembershipState {
+  is_vip: boolean
+  plan_code: 'vip'
+  plan_name: string
+  billing_cycle: VIPBillingCycle
+  activated_at: string
+  expires_at: string
 }
 
-function addDays(date: Date, days: number) {
-  const next = new Date(date)
-  next.setDate(next.getDate() + days)
-  return next
+interface RawQuotaStatus {
+  usage_date: string
+  sector_analysis_limit: number
+  sector_analysis_used: number
+  sector_analysis_remaining: number
+  portfolio_analysis_limit: number
+  portfolio_analysis_used: number
+  portfolio_analysis_remaining: number
 }
 
-function buildDefaultMembership(): VIPMembershipState {
+interface RawTaskView {
+  id: string
+  type: VIPTaskType
+  target_type: VIPTargetType
+  target_id: string
+  target_name: string
+  created_at: string
+  status: VIPTaskView['status']
+  started_at?: string
+  completed_at?: string
+  progress_text: string
+  report_id?: string
+}
+
+interface RawReportSource extends Omit<VIPReportSource, 'publishedAt'> {
+  published_at: string
+}
+
+interface RawReport extends Omit<VIPReport, 'targetName' | 'generatedAt' | 'coverageWindow' | 'footerDisclaimer' | 'sources'> {
+  target_name: string
+  generated_at: string
+  coverage_window: string
+  footerDisclaimer: string
+  sources: RawReportSource[]
+}
+
+export interface VIPOrder {
+  id: string
+  orderNo: string
+  planCode: 'vip'
+  planName: string
+  billingCycle: VIPBillingCycle
+  amountFen: number
+  currency: string
+  status: 'pending_payment' | 'paid' | 'closed' | 'failed'
+  paymentChannel: 'wechat_pay'
+  paymentScene: 'native'
+  description: string
+  codeURL?: string
+  wechatTransactionID?: string
+  errorCode?: string
+  errorMessage?: string
+  expiresAt?: string
+  paidAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface RawOrder {
+  id: string
+  order_no: string
+  plan_code: 'vip'
+  plan_name: string
+  billing_cycle: VIPBillingCycle
+  amount_fen: number
+  currency: string
+  status: VIPOrder['status']
+  payment_channel: 'wechat_pay'
+  payment_scene: 'native'
+  description: string
+  code_url?: string
+  wechat_transaction_id?: string
+  error_code?: string
+  error_message?: string
+  expires_at?: string
+  paid_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export class VIPRequestError extends Error {
+  code: string
+
+  constructor(message: string, code?: string) {
+    super(message)
+    this.name = 'VIPRequestError'
+    this.code = code || 'VIP_REQUEST_FAILED'
+  }
+}
+
+const defaultMembershipState: VIPMembershipState = {
+  isVip: false,
+  planCode: VIP_PLAN.code,
+  planName: VIP_PLAN.name,
+  billingCycle: 'monthly',
+  activatedAt: '',
+  expiresAt: '',
+  usageByDate: {},
+}
+
+function normalizeMembership(raw?: RawMembershipState | null): VIPMembershipState {
+  if (!raw) {
+    return defaultMembershipState
+  }
+
   return {
-    isVip: false,
-    planCode: 'vip',
-    planName: VIP_PLAN.name,
-    billingCycle: 'monthly',
-    activatedAt: '',
-    expiresAt: '',
+    isVip: raw.is_vip,
+    planCode: raw.plan_code,
+    planName: raw.plan_name,
+    billingCycle: raw.billing_cycle,
+    activatedAt: raw.activated_at,
+    expiresAt: raw.expires_at,
     usageByDate: {},
   }
 }
 
-function loadMembershipState() {
-  if (!isBrowser()) {
-    return buildDefaultMembership()
-  }
-
-  try {
-    const raw = window.localStorage.getItem(MEMBERSHIP_STORAGE_KEY)
-    if (!raw) {
-      return buildDefaultMembership()
-    }
-
-    const parsed = JSON.parse(raw) as Partial<VIPMembershipState>
-    return {
-      ...buildDefaultMembership(),
-      ...parsed,
-      usageByDate: parsed.usageByDate ?? {},
-    }
-  } catch {
-    return buildDefaultMembership()
+function normalizeTask(raw: RawTaskView): VIPTaskView {
+  return {
+    id: raw.id,
+    type: raw.type,
+    targetType: raw.target_type,
+    targetId: raw.target_id,
+    targetName: raw.target_name,
+    createdAt: raw.created_at,
+    status: raw.status,
+    startedAt: raw.started_at,
+    completedAt: raw.completed_at,
+    progressText: raw.progress_text,
+    reportId: raw.report_id,
+    templateReportId: raw.report_id || '',
   }
 }
 
-function saveMembershipState(state: VIPMembershipState) {
-  if (!isBrowser()) {
-    return
-  }
-
-  window.localStorage.setItem(MEMBERSHIP_STORAGE_KEY, JSON.stringify(state))
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT))
-}
-
-function loadTaskRecords() {
-  if (!isBrowser()) {
-    return [] as VIPTaskRecord[]
-  }
-
-  try {
-    const raw = window.localStorage.getItem(TASKS_STORAGE_KEY)
-    if (!raw) {
-      return [] as VIPTaskRecord[]
-    }
-
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed as VIPTaskRecord[] : []
-  } catch {
-    return [] as VIPTaskRecord[]
-  }
-}
-
-function saveTaskRecords(tasks: VIPTaskRecord[]) {
-  if (!isBrowser()) {
-    return
-  }
-
-  window.localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks))
-  window.dispatchEvent(new CustomEvent(UPDATE_EVENT))
-}
-
-function resolveTaskTemplate(type: VIPTaskType, targetName: string) {
-  if (type === 'sector_analysis' && targetName.includes('医')) {
-    return VIP_SAMPLE_REPORT_IDS.defaultSectorMedical
-  }
-  if (type === 'sector_analysis') {
-    return VIP_SAMPLE_REPORT_IDS.defaultSector
-  }
-  return VIP_SAMPLE_REPORT_IDS.defaultPortfolio
-}
-
-function deriveTaskView(task: VIPTaskRecord, now: number): VIPTaskView {
-  const createdAtMs = new Date(task.createdAt).getTime()
-  const ageMs = Math.max(0, now - createdAtMs)
-
-  if (ageMs < 3000) {
-    return {
-      ...task,
-      status: 'queued',
-      progressText: '已提交，正在整理分析对象与数据上下文',
-    }
-  }
-
-  if (ageMs < 9000) {
-    return {
-      ...task,
-      status: 'running',
-      startedAt: new Date(createdAtMs + 3000).toISOString(),
-      progressText: '正在整合宏观、政策、财报与市场走势信息',
-    }
+function normalizeReport(raw?: RawReport | null): VIPReport | null {
+  if (!raw) {
+    return null
   }
 
   return {
-    ...task,
-    status: 'completed',
-    startedAt: new Date(createdAtMs + 3000).toISOString(),
-    completedAt: new Date(createdAtMs + 9000).toISOString(),
-    progressText: '报告已生成，可查看完整内容',
-    reportId: task.templateReportId,
+    ...raw,
+    targetName: raw.target_name,
+    generatedAt: raw.generated_at,
+    coverageWindow: raw.coverage_window,
+    footerDisclaimer: raw.footerDisclaimer,
+    sources: raw.sources.map((source) => ({
+      ...source,
+      publishedAt: source.published_at,
+    })),
   }
 }
 
-function countUsage(tasks: VIPTaskRecord[], membership: VIPMembershipState) {
-  const key = shanghaiDateKey(new Date())
-  const storedUsage = membership.usageByDate[key] ?? {
-    sectorAnalysis: 0,
-    portfolioAnalysis: 0,
+function normalizeOrder(raw?: RawOrder | null): VIPOrder | null {
+  if (!raw) {
+    return null
   }
 
   return {
-    sectorAnalysis: storedUsage.sectorAnalysis,
-    portfolioAnalysis: storedUsage.portfolioAnalysis,
+    id: raw.id,
+    orderNo: raw.order_no,
+    planCode: raw.plan_code,
+    planName: raw.plan_name,
+    billingCycle: raw.billing_cycle,
+    amountFen: raw.amount_fen,
+    currency: raw.currency,
+    status: raw.status,
+    paymentChannel: raw.payment_channel,
+    paymentScene: raw.payment_scene,
+    description: raw.description,
+    codeURL: raw.code_url,
+    wechatTransactionID: raw.wechat_transaction_id,
+    errorCode: raw.error_code,
+    errorMessage: raw.error_message,
+    expiresAt: raw.expires_at,
+    paidAt: raw.paid_at,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
   }
 }
 
-function canCreateTask(type: VIPTaskType, membership: VIPMembershipState, tasks: VIPTaskRecord[]) {
-  if (!membership.isVip) {
-    return false
+async function fetchVIP<T>(url: string): Promise<T> {
+  const res = await fetch(url, {
+    credentials: 'include',
+  })
+
+  const json = await res.json() as ApiEnvelope<T>
+  if (!res.ok || !json.success || typeof json.data === 'undefined') {
+    throw new VIPRequestError(json.error?.message || 'VIP request failed', json.error?.code)
   }
 
-  const usage = countUsage(tasks, membership)
-  if (type === 'sector_analysis') {
-    return usage.sectorAnalysis < VIP_DAILY_QUOTA.sectorAnalysis
-  }
-  return usage.portfolioAnalysis < VIP_DAILY_QUOTA.portfolioAnalysis
+  return json.data
 }
 
-function updateUsage(type: VIPTaskType, membership: VIPMembershipState) {
-  const key = shanghaiDateKey(new Date())
-  const current = membership.usageByDate[key] ?? {
-    sectorAnalysis: 0,
-    portfolioAnalysis: 0,
-  }
-
-  membership.usageByDate = {
-    ...membership.usageByDate,
-    [key]: {
-      sectorAnalysis: current.sectorAnalysis + (type === 'sector_analysis' ? 1 : 0),
-      portfolioAnalysis: current.portfolioAnalysis + (type === 'portfolio_analysis' ? 1 : 0),
+async function requestVIP<T>(path: string, init?: RequestInit): Promise<T | null> {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers ?? {}),
     },
+    ...init,
+  })
+
+  const json = await res.json() as ApiEnvelope<T>
+  if (!res.ok || !json.success) {
+    throw new VIPRequestError(json.error?.message || 'VIP request failed', json.error?.code)
   }
+
+  return json.data ?? null
 }
 
 export function useVIPPreview() {
-  const [membership, setMembership] = useState<VIPMembershipState>(buildDefaultMembership())
-  const [taskRecords, setTaskRecords] = useState<VIPTaskRecord[]>([])
-  const [now, setNow] = useState(() => Date.now())
+  const { user } = useCurrentUser()
 
-  useEffect(() => {
-    const sync = () => {
-      setMembership(loadMembershipState())
-      setTaskRecords(loadTaskRecords())
-      setNow(Date.now())
+  const membershipKey = user ? `${API_BASE_URL}/api/v1/vip/membership` : null
+  const quotaKey = user ? `${API_BASE_URL}/api/v1/vip/quota` : null
+  const tasksKey = user ? `${API_BASE_URL}/api/v1/vip/tasks` : null
+
+  const { data: membershipRaw, mutate: mutateMembership } = useSWR<RawMembershipState>(
+    membershipKey,
+    fetchVIP,
+    {
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
     }
-
-    sync()
-    window.addEventListener('storage', sync)
-    window.addEventListener(UPDATE_EVENT, sync)
-
-    const timer = window.setInterval(() => {
-      setNow(Date.now())
-    }, 1000)
-
-    return () => {
-      window.removeEventListener('storage', sync)
-      window.removeEventListener(UPDATE_EVENT, sync)
-      window.clearInterval(timer)
-    }
-  }, [])
-
-  const tasks = useMemo(
-    () => taskRecords
-      .map((task) => deriveTaskView(task, now))
-      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
-    [now, taskRecords]
   )
 
-  const usage = useMemo(() => countUsage(taskRecords, membership), [membership, taskRecords])
-  const remainingQuota = useMemo(() => ({
-    sectorAnalysis: Math.max(0, VIP_DAILY_QUOTA.sectorAnalysis - usage.sectorAnalysis),
-    portfolioAnalysis: Math.max(0, VIP_DAILY_QUOTA.portfolioAnalysis - usage.portfolioAnalysis),
-  }), [usage])
-
-  const latestCompletedTask = useMemo(
-    () => tasks.find((task) => task.status === 'completed') ?? null,
-    [tasks]
+  const { data: quotaRaw, mutate: mutateQuota } = useSWR<RawQuotaStatus>(
+    quotaKey,
+    fetchVIP,
+    {
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
+    }
   )
 
-  const activateVIP = (cycle: VIPBillingCycle) => {
-    const nowDate = new Date()
-    const expiresAt = cycle === 'yearly' ? addDays(nowDate, 365) : addDays(nowDate, 30)
-    const nextState: VIPMembershipState = {
-      ...membership,
-      isVip: true,
-      billingCycle: cycle,
-      activatedAt: nowDate.toISOString(),
-      expiresAt: expiresAt.toISOString(),
+  const { data: tasksRaw = [], mutate: mutateTasks } = useSWR<RawTaskView[]>(
+    tasksKey,
+    fetchVIP,
+    {
+      revalidateOnFocus: false,
+      refreshInterval: user ? 2000 : 0,
+      dedupingInterval: 1000,
+      shouldRetryOnError: false,
     }
-    saveMembershipState(nextState)
+  )
+
+  const membership = normalizeMembership(membershipRaw)
+  const tasks = tasksRaw.map(normalizeTask)
+  const latestCompletedTask = tasks.find((task) => task.status === 'completed') ?? null
+
+  const remainingQuota = {
+    sectorAnalysis: quotaRaw?.sector_analysis_remaining ?? (membership.isVip ? VIP_DAILY_QUOTA.sectorAnalysis : 0),
+    portfolioAnalysis: quotaRaw?.portfolio_analysis_remaining ?? (membership.isVip ? VIP_DAILY_QUOTA.portfolioAnalysis : 0),
   }
 
-  const createTask = (input: {
+  const activateVIP = async (cycle: VIPBillingCycle) => {
+    if (!user) {
+      return
+    }
+
+    await requestVIP('/api/v1/vip/membership/preview-activate', {
+      method: 'POST',
+      body: JSON.stringify({ billing_cycle: cycle }),
+    })
+
+    await Promise.all([mutateMembership(), mutateQuota()])
+  }
+
+  const createTask = async (input: {
     type: VIPTaskType
     targetType: VIPTargetType
     targetId: string
     targetName: string
   }) => {
-    const currentMembership = loadMembershipState()
-    const currentTasks = loadTaskRecords()
-
-    if (!currentMembership.isVip) {
+    if (!user) {
       return { ok: false as const, reason: 'not_vip' as const }
     }
-    if (!canCreateTask(input.type, currentMembership, currentTasks)) {
-      return { ok: false as const, reason: 'quota_exhausted' as const }
+
+    try {
+      const result = await requestVIP<{ task_id: string }>('/api/v1/vip/tasks', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: input.type,
+          target_type: input.targetType,
+          target_id: input.targetId,
+          target_name: input.targetName,
+        }),
+      })
+
+      await Promise.all([mutateTasks(), mutateQuota()])
+
+      return { ok: true as const, taskId: result?.task_id || '' }
+    } catch (error) {
+      if (error instanceof VIPRequestError) {
+        if (error.code === 'VIP_REQUIRED') {
+          return { ok: false as const, reason: 'not_vip' as const }
+        }
+        if (error.code === 'VIP_QUOTA_EXHAUSTED') {
+          return { ok: false as const, reason: 'quota_exhausted' as const }
+        }
+      }
+      throw error
     }
-
-    updateUsage(input.type, currentMembership)
-    saveMembershipState(currentMembership)
-
-    const nextTask: VIPTaskRecord = {
-      id: `vip-task-${Date.now()}`,
-      type: input.type,
-      targetType: input.targetType,
-      targetId: input.targetId,
-      targetName: input.targetName,
-      createdAt: new Date().toISOString(),
-      templateReportId: resolveTaskTemplate(input.type, input.targetName),
-    }
-
-    saveTaskRecords([nextTask, ...currentTasks])
-    return { ok: true as const, taskId: nextTask.id }
   }
 
-  const resetPreview = () => {
-    saveMembershipState(buildDefaultMembership())
-    saveTaskRecords([])
+  const resetPreview = async () => {
+    if (!user) {
+      return
+    }
+
+    await requestVIP('/api/v1/vip/preview/reset', {
+      method: 'POST',
+    })
+
+    await Promise.all([mutateMembership(), mutateQuota(), mutateTasks()])
   }
 
   return {
@@ -292,12 +359,60 @@ export function useVIPPreview() {
     tasks,
     latestCompletedTask,
     remainingQuota,
-    canCreateSectorTask: canCreateTask('sector_analysis', membership, taskRecords),
-    canCreatePortfolioTask: canCreateTask('portfolio_analysis', membership, taskRecords),
+    canCreateSectorTask: membership.isVip && remainingQuota.sectorAnalysis > 0,
+    canCreatePortfolioTask: membership.isVip && remainingQuota.portfolioAnalysis > 0,
     activateVIP,
     createTask,
     resetPreview,
+    refreshMembership: mutateMembership,
+    refreshQuota: mutateQuota,
     sampleReports: VIP_SAMPLE_REPORTS,
     getReportByID: getVIPSampleReportByID,
+  }
+}
+
+export function useVIPReport(reportID: string | null) {
+  const { data, error, isLoading } = useSWR<RawReport>(
+    reportID ? `${API_BASE_URL}/api/v1/vip/reports/${reportID}` : null,
+    fetchVIP,
+    {
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
+    }
+  )
+
+  return {
+    report: normalizeReport(data),
+    isLoading,
+    error,
+  }
+}
+
+export async function createVIPOrder(billingCycle: VIPBillingCycle) {
+  const data = await requestVIP<RawOrder>('/api/v1/vip/orders', {
+    method: 'POST',
+    body: JSON.stringify({ billing_cycle: billingCycle }),
+  })
+
+  return normalizeOrder(data)
+}
+
+export function useVIPOrder(orderID: string | null) {
+  const { data, error, isLoading, mutate } = useSWR<RawOrder>(
+    orderID ? `${API_BASE_URL}/api/v1/vip/orders/${orderID}` : null,
+    fetchVIP,
+    {
+      revalidateOnFocus: false,
+      refreshInterval: orderID ? 3000 : 0,
+      dedupingInterval: 1000,
+      shouldRetryOnError: false,
+    }
+  )
+
+  return {
+    order: normalizeOrder(data),
+    isLoading,
+    error,
+    refresh: mutate,
   }
 }

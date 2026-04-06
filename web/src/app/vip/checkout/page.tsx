@@ -1,40 +1,99 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
-import { CheckCircle2, Crown, LoaderCircle, ShieldAlert } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CheckCircle2, Copy, Crown, ExternalLink, LoaderCircle, ShieldAlert } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
 import { useCurrentUser } from '@/hooks/use-auth'
-import { useVIPPreview } from '@/hooks/use-vip-preview'
+import { VIPRequestError, createVIPOrder, useVIPOrder, useVIPPreview } from '@/hooks/use-vip-preview'
 import type { VIPBillingCycle } from '@/mocks/vip'
 import { cn } from '@/lib/utils'
 
 export default function VIPCheckoutPage() {
   const { user } = useCurrentUser()
-  const { membership, plan, activateVIP, resetPreview } = useVIPPreview()
+  const { membership, plan, activateVIP, resetPreview, refreshMembership, refreshQuota } = useVIPPreview()
   const [selectedCycle, setSelectedCycle] = useState<VIPBillingCycle>('yearly')
-  const [isActivating, setIsActivating] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [activeOrderID, setActiveOrderID] = useState<string | null>(null)
+  const [paymentMessage, setPaymentMessage] = useState<string | null>(null)
+  const [isCopied, setIsCopied] = useState(false)
 
   const selectedOption = plan.billingOptions.find((option) => option.cycle === selectedCycle) ?? plan.billingOptions[0]
+  const { order, isLoading: isOrderLoading } = useVIPOrder(activeOrderID)
 
-  const handleActivate = async () => {
-    if (!user || isActivating) {
+  useEffect(() => {
+    if (order?.status === 'paid') {
+      void Promise.all([refreshMembership(), refreshQuota()])
+    }
+  }, [order?.status, refreshMembership, refreshQuota])
+
+  const handleCreateOrder = async () => {
+    if (!user || isSubmitting) {
       return
     }
 
-    setIsActivating(true)
+    setPaymentMessage(null)
+    setIsSubmitting(true)
     try {
-      await new Promise((resolve) => window.setTimeout(resolve, 900))
-      activateVIP(selectedCycle)
+      const created = await createVIPOrder(selectedCycle)
+      if (created) {
+        setActiveOrderID(created.id)
+        setPaymentMessage('订单已创建。请使用微信扫码或打开支付链接完成支付，页面会自动刷新支付状态。')
+      }
+    } catch (error) {
+      if (error instanceof VIPRequestError && error.code === 'PAYMENT_NOT_CONFIGURED') {
+        setPaymentMessage('微信支付尚未完成配置。你可以先补充 YAML 中的支付参数，或临时使用预览开通进行联调。')
+      } else {
+        setPaymentMessage(error instanceof Error ? error.message : '创建支付订单失败，请稍后重试。')
+      }
     } finally {
-      setIsActivating(false)
+      setIsSubmitting(false)
     }
   }
+
+  const handleActivatePreview = async () => {
+    if (!user || isSubmitting) {
+      return
+    }
+
+    setIsSubmitting(true)
+    setPaymentMessage(null)
+    try {
+      await activateVIP(selectedCycle)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleCopyCodeURL = async () => {
+    if (!order?.codeURL) {
+      return
+    }
+
+    await navigator.clipboard.writeText(order.codeURL)
+    setIsCopied(true)
+    window.setTimeout(() => setIsCopied(false), 1500)
+  }
+
+  const currentStatusLabel = (() => {
+    switch (order?.status) {
+      case 'paid':
+        return '已支付'
+      case 'closed':
+        return '已关闭'
+      case 'failed':
+        return '下单失败'
+      case 'pending_payment':
+        return '待支付'
+      default:
+        return '未创建'
+    }
+  })()
 
   return (
     <AccountAreaShell
       title="开通 VIP"
-      description="当前版本先完成前端展示与交互闭环。页面会保留真实支付所需的结构，但按钮暂用于模拟开通流程。"
+      description="当前版本已支持真实 VIP 订单、微信支付 Native 下单与支付状态查询。若微信配置尚未补齐，页面会明确提示缺失项。"
     >
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="vip-checkout-shell rounded-[36px] border p-6">
@@ -85,7 +144,7 @@ export default function VIPCheckoutPage() {
           </div>
 
           <div className="vip-urgency-banner mt-6 rounded-[28px] border p-5 text-sm leading-6 text-amber-50/92">
-            当前是前端展示版，但页面结构已经按真实开通路径设计。正式支付接入后，这里会直接切成真实支付表单、支付状态和回调结果。
+            当前页面已接入微信支付 Native 下单与订单状态查询。若你还没有补齐商户配置，页面会直接提示“支付未配置”，不会再静默回退。
           </div>
         </section>
 
@@ -109,6 +168,55 @@ export default function VIPCheckoutPage() {
               <div className="mt-2 text-4xl font-black text-cyan-50">{selectedOption.priceLabel}</div>
               <div className="mt-2 text-xs text-theme-muted">开通后即可解锁分析入口、任务中心和完整报告阅读权限</div>
             </div>
+
+            {paymentMessage && (
+              <div className="mt-6 rounded-[24px] border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-50/90">
+                {paymentMessage}
+              </div>
+            )}
+
+            {order && (
+              <div className="mt-6 rounded-[24px] border border-[var(--card-border)] bg-[var(--input-bg)]/60 p-5">
+                <div className="text-xs tracking-[0.18em] text-theme-muted">当前订单</div>
+                <div className="mt-3 space-y-3 text-sm text-theme-secondary">
+                  <div>订单号：{order.orderNo}</div>
+                  <div>订单状态：{currentStatusLabel}</div>
+                  <div>支付方式：微信支付 Native</div>
+                  {order.expiresAt && <div>过期时间：{new Date(order.expiresAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}</div>}
+                  {order.paidAt && <div>支付时间：{new Date(order.paidAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}</div>}
+                  {order.wechatTransactionID && <div>微信交易单号：{order.wechatTransactionID}</div>}
+                  {order.errorMessage && <div className="text-rose-200">错误信息：{order.errorMessage}</div>}
+                </div>
+
+                {order.codeURL && order.status === 'pending_payment' && (
+                  <div className="mt-5 space-y-3">
+                    <div className="rounded-[20px] border border-cyan-400/20 bg-black/10 p-4 text-sm leading-6 text-cyan-50/90 break-all">
+                      请将下方 `code_url` 生成二维码后使用微信扫码，或尝试直接打开支付链接。
+                      <div className="mt-3 rounded-xl border border-cyan-400/15 bg-black/20 p-3 font-mono text-xs text-cyan-100/90">
+                        {order.codeURL}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => void handleCopyCodeURL()}
+                        className="vip-secondary-cta inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium"
+                      >
+                        <Copy className="h-4 w-4" />
+                        {isCopied ? '已复制' : '复制 code_url'}
+                      </button>
+                      <a
+                        href={order.codeURL}
+                        className="vip-primary-cta inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium text-white"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        尝试打开支付链接
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {!user ? (
               <div className="mt-6 space-y-3">
@@ -136,7 +244,7 @@ export default function VIPCheckoutPage() {
                   </Link>
                   <button
                     type="button"
-                    onClick={resetPreview}
+                    onClick={() => void resetPreview()}
                     className="vip-secondary-cta rounded-2xl border px-5 py-3 text-sm font-medium"
                   >
                     重置演示状态
@@ -144,15 +252,26 @@ export default function VIPCheckoutPage() {
                 </div>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => void handleActivate()}
-                disabled={isActivating}
-                className="vip-primary-cta mt-6 inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-80"
-              >
-                {isActivating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Crown className="h-4 w-4" />}
-                {isActivating ? '开通中...' : '模拟开通 VIP'}
-              </button>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => void handleCreateOrder()}
+                  disabled={isSubmitting || isOrderLoading}
+                  className="vip-primary-cta inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-80"
+                >
+                  {isSubmitting || isOrderLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Crown className="h-4 w-4" />}
+                  {isSubmitting ? '创建订单中...' : '微信支付下单'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void handleActivatePreview()}
+                  disabled={isSubmitting}
+                  className="vip-secondary-cta rounded-2xl border px-5 py-3 text-sm font-medium"
+                >
+                  开发环境预览开通
+                </button>
+              </div>
             )}
           </div>
 

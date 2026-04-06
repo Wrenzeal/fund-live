@@ -1,8 +1,11 @@
+'use client'
+
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
-import { AlertTriangle, BookOpenText, CalendarDays, FileStack, ShieldAlert, TrendingUp } from 'lucide-react'
+import { useParams } from 'next/navigation'
+import { AlertTriangle, BookOpenText, CalendarDays, FileStack, LoaderCircle, ShieldAlert, TrendingUp } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
-import { VIP_SAMPLE_REPORT_IDS, getVIPSampleReportByID } from '@/mocks/vip'
+import { useVIPReport } from '@/hooks/use-vip-preview'
+import { VIP_SAMPLE_REPORT_IDS } from '@/mocks/vip'
 import { cn } from '@/lib/utils'
 
 function riskMeta(level: 'low' | 'medium' | 'high') {
@@ -25,16 +28,59 @@ function riskMeta(level: 'low' | 'medium' | 'high') {
   }
 }
 
-export default async function VIPReportDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const { id } = await params
-  const report = getVIPSampleReportByID(id)
+export default function VIPReportDetailPage() {
+  const params = useParams<{ id: string }>()
+  const reportID = typeof params?.id === 'string' ? params.id : ''
+  const { report, isLoading, error } = useVIPReport(reportID)
+
+  if (isLoading) {
+    return (
+      <AccountAreaShell
+        title="VIP 报告详情"
+        description="查看结构化研究报告，包括摘要结论、操作建议、风险提示以及引用来源。"
+      >
+        <div className="rounded-[36px] border border-[var(--card-border)] p-10 glass text-center">
+          <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
+          <div className="mt-4 text-sm text-theme-secondary">正在读取报告...</div>
+        </div>
+      </AccountAreaShell>
+    )
+  }
 
   if (!report) {
-    notFound()
+    return (
+      <AccountAreaShell
+        title="VIP 报告详情"
+        description="查看结构化研究报告，包括摘要结论、操作建议、风险提示以及引用来源。"
+      >
+        <section className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6">
+          <div className="flex items-start gap-3 text-rose-100">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+            <div>
+              <div className="text-lg font-bold">报告不存在或当前账号无权查看</div>
+              <p className="mt-2 text-sm leading-6 text-rose-50/90">
+                {error instanceof Error ? error.message : '请返回任务中心，或查看系统内置示例报告。'}
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link
+                  href="/vip/tasks"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-theme-primary"
+                >
+                  <FileStack className="h-4 w-4" />
+                  返回任务中心
+                </Link>
+                <Link
+                  href={`/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultSector}`}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-theme-primary"
+                >
+                  查看示例报告
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      </AccountAreaShell>
+    )
   }
 
   const risk = riskMeta(report.riskLevel)

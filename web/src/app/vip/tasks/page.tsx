@@ -43,7 +43,7 @@ export default function VIPTasksPage() {
   return (
     <AccountAreaShell
       title="分析任务中心"
-      description="查看 VIP 板块分析和组合分析的任务状态。展示版会用 mock 状态模拟排队、生成和完成的异步过程。"
+      description="查看 VIP 板块分析和组合分析的任务状态。当前任务、额度与报告入口来自后端，任务进度仍按模板化异步流程推进。"
     >
       <div className="space-y-8">
         {!membership.isVip && (

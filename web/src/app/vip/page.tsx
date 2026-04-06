@@ -99,7 +99,7 @@ export default function VIPPage() {
                     <div className="mt-2 text-sm leading-6 text-white/72">{plan.subtitle}</div>
                   </div>
                   <div className="vip-limited-chip rounded-full px-3 py-1 text-[11px] tracking-[0.2em]">
-                    FRONTEND PREVIEW
+                    PAYMENT PREVIEW
                   </div>
                 </div>
                 <div className="mt-5 grid gap-3">

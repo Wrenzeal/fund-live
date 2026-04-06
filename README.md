@@ -10,8 +10,13 @@
 
 ## 2026.4.5 更新摘要
 
-- 新增 VIP 前端展示版闭环：会员介绍页、开通页、任务中心、报告详情页，以及自选/持仓页的 VIP 入口
-- 自选页和持仓页中的 VIP 入口已从占位按钮改成真实可点击入口，并接入 mock 会员状态、任务与报告流转
+- 新增 VIP 前端页面闭环：会员介绍页、开通页、任务中心、报告详情页，以及自选/持仓页的 VIP 入口
+- 自选页和持仓页中的 VIP 入口已从占位按钮改成真实可点击入口，并接入会员状态、任务与报告流转；报告内容当前仍以模板化样例驱动
+- 新增 VIP 后端基础骨架：`user_memberships`、`vip_usage_daily`、`analysis_tasks`、`analysis_reports`、`analysis_report_sources`
+- 新增 VIP 后端接口：会员状态、剩余额度、任务创建 / 列表、报告详情，以及预览开通 / 重置接口
+- 前端 `useVIPPreview` 已切到后端真实数据读取；VIP 页面当前是“后端真实状态 + 模板化报告内容 + 真实订单流”的过渡形态
+- 新增 `vip_orders` 与微信支付 `Native` 下单 / 查单 / 回调链路，支付成功后会自动开通或续期 VIP 会员
+- `/vip/checkout` 已改为真实订单流：优先创建微信支付订单并轮询状态，支付配置缺失时会明确提示
 - VIP 页面与按钮已做高级化视觉增强，和普通功能区形成明显区分
 - 修复持仓页“持仓总览”和下方内容宽度不一致的问题
 - 对 `classic` 与 `cyber` 主题做了专项可读性与层次修复，尤其增强了 `classic` 主题下的卡片、页签和 VIP 页面文字可读性
@@ -67,12 +72,17 @@
 - 冷基金数据改为后台预热，预热状态会通过 `meta.cache_status` / `FUND_DATA_WARMING` 返回前端
 - 用户持仓按交易日和北京时间 `15:00` 截止自动计算确认净值日
 - 受控 SQL migration：启动时会检查 `schema_migrations`、搜索索引与关键唯一约束
+- VIP 基础后端：会员状态、每日额度、分析任务、报告详情与来源列表已具备持久化数据结构
+- 支持 VIP 预览开通 / 重置链路，在真实支付接入前先使用后端保存会员状态
+- VIP 支付后端：已支持 `vip_orders`、微信支付 `Native` 下单、订单状态查询、微信回调处理，以及支付成功后自动开通 / 续期会员
 
 ### 前端
 - Next.js 16 App Router
 - SWR 数据获取
 - Recharts 分时图表
-- VIP 前端展示版：会员介绍页、开通页、任务中心、报告详情页
+- VIP 前端页面：会员介绍页、开通页、任务中心、报告详情页
+- VIP 页面当前已切到后端真实会员 / 额度 / 任务 / 报告接口；订单与支付状态也由后端驱动
+- VIP 开通页当前已接入真实订单流，优先调用微信支付下单接口并轮询支付状态；在配置未补齐时保留开发环境预览开通入口
 - 登录页、注册页、Google 登录按钮
 - 自选页与持仓页的账户工作区布局重构
 - 自定义分组下拉菜单与持仓交易时间录入面板
@@ -85,7 +95,7 @@
   - 本地搜索次数 Top 3 快速选择
   - 本地清空历史搜索
 - 通过同源 `/api/v1/*` 调用后端，避免浏览器直接跨域请求后端
-- 自选页与持仓页已接入 VIP 入口，支持展示版会员状态、任务与示例报告流转
+- 自选页与持仓页已接入 VIP 入口，支持真实会员状态、任务与模板化示例报告流转
 - Dark / Cyber / Classic 三套主题已做专项可读性修正，其中 Classic 针对浅色层次、页签与 VIP 页面做了增强
 - 自选 / 持仓页按钮、切换标签与删除操作增加动画反馈
 
@@ -174,6 +184,19 @@ auth:
   cookie_secure: false
   session_ttl_hours: 720
   google_client_id: your-google-client-id.apps.googleusercontent.com
+
+payment:
+  wechat_pay:
+    enabled: false
+    app_id: your-wechat-pay-app-id
+    merchant_id: your-wechat-pay-merchant-id
+    merchant_certificate_serial_no: your-merchant-cert-serial
+    merchant_private_key_path: /path/to/apiclient_key.pem
+    api_v3_key: your-32-byte-api-v3-key
+    notify_url: https://your-domain.example.com/api/v1/vip/payments/wechat/notify
+    platform_certificate_path: /path/to/wechatpay_cert.pem
+    platform_public_key_path: ""
+    platform_serial_no: your-wechat-platform-serial
 ```
 
 说明：
@@ -190,6 +213,8 @@ auth:
 - 请不要把真实数据库密码提交到仓库
 - 如果要启用 Google 登录，后端需要配置 `auth.google_client_id` 或环境变量 `GOOGLE_CLIENT_ID`
 - 前端启用 Google 登录时，需要在 `web/.env.local` 中配置 `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
+- 如果要启用微信支付，需要补齐 `payment.wechat_pay` 下的商户号、应用 ID、商户私钥、商户证书序列号、API v3 Key 和回调地址
+- 当前支付方式先接入微信支付 `Native` 模式，后端会返回 `code_url`，前端会轮询订单状态并在支付成功后自动刷新会员状态
 
 ## 快速开始
 

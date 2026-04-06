@@ -126,5 +126,11 @@ func UserModels() []interface{} {
 		&UserWatchlistFund{},
 		&UserHoldingOverride{},
 		&UserFundHolding{},
+		&UserMembership{},
+		&VIPUsageDaily{},
+		&AnalysisTask{},
+		&AnalysisReport{},
+		&AnalysisReportSource{},
+		&VIPOrder{},
 	}
 }

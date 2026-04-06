@@ -30,3 +30,16 @@ auth:
   cookie_secure: false
   session_ttl_hours: 720
   google_client_id: ""
+
+payment:
+  wechat_pay:
+    enabled: false
+    app_id: ""
+    merchant_id: ""
+    merchant_certificate_serial_no: ""
+    merchant_private_key_path: ""
+    api_v3_key: ""
+    notify_url: ""
+    platform_certificate_path: ""
+    platform_public_key_path: ""
+    platform_serial_no: ""

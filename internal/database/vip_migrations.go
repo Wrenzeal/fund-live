@@ -1,0 +1,100 @@
+package database
+
+var vipTableMigrationStatements = []string{
+	`CREATE TABLE IF NOT EXISTS user_memberships (
+		id varchar(40) PRIMARY KEY,
+		user_id varchar(40) NOT NULL UNIQUE,
+		plan_code varchar(32) NOT NULL,
+		plan_name varchar(100) NOT NULL,
+		billing_cycle varchar(16) NOT NULL,
+		activated_at timestamptz NOT NULL,
+		expires_at timestamptz NOT NULL,
+		created_at timestamptz NOT NULL DEFAULT now(),
+		updated_at timestamptz NOT NULL DEFAULT now()
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_user_memberships_expires_at ON user_memberships (expires_at)`,
+	`CREATE TABLE IF NOT EXISTS vip_usage_daily (
+		id bigserial PRIMARY KEY,
+		user_id varchar(40) NOT NULL,
+		usage_date date NOT NULL,
+		sector_analysis_used integer NOT NULL DEFAULT 0,
+		portfolio_analysis_used integer NOT NULL DEFAULT 0,
+		created_at timestamptz NOT NULL DEFAULT now(),
+		updated_at timestamptz NOT NULL DEFAULT now(),
+		CONSTRAINT uq_vip_usage_daily_user_date UNIQUE (user_id, usage_date)
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_vip_usage_daily_user_id ON vip_usage_daily (user_id)`,
+	`CREATE TABLE IF NOT EXISTS analysis_tasks (
+		id varchar(40) PRIMARY KEY,
+		user_id varchar(40) NOT NULL,
+		type varchar(32) NOT NULL,
+		target_type varchar(32) NOT NULL,
+		target_id varchar(80) NOT NULL,
+		target_name varchar(255) NOT NULL,
+		status varchar(16) NOT NULL,
+		progress_text text NOT NULL DEFAULT '',
+		template_report_id varchar(120) NOT NULL DEFAULT '',
+		report_id varchar(40) NOT NULL DEFAULT '',
+		created_at timestamptz NOT NULL DEFAULT now(),
+		started_at timestamptz NULL,
+		completed_at timestamptz NULL,
+		failed_at timestamptz NULL,
+		updated_at timestamptz NOT NULL DEFAULT now()
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_analysis_tasks_user_created ON analysis_tasks (user_id, created_at DESC)`,
+	`CREATE INDEX IF NOT EXISTS idx_analysis_tasks_status ON analysis_tasks (status)`,
+	`CREATE INDEX IF NOT EXISTS idx_analysis_tasks_report_id ON analysis_tasks (report_id)`,
+	`CREATE TABLE IF NOT EXISTS analysis_reports (
+		id varchar(40) PRIMARY KEY,
+		user_id varchar(40) NOT NULL,
+		task_id varchar(40) UNIQUE,
+		payload_json text NOT NULL,
+		generated_at timestamptz NOT NULL,
+		created_at timestamptz NOT NULL DEFAULT now(),
+		updated_at timestamptz NOT NULL DEFAULT now()
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_analysis_reports_user_id ON analysis_reports (user_id)`,
+	`CREATE TABLE IF NOT EXISTS analysis_report_sources (
+		id varchar(80) PRIMARY KEY,
+		report_id varchar(40) NOT NULL,
+		title varchar(255) NOT NULL,
+		type varchar(32) NOT NULL,
+		publisher varchar(255) NOT NULL,
+		published_at timestamptz NOT NULL,
+		url text NOT NULL,
+		snippet text NOT NULL,
+		created_at timestamptz NOT NULL DEFAULT now()
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_analysis_report_sources_report_id ON analysis_report_sources (report_id)`,
+}
+
+var vipPaymentMigrationStatements = []string{
+	`CREATE TABLE IF NOT EXISTS vip_orders (
+		id varchar(40) PRIMARY KEY,
+		user_id varchar(40) NOT NULL,
+		order_no varchar(64) NOT NULL UNIQUE,
+		plan_code varchar(32) NOT NULL,
+		plan_name varchar(100) NOT NULL,
+		billing_cycle varchar(16) NOT NULL,
+		amount_fen bigint NOT NULL,
+		currency varchar(8) NOT NULL,
+		status varchar(24) NOT NULL,
+		payment_channel varchar(32) NOT NULL,
+		payment_scene varchar(16) NOT NULL,
+		description varchar(255) NOT NULL,
+		code_url text NOT NULL DEFAULT '',
+		wechat_transaction_id varchar(64) NOT NULL DEFAULT '',
+		wechat_prepay_id varchar(128) NOT NULL DEFAULT '',
+		error_code varchar(64) NOT NULL DEFAULT '',
+		error_message text NOT NULL DEFAULT '',
+		notify_id varchar(64) NOT NULL DEFAULT '',
+		notify_payload text NOT NULL DEFAULT '',
+		expires_at timestamptz NULL,
+		paid_at timestamptz NULL,
+		created_at timestamptz NOT NULL DEFAULT now(),
+		updated_at timestamptz NOT NULL DEFAULT now()
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_vip_orders_user_created ON vip_orders (user_id, created_at DESC)`,
+	`CREATE INDEX IF NOT EXISTS idx_vip_orders_status ON vip_orders (status)`,
+	`CREATE INDEX IF NOT EXISTS idx_vip_orders_paid_at ON vip_orders (paid_at)`,
+}

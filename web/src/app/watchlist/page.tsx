@@ -44,7 +44,7 @@ export default function WatchlistPage() {
   )
   const selectedGroupLabel = selectedGroup?.name || '选择一个分组'
 
-  const handleCreateVIPTask = (type: VIPTaskType) => {
+  const handleCreateVIPTask = async (type: VIPTaskType) => {
     setVipFeedback(null)
 
     if (!membership.isVip) {
@@ -60,12 +60,21 @@ export default function WatchlistPage() {
       return
     }
 
-    const created = createTask({
-      type,
-      targetType: 'watchlist_group',
-      targetId: selectedGroup.id,
-      targetName: selectedGroup.name,
-    })
+    let created
+    try {
+      created = await createTask({
+        type,
+        targetType: 'watchlist_group',
+        targetId: selectedGroup.id,
+        targetName: selectedGroup.name,
+      })
+    } catch (error) {
+      setVipFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : '创建 VIP 任务失败，请稍后重试。',
+      })
+      return
+    }
 
     if (!created.ok) {
       setVipFeedback({
@@ -446,12 +455,12 @@ export default function WatchlistPage() {
           actions={membership.isVip ? [
             {
               label: '发起板块分析',
-              onClick: () => handleCreateVIPTask('sector_analysis'),
+              onClick: () => void handleCreateVIPTask('sector_analysis'),
               variant: 'primary',
             },
             {
               label: '发起组合分析',
-              onClick: () => handleCreateVIPTask('portfolio_analysis'),
+              onClick: () => void handleCreateVIPTask('portfolio_analysis'),
               variant: 'secondary',
             },
             {
