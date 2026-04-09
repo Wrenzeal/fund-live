@@ -76,7 +76,10 @@ var (
 
 func DefaultConfigPaths() []string {
 	home, _ := os.UserHomeDir()
+	exePath, _ := os.Executable()
+	exeDir := filepath.Dir(exePath)
 	return []string{
+		filepath.Join(exeDir, "fundlive.yaml"),
 		"fundlive.yaml",
 		"fundlive.yml",
 		".fundlive.yaml",
@@ -90,6 +93,11 @@ func DefaultConfigPaths() []string {
 
 func LoadConfig() (*Config, error) {
 	loadOnce.Do(func() {
+		if p := os.Getenv("FUNDLIVE_CONFIG"); p != "" {
+			cached, loadErr = LoadConfigFromFile(p)
+			return
+		}
+
 		for _, path := range DefaultConfigPaths() {
 			if _, err := os.Stat(path); err == nil {
 				cached, loadErr = LoadConfigFromFile(path)

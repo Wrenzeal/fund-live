@@ -31,6 +31,9 @@ type FundRepository interface {
 	// GetFundHoldings retrieves the top holdings for a fund.
 	GetFundHoldings(ctx context.Context, fundID string) ([]StockHolding, error)
 
+	// ListFundIDsWithHoldings returns fund IDs that currently have persisted holdings.
+	ListFundIDsWithHoldings(ctx context.Context) ([]string, error)
+
 	// SaveFund saves or updates a fund.
 	SaveFund(ctx context.Context, fund *Fund) error
 

@@ -1,0 +1,170 @@
+package database
+
+var coreFundTableMigrationStatements = []string{
+	`CREATE TABLE IF NOT EXISTS funds (
+		id varchar(10) PRIMARY KEY,
+		name varchar(100),
+		type varchar(20),
+		manager varchar(50),
+		company varchar(100),
+		net_asset_val numeric(10,4),
+		total_scale numeric(15,4),
+		created_at timestamptz DEFAULT now(),
+		updated_at timestamptz DEFAULT now()
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_funds_name ON funds (name)`,
+	`CREATE INDEX IF NOT EXISTS idx_funds_type ON funds (type)`,
+	`CREATE TABLE IF NOT EXISTS stock_holdings (
+		id bigserial PRIMARY KEY,
+		fund_id varchar(10) NOT NULL,
+		stock_code varchar(10) NOT NULL,
+		stock_name varchar(50),
+		exchange varchar(5),
+		holding_ratio numeric(8,4),
+		holding_shares numeric(18,2),
+		market_value numeric(18,2),
+		reporting_period varchar(10),
+		created_at timestamptz DEFAULT now(),
+		updated_at timestamptz DEFAULT now()
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_stock_holdings_fund_id ON stock_holdings (fund_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_stock_holdings_stock_code ON stock_holdings (stock_code)`,
+	`CREATE INDEX IF NOT EXISTS idx_stock_holdings_reporting_period ON stock_holdings (reporting_period)`,
+	`CREATE TABLE IF NOT EXISTS fund_time_series (
+		id bigserial PRIMARY KEY,
+		fund_id varchar(10) NOT NULL,
+		date date NOT NULL,
+		time timestamptz NOT NULL,
+		change_percent numeric(8,4),
+		estimate_nav numeric(10,4),
+		created_at timestamptz DEFAULT now()
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_fund_time ON fund_time_series (fund_id, date, "time")`,
+	`CREATE TABLE IF NOT EXISTS fund_history (
+		id bigserial PRIMARY KEY,
+		fund_id varchar(10) NOT NULL,
+		date date NOT NULL,
+		net_asset_val numeric(10,4),
+		accum_val numeric(10,4),
+		daily_return numeric(8,4),
+		created_at timestamptz DEFAULT now()
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_fund_date ON fund_history (fund_id, date)`,
+	`CREATE TABLE IF NOT EXISTS fund_valuation_profiles (
+		fund_id varchar(10) PRIMARY KEY,
+		pricing_method varchar(50) NOT NULL,
+		quote_source varchar(50) NOT NULL,
+		underlying_symbol varchar(50) NOT NULL,
+		underlying_name varchar(100),
+		effective_exposure numeric(10,4) DEFAULT 1.0000,
+		notes text,
+		created_at timestamptz DEFAULT now(),
+		updated_at timestamptz DEFAULT now()
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_fund_valuation_profiles_pricing_method ON fund_valuation_profiles (pricing_method)`,
+	`CREATE TABLE IF NOT EXISTS fund_mappings (
+		id bigserial PRIMARY KEY,
+		feeder_code varchar(10) NOT NULL,
+		feeder_name varchar(100),
+		target_code varchar(10),
+		target_name varchar(100),
+		is_resolved boolean NOT NULL DEFAULT false,
+		resolved_at timestamptz,
+		resolve_error text,
+		created_at timestamptz DEFAULT now(),
+		updated_at timestamptz DEFAULT now()
+	)`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS idx_fund_mappings_feeder_code ON fund_mappings (feeder_code)`,
+	`CREATE INDEX IF NOT EXISTS idx_fund_mappings_target_code ON fund_mappings (target_code)`,
+	`CREATE INDEX IF NOT EXISTS idx_fund_mappings_is_resolved ON fund_mappings (is_resolved)`,
+}
+
+var coreUserTableMigrationStatements = []string{
+	`CREATE TABLE IF NOT EXISTS tb_user (
+		id varchar(40) PRIMARY KEY,
+		email varchar(255) NOT NULL,
+		display_name varchar(100) NOT NULL,
+		avatar_url text,
+		password_hash varchar(255),
+		google_sub varchar(255),
+		provider varchar(20) NOT NULL,
+		email_verified boolean NOT NULL DEFAULT false,
+		last_login_at timestamptz,
+		created_at timestamptz DEFAULT now(),
+		updated_at timestamptz DEFAULT now(),
+		preferred_quote_source varchar(20) NOT NULL DEFAULT 'sina',
+		is_admin boolean NOT NULL DEFAULT false
+	)`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS idx_tb_user_email ON tb_user (email)`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS idx_tb_user_google_sub ON tb_user (google_sub)`,
+	`CREATE INDEX IF NOT EXISTS idx_tb_user_provider ON tb_user (provider)`,
+	`CREATE INDEX IF NOT EXISTS idx_tb_user_is_admin ON tb_user (is_admin)`,
+	`CREATE TABLE IF NOT EXISTS tb_user_session (
+		id varchar(40) PRIMARY KEY,
+		user_id varchar(40) NOT NULL,
+		token_hash char(64) NOT NULL,
+		user_agent text,
+		ip_address varchar(64),
+		expires_at timestamptz NOT NULL,
+		created_at timestamptz DEFAULT now(),
+		last_seen_at timestamptz DEFAULT now()
+	)`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS idx_tb_user_session_token_hash ON tb_user_session (token_hash)`,
+	`CREATE INDEX IF NOT EXISTS idx_tb_user_session_user_id ON tb_user_session (user_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_tb_user_session_expires_at ON tb_user_session (expires_at)`,
+	`CREATE TABLE IF NOT EXISTS tb_user_favorite_fund (
+		id bigserial PRIMARY KEY,
+		user_id varchar(40) NOT NULL,
+		fund_id varchar(10) NOT NULL,
+		created_at timestamptz DEFAULT now()
+	)`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_favorite_fund ON tb_user_favorite_fund (user_id, fund_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_tb_user_favorite_fund_fund_id ON tb_user_favorite_fund (fund_id)`,
+	`CREATE TABLE IF NOT EXISTS tb_user_watchlist_group (
+		id varchar(40) PRIMARY KEY,
+		user_id varchar(40) NOT NULL,
+		name varchar(100) NOT NULL,
+		description text,
+		accent varchar(32) NOT NULL,
+		created_at timestamptz DEFAULT now(),
+		updated_at timestamptz DEFAULT now()
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_tb_user_watchlist_group_user_id ON tb_user_watchlist_group (user_id)`,
+	`CREATE TABLE IF NOT EXISTS tb_user_watchlist_fund (
+		id bigserial PRIMARY KEY,
+		group_id varchar(40) NOT NULL,
+		fund_id varchar(10) NOT NULL,
+		created_at timestamptz DEFAULT now()
+	)`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_watchlist_group_fund ON tb_user_watchlist_fund (group_id, fund_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_tb_user_watchlist_fund_group_id ON tb_user_watchlist_fund (group_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_tb_user_watchlist_fund_fund_id ON tb_user_watchlist_fund (fund_id)`,
+	`CREATE TABLE IF NOT EXISTS tb_user_holding_override (
+		id varchar(40) PRIMARY KEY,
+		user_id varchar(40) NOT NULL,
+		fund_id varchar(10) NOT NULL,
+		stock_code varchar(10) NOT NULL,
+		stock_name varchar(100) NOT NULL,
+		exchange varchar(8) NOT NULL,
+		holding_ratio numeric(8,4) NOT NULL,
+		note text,
+		created_at timestamptz DEFAULT now(),
+		updated_at timestamptz DEFAULT now()
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_user_holding_fund ON tb_user_holding_override (user_id, fund_id)`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_holding_stock ON tb_user_holding_override (user_id, fund_id, stock_code)`,
+	`CREATE TABLE IF NOT EXISTS tb_user_fund_holding (
+		id varchar(40) PRIMARY KEY,
+		user_id varchar(40) NOT NULL,
+		fund_id varchar(10) NOT NULL,
+		amount numeric(18,2) NOT NULL,
+		as_of_date date NOT NULL,
+		note text,
+		created_at timestamptz DEFAULT now(),
+		updated_at timestamptz DEFAULT now(),
+		trade_at timestamptz
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_tb_user_fund_holding_fund_id ON tb_user_fund_holding (fund_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_tb_user_fund_holding_trade_at ON tb_user_fund_holding (trade_at)`,
+	`CREATE INDEX IF NOT EXISTS idx_user_fund_holding_user_created ON tb_user_fund_holding (user_id, created_at)`,
+}

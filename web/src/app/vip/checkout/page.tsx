@@ -143,7 +143,7 @@ export default function VIPCheckoutPage() {
             })}
           </div>
 
-          <div className="vip-urgency-banner mt-6 rounded-[28px] border p-5 text-sm leading-6 text-amber-50/92">
+          <div className="vip-urgency-banner mt-6 rounded-[28px] border p-5 text-sm leading-6 text-theme-secondary">
             当前页面已接入微信支付 Native 下单与订单状态查询。若你还没有补齐商户配置，页面会直接提示“支付未配置”，不会再静默回退。
           </div>
         </section>
@@ -165,7 +165,7 @@ export default function VIPCheckoutPage() {
 
             <div className="vip-total-box mt-6 rounded-[24px] border p-5">
               <div className="text-sm text-theme-secondary">应付金额</div>
-              <div className="mt-2 text-4xl font-black text-cyan-50">{selectedOption.priceLabel}</div>
+              <div className="mt-2 text-4xl font-black text-theme-primary">{selectedOption.priceLabel}</div>
               <div className="mt-2 text-xs text-theme-muted">开通后即可解锁分析入口、任务中心和完整报告阅读权限</div>
             </div>
 
@@ -190,9 +190,9 @@ export default function VIPCheckoutPage() {
 
                 {order.codeURL && order.status === 'pending_payment' && (
                   <div className="mt-5 space-y-3">
-                    <div className="rounded-[20px] border border-cyan-400/20 bg-black/10 p-4 text-sm leading-6 text-cyan-50/90 break-all">
+                    <div className="rounded-[20px] border border-[var(--card-border)] bg-[var(--input-bg)]/60 p-4 text-sm leading-6 text-theme-secondary break-all">
                       请将下方 `code_url` 生成二维码后使用微信扫码，或尝试直接打开支付链接。
-                      <div className="mt-3 rounded-xl border border-cyan-400/15 bg-black/20 p-3 font-mono text-xs text-cyan-100/90">
+                      <div className="mt-3 rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/70 p-3 font-mono text-xs text-theme-primary">
                         {order.codeURL}
                       </div>
                     </div>
@@ -276,13 +276,13 @@ export default function VIPCheckoutPage() {
           </div>
 
           <div className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6">
-            <div className="flex items-center gap-3 text-rose-100">
-              <ShieldAlert className="h-5 w-5" />
-              <div className="text-lg font-bold">风险与服务提示</div>
-            </div>
-            <p className="mt-4 text-sm leading-6 text-rose-50/90">{plan.disclaimer}</p>
+          <div className="flex items-center gap-3 text-theme-primary">
+            <ShieldAlert className="h-5 w-5" />
+            <div className="text-lg font-bold">风险与服务提示</div>
           </div>
-        </section>
+          <p className="mt-4 text-sm leading-6 text-theme-secondary">{plan.disclaimer}</p>
+        </div>
+      </section>
       </div>
     </AccountAreaShell>
   )

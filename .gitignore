@@ -40,3 +40,12 @@ dist/
 !src/main/resources/*.properties
 fundlive.yaml
 pgdata/
+.omx/
+.codex/*
+!.codex/agents/
+!.codex/agents/**
+!.codex/skills/
+!.codex/skills/**
+.codex/skills/.system/**
+!.codex/prompts/
+!.codex/prompts/**

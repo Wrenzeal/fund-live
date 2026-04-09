@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { ArrowUpRight, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { useMarketTradingState } from '@/hooks/use-market-status'
 import { useFund, useFundEstimate, useTimeSeries } from '@/hooks/use-fund-data'
 import { FundMiniTrend } from '@/components/fund-mini-trend'
 import { cn, formatPercent } from '@/lib/utils'
@@ -14,12 +15,14 @@ interface WatchlistFundCardProps {
 
 export function WatchlistFundCard({ fundId, onRemove }: WatchlistFundCardProps) {
   const [isRemoving, setIsRemoving] = useState(false)
-  const { estimate, isLoading } = useFundEstimate(fundId)
+  const { session } = useMarketTradingState()
+  const isCallAuction = session === 'call_auction'
+  const { estimate, isLoading } = useFundEstimate(isCallAuction ? null : fundId)
   const { fund } = useFund(fundId)
-  const { timeSeries } = useTimeSeries(fundId)
+  const { timeSeries } = useTimeSeries(isCallAuction ? null : fundId)
 
   const fundName = fund?.name || estimate?.fund_name || fundId
-  const percent = formatPercent(estimate?.change_percent)
+  const percent = isCallAuction ? { text: '-', isPositive: false } : formatPercent(estimate?.change_percent)
 
   const handleRemove = async () => {
     if (isRemoving) {
@@ -67,13 +70,13 @@ export function WatchlistFundCard({ fundId, onRemove }: WatchlistFundCardProps) 
         </button>
       </div>
 
-      <FundMiniTrend timeSeries={timeSeries} isPositive={percent.isPositive} />
+      <FundMiniTrend timeSeries={timeSeries} isPositive={percent.isPositive} isCallAuction={isCallAuction} />
 
       <div className="mt-4 flex items-end justify-between gap-4">
         <div>
           <div className="text-xs text-theme-muted">实时预估涨跌幅</div>
           <div className={cn('mt-1 text-2xl font-black', percent.isPositive ? 'text-up' : 'text-down')}>
-            {isLoading ? '--' : percent.text}
+            {isCallAuction ? '-' : isLoading ? '--' : percent.text}
           </div>
         </div>
 

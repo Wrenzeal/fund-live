@@ -206,23 +206,28 @@ func main() {
 				continue
 			}
 
-			// Convert and save holdings
-			domainHoldings := make([]domain.StockHolding, len(result.Holdings))
-			for i, h := range result.Holdings {
-				domainHoldings[i] = domain.StockHolding{
-					StockCode:       h.StockCode,
-					StockName:       h.StockName,
-					Exchange:        h.Exchange,
-					HoldingRatio:    h.HoldingRatio,
-					HoldingShares:   h.HoldingShares,
-					MarketValue:     h.MarketValue,
-					ReportingPeriod: h.ReportingPeriod,
+			// Convert and save holdings.
+			// nil means upstream holdings fetch failed, so keep existing persisted holdings untouched.
+			if result.Holdings == nil {
+				log.Printf("   ⚠️ Skipped replacing holdings for %s because upstream holdings fetch failed; existing holdings kept", code)
+			} else {
+				domainHoldings := make([]domain.StockHolding, len(result.Holdings))
+				for i, h := range result.Holdings {
+					domainHoldings[i] = domain.StockHolding{
+						StockCode:       h.StockCode,
+						StockName:       h.StockName,
+						Exchange:        h.Exchange,
+						HoldingRatio:    h.HoldingRatio,
+						HoldingShares:   h.HoldingShares,
+						MarketValue:     h.MarketValue,
+						ReportingPeriod: h.ReportingPeriod,
+					}
 				}
-			}
 
-			if err := fundRepo.SaveHoldings(dbCtx, code, domainHoldings); err != nil {
-				log.Printf("   ❌ Failed to save holdings for %s: %v", code, err)
-				continue
+				if err := fundRepo.SaveHoldings(dbCtx, code, domainHoldings); err != nil {
+					log.Printf("   ❌ Failed to save holdings for %s: %v", code, err)
+					continue
+				}
 			}
 
 			savedCount++

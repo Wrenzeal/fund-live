@@ -7,12 +7,21 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 export type IssueType = 'bug' | 'feature' | 'improvement'
 export type IssueStatus = 'pending' | 'accepted' | 'completed'
 
+export interface IssueOfficialReply {
+  body: string
+  replied_by_user_id: string
+  replied_by_display_name: string
+  created_at: string
+  updated_at: string
+}
+
 export interface Issue {
   id: string
   title: string
   body: string
   type: IssueType
   status: IssueStatus
+  official_reply?: IssueOfficialReply
   created_by_user_id: string
   created_by_display_name: string
   created_at: string
@@ -130,5 +139,12 @@ export async function updateIssueStatus(issueID: string, status: IssueStatus) {
   return requestIssues<Issue>(`/api/v1/admin/issues/${issueID}/status`, {
     method: 'PUT',
     body: JSON.stringify({ status }),
+  })
+}
+
+export async function updateIssueReply(issueID: string, body: string) {
+  return requestIssues<Issue>(`/api/v1/admin/issues/${issueID}/reply`, {
+    method: 'PUT',
+    body: JSON.stringify({ body }),
   })
 }

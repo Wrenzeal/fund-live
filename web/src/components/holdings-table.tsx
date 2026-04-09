@@ -7,14 +7,29 @@ import type { HoldingDetail, FundEstimate } from '@/hooks/use-fund-data'
 
 interface HoldingsTableProps {
     estimate?: FundEstimate
+    isCallAuction?: boolean
     className?: string
 }
 
-export function HoldingsTable({ estimate, className }: HoldingsTableProps) {
+export function HoldingsTable({ estimate, isCallAuction = false, className }: HoldingsTableProps) {
     const holdings = useMemo(() =>
         estimate?.holding_details || [],
         [estimate?.holding_details]
     )
+
+    if (isCallAuction) {
+        return (
+            <div className={cn('glass rounded-2xl p-6', className)}>
+                <h3 className="text-lg font-semibold text-theme-primary mb-4">持仓明细</h3>
+                <div className="rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/35 px-5 py-10 text-center">
+                    <div className="text-base font-semibold text-theme-primary">集合竞价中</div>
+                    <p className="mt-2 text-sm leading-6 text-theme-secondary">
+                        等待 09:30 开盘后更新重仓股和贡献数据
+                    </p>
+                </div>
+            </div>
+        )
+    }
 
     if (holdings.length === 0) {
         return (
@@ -28,7 +43,12 @@ export function HoldingsTable({ estimate, className }: HoldingsTableProps) {
     return (
         <div className={cn('glass rounded-2xl p-6', className)}>
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-theme-primary">前十大重仓股</h3>
+                <div>
+                    <h3 className="text-lg font-semibold text-theme-primary">重仓股明细</h3>
+                    <p className="mt-1 text-xs text-theme-muted">
+                        当前参与估值展示 {holdings.length} / 10 只
+                    </p>
+                </div>
                 <span className="text-xs text-theme-muted">
                     合计占比: {formatRatio(estimate?.total_hold_ratio)}
                 </span>

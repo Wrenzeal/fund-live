@@ -3,6 +3,7 @@ package repository
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -159,6 +160,22 @@ func (r *MemoryFundRepository) GetFundHoldings(ctx context.Context, fundID strin
 	return nil, nil
 }
 
+// ListFundIDsWithHoldings returns fund IDs that currently have in-memory holdings.
+func (r *MemoryFundRepository) ListFundIDsWithHoldings(ctx context.Context) ([]string, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	fundIDs := make([]string, 0, len(r.holdings))
+	for fundID, holdings := range r.holdings {
+		if len(holdings) == 0 {
+			continue
+		}
+		fundIDs = append(fundIDs, fundID)
+	}
+	sort.Strings(fundIDs)
+	return fundIDs, nil
+}
+
 // SaveFund saves or updates a fund.
 func (r *MemoryFundRepository) SaveFund(ctx context.Context, fund *domain.Fund) error {
 	r.mu.Lock()
@@ -170,6 +187,10 @@ func (r *MemoryFundRepository) SaveFund(ctx context.Context, fund *domain.Fund) 
 
 // SaveHoldings saves the holdings for a fund.
 func (r *MemoryFundRepository) SaveHoldings(ctx context.Context, fundID string, holdings []domain.StockHolding) error {
+	if holdings == nil {
+		return nil
+	}
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 

@@ -141,6 +141,10 @@ func main() {
 		officialNavSync := service.NewOfficialNAVSyncService(fundRepo, fundHoldingRepo)
 		officialNavSync.Start(context.Background())
 		log.Println("🕚 Official NAV sync scheduled for 23:00 Asia/Shanghai")
+
+		holdingsRefresh := service.NewFundHoldingsRefreshService(fundRepo)
+		holdingsRefresh.Start(context.Background())
+		log.Println("🗓️ Monthly holdings refresh scheduled for day 1 at 01:00 Asia/Shanghai")
 	}
 
 	// Start background data collector
@@ -174,7 +178,7 @@ func main() {
 			"status":       "ok",
 			"timestamp":    time.Now().Unix(),
 			"service":      "FundLive API",
-			"version":      "2026.4.5",
+			"version":      "2026.4.8",
 			"storage_mode": storageMode,
 		})
 	})
@@ -255,6 +259,7 @@ func main() {
 		admin.Use(middleware.RequireAdmin())
 		{
 			admin.PUT("/issues/:id/status", issueHandler.UpdateStatus)
+			admin.PUT("/issues/:id/reply", issueHandler.UpdateReply)
 			admin.POST("/announcements", announcementHandler.Create)
 			admin.POST("/announcements/import-changelog", announcementHandler.ImportChangelog)
 		}
@@ -328,6 +333,7 @@ func main() {
 		log.Printf("   GET /api/v1/issues/:id - Get issue detail")
 		log.Printf("   POST /api/v1/issues - Create issue (auth required)")
 		log.Printf("   PUT /api/v1/admin/issues/:id/status - Update issue status (admin)")
+		log.Printf("   PUT /api/v1/admin/issues/:id/reply - Update issue official reply (admin)")
 		log.Printf("   GET /api/v1/announcements - List announcements")
 		log.Printf("   GET /api/v1/announcements/:id - Get announcement detail")
 		log.Printf("   GET /api/v1/announcements/unread - List unread announcements (auth)")

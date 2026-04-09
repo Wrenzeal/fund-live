@@ -94,9 +94,9 @@ export default function VIPPage() {
               <div className="vip-price-spotlight rounded-[30px] border p-6">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-xs tracking-[0.2em] text-amber-200/85">当前开放档位</div>
-                    <div className="mt-3 text-3xl font-black text-white">{plan.name}</div>
-                    <div className="mt-2 text-sm leading-6 text-white/72">{plan.subtitle}</div>
+                    <div className="text-xs tracking-[0.2em] text-theme-muted">当前开放档位</div>
+                    <div className="mt-3 text-3xl font-black text-theme-primary">{plan.name}</div>
+                    <div className="mt-2 text-sm leading-6 text-theme-secondary">{plan.subtitle}</div>
                   </div>
                   <div className="vip-limited-chip rounded-full px-3 py-1 text-[11px] tracking-[0.2em]">
                     PAYMENT PREVIEW
@@ -107,34 +107,34 @@ export default function VIPPage() {
                     <div key={option.cycle} className="vip-price-option rounded-2xl border px-4 py-3">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <div className="text-sm font-semibold text-white">{option.label}</div>
-                          <div className="mt-1 text-xs text-white/60">{option.dailyCostLabel}</div>
+                          <div className="text-sm font-semibold text-theme-primary">{option.label}</div>
+                          <div className="mt-1 text-xs text-theme-secondary">{option.dailyCostLabel}</div>
                         </div>
                         <div className="text-right">
                           {option.badge && (
                             <div className="mb-1 text-[10px] tracking-[0.2em] text-amber-200">{option.badge}</div>
                           )}
-                          <div className="text-sm font-semibold text-cyan-100">{option.priceLabel}</div>
+                          <div className="text-sm font-semibold text-theme-primary">{option.priceLabel}</div>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="mt-5 rounded-2xl border border-white/10 bg-black/15 px-4 py-4 text-sm leading-6 text-white/78">
+                <div className="mt-5 rounded-2xl border border-[var(--card-border)] bg-[var(--input-bg)]/60 px-4 py-4 text-sm leading-6 text-theme-secondary">
                   从“每天看很多信息”，变成“每天只看一份结果清晰、结构完整的报告”。
                 </div>
               </div>
 
               <div className="vip-benefit-panel rounded-[28px] border p-6">
-                <div className="text-xs tracking-[0.2em] text-amber-200/90">权益摘要</div>
-                <div className="mt-3 space-y-3 text-sm text-amber-50">
+              <div className="text-xs tracking-[0.2em] text-amber-200/90">权益摘要</div>
+                <div className="mt-3 space-y-3 text-sm text-theme-secondary">
                   <div>每交易日 2 次板块分析</div>
                   <div>每交易日 2 次组合分析</div>
                   <div>异步生成完整报告</div>
                   <div>带风险提示和引用来源</div>
                 </div>
                 {membership.isVip && (
-                  <div className="mt-5 rounded-2xl border border-amber-300/18 bg-black/10 px-4 py-3 text-xs leading-6 text-amber-100/90">
+                  <div className="mt-5 rounded-2xl border border-[var(--card-border)] bg-[var(--input-bg)]/60 px-4 py-3 text-xs leading-6 text-theme-secondary">
                     当前剩余：板块分析 {remainingQuota.sectorAnalysis} 次，组合分析 {remainingQuota.portfolioAnalysis} 次
                   </div>
                 )}
@@ -167,8 +167,8 @@ export default function VIPPage() {
 
             <div className="space-y-4">
               <div className="vip-preview-highlight rounded-[24px] border p-5">
-                <div className="text-sm font-semibold text-cyan-50">摘要结论</div>
-                <div className="mt-3 text-sm leading-6 text-cyan-50/90">
+                <div className="text-sm font-semibold text-theme-primary">摘要结论</div>
+                <div className="mt-3 text-sm leading-6 text-theme-secondary">
                   组合当前处于“成长驱动 + 医药修复”并存阶段，适合维持平衡偏积极而非极端押注。
                 </div>
               </div>
@@ -213,11 +213,11 @@ export default function VIPPage() {
             </section>
 
             <section className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6">
-              <div className="flex items-center gap-3 text-rose-100">
+              <div className="flex items-center gap-3 text-theme-primary">
                 <ShieldAlert className="h-5 w-5" />
                 <div className="text-lg font-bold">风险与免责声明</div>
               </div>
-              <p className="mt-4 text-sm leading-6 text-rose-50/90">{plan.disclaimer}</p>
+              <p className="mt-4 text-sm leading-6 text-theme-secondary">{plan.disclaimer}</p>
             </section>
 
             {membership.isVip && latestCompletedTask && latestCompletedTask.reportId && (

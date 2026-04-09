@@ -76,3 +76,38 @@ func TestMemoryFundRepositorySearchFundsUsesStableRanking(t *testing.T) {
 		t.Fatalf("results[1].ID = %s, want 320007", results[1].ID)
 	}
 }
+
+func TestMemoryFundRepositorySaveHoldingsNilKeepsExistingHoldings(t *testing.T) {
+	repo := NewMemoryFundRepository()
+
+	before, err := repo.GetFundHoldings(t.Context(), "005827")
+	if err != nil {
+		t.Fatalf("GetFundHoldings() error = %v", err)
+	}
+
+	if err := repo.SaveHoldings(t.Context(), "005827", nil); err != nil {
+		t.Fatalf("SaveHoldings(nil) error = %v", err)
+	}
+
+	after, err := repo.GetFundHoldings(t.Context(), "005827")
+	if err != nil {
+		t.Fatalf("GetFundHoldings() after error = %v", err)
+	}
+
+	if len(after) != len(before) {
+		t.Fatalf("len(after) = %d, want %d", len(after), len(before))
+	}
+}
+
+func TestMemoryFundRepositoryListFundIDsWithHoldings(t *testing.T) {
+	repo := NewMemoryFundRepository()
+
+	fundIDs, err := repo.ListFundIDsWithHoldings(t.Context())
+	if err != nil {
+		t.Fatalf("ListFundIDsWithHoldings() error = %v", err)
+	}
+
+	if len(fundIDs) == 0 {
+		t.Fatal("ListFundIDsWithHoldings() returned no fund IDs")
+	}
+}

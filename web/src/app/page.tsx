@@ -51,6 +51,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   const switchingFundIdRef = useRef<string | null>(null)
   // 市场状态 hook
   const marketStatus = useMarketStatus()
+  const isCallAuction = marketStatus.session === 'call_auction'
 
   const syncFundInUrl = (fundId: string) => {
     if (typeof window === 'undefined') {
@@ -104,19 +105,19 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     refreshInterval,
     isWarming: isEstimateWarming,
     retryAfterSeconds,
-  } = useFundEstimate(currentFundId, {
+  } = useFundEstimate(isCallAuction ? null : currentFundId, {
     onSuccess: handleEstimateSuccess,
     onError: handleEstimateError,
   })
 
-  const { fund, cacheStatus: fundCacheStatus } = useFund(currentFundId)
+  const { fund, cacheStatus: fundCacheStatus } = useFund(isCallAuction ? null : currentFundId)
   const {
     timeSeries,
     displayDate,
     isHistorical,
     isLoading: isTimeSeriesLoading,
     isWarming: isTimeSeriesWarming,
-  } = useTimeSeries(currentFundId)
+  } = useTimeSeries(isCallAuction ? null : currentFundId)
 
   // 切换基金时使用 transition 避免阻塞
   const handleFundSelect = (fundId: string) => {
@@ -132,6 +133,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   }
 
   const isFundSwitching = Boolean(
+    !isCallAuction &&
     switchingFundId &&
     (isEstimateLoading || isEstimateWarming || estimate?.fund_id !== switchingFundId)
   )
@@ -165,12 +167,18 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
       : fundCacheStatus === 'warming'
         ? `基金 ${currentFundId} 的基础资料正在后台补全，页面会自动刷新。`
         : ''
+  const activeEstimate = isCallAuction ? undefined : estimate
+  const activeFund = isCallAuction ? undefined : fund
+  const activeTimeSeries = isCallAuction ? [] : timeSeries
+  const activeLastUpdated = isCallAuction ? null : lastUpdated
   const warmupDetailText = isEstimateWarming
     ? `数据预热中，约 ${Math.max(retryAfterSeconds || 5, 1)} 秒后自动重试`
-    : warmupNotice
+    : isCallAuction
+      ? '集合竞价中，等待 09:30 开盘后更新基金数据'
+      : warmupNotice
 
   // 计算 Top 贡献者
-  const topContributors = (estimate?.holding_details ?? [])
+  const topContributors = (activeEstimate?.holding_details ?? [])
     .slice()
     .sort((a, b) => parseFloat(b.contribution) - parseFloat(a.contribution))
     .slice(0, 3)
@@ -295,11 +303,19 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
             </button>
           </div>
         )}
-        {warmupNotice && (
+        {warmupNotice && !isCallAuction && (
           <div className="mb-6 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-50">
             <div className="flex items-start gap-3">
               <RefreshCw className={cn('mt-0.5 h-4 w-4 shrink-0', isEstimateWarming || isTimeSeriesWarming ? 'animate-spin' : '')} />
               <span>{warmupNotice}</span>
+            </div>
+          </div>
+        )}
+        {isCallAuction && (
+          <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            <div className="flex items-start gap-3">
+              <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>集合竞价中，等待 09:30 开盘后更新基金数据。</span>
             </div>
           </div>
         )}
@@ -315,11 +331,12 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
           /* ===== Minimal Mode ===== */
           <div className="flex items-center justify-center min-h-[60vh]">
             <EstimateCard
-              estimate={estimate}
-              fund={fund}
+              estimate={activeEstimate}
+              fund={activeFund}
               isLoading={isEstimateLoading}
+              isCallAuction={isCallAuction}
               isValidating={isValidating}
-              lastUpdated={lastUpdated}
+              lastUpdated={activeLastUpdated}
               className="w-full max-w-2xl"
             />
           </div>
@@ -329,11 +346,12 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
             {/* Top Section: Estimate Card + Stats */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <EstimateCard
-                estimate={estimate}
-                fund={fund}
+                estimate={activeEstimate}
+                fund={activeFund}
                 isLoading={isEstimateLoading}
+                isCallAuction={isCallAuction}
                 isValidating={isValidating}
-                lastUpdated={lastUpdated}
+                lastUpdated={activeLastUpdated}
                 className="lg:col-span-2"
               />
 
@@ -368,19 +386,19 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
                     <div className="flex justify-between text-sm">
                       <span className="text-theme-secondary">重仓股覆盖</span>
                       <span className="text-theme-primary font-medium">
-                        {estimate?.holding_details?.length || 0} / 10
+                        {isCallAuction ? '-' : `${estimate?.holding_details?.length || 0} / 10`}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-theme-secondary">持仓占比</span>
                       <span className="text-theme-primary font-medium">
-                        {parseFloat(estimate?.total_hold_ratio || '0').toFixed(2)}%
+                        {isCallAuction ? '-' : `${parseFloat(estimate?.total_hold_ratio || '0').toFixed(2)}%`}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-theme-secondary">数据来源</span>
                       <span className="text-cyan-400 font-medium">
-                        {estimate?.data_source || 'N/A'}
+                        {isCallAuction ? '-' : (estimate?.data_source || 'N/A')}
                       </span>
                     </div>
                   </div>
@@ -395,7 +413,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
                     <h3 className="font-semibold text-theme-primary">涨幅贡献 TOP3</h3>
                   </div>
                   <div className="space-y-2">
-                    {topContributors.map((holding, index) => {
+                    {!isCallAuction && topContributors.map((holding, index) => {
                       const contrib = parseFloat(holding.contribution)
                       const isPositive = contrib >= 0
                       return (
@@ -413,7 +431,9 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
                         </div>
                       )
                     })}
-                    {topContributors.length === 0 && (
+                    {isCallAuction ? (
+                      <p className="text-sm text-theme-muted text-center py-4">集合竞价中</p>
+                    ) : topContributors.length === 0 && (
                       <p className="text-sm text-theme-muted text-center py-4">暂无数据</p>
                     )}
                   </div>
@@ -423,15 +443,16 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
 
             {/* Chart Section */}
             <IntradayChart
-              timeSeries={timeSeries}
-              estimate={estimate}
+              timeSeries={activeTimeSeries}
+              estimate={activeEstimate}
               isLoading={isTimeSeriesLoading}
+              isCallAuction={isCallAuction}
               displayDate={displayDate}
               isHistorical={isHistorical}
             />
 
             {/* Holdings Table */}
-            <HoldingsTable estimate={estimate} />
+            <HoldingsTable estimate={activeEstimate} isCallAuction={isCallAuction} />
           </div>
         )}
       </main>

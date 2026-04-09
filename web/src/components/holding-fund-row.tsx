@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
+import { useMarketTradingState } from '@/hooks/use-market-status'
 import { useFund, useFundEstimate } from '@/hooks/use-fund-data'
 import { cn } from '@/lib/utils'
 import type { HoldingEntry } from '@/hooks/use-user-portfolio'
@@ -79,11 +80,13 @@ function formatTradeAt(tradeAt?: string) {
 
 export function HoldingFundRow({ holding, onRemove }: HoldingFundRowProps) {
   const [isRemoving, setIsRemoving] = useState(false)
-  const { estimate } = useFundEstimate(holding.fund_id)
+  const { session } = useMarketTradingState()
+  const isCallAuction = session === 'call_auction'
+  const { estimate } = useFundEstimate(isCallAuction ? null : holding.fund_id)
   const { fund } = useFund(holding.fund_id)
   const actualDailyReturn = holding.actual_daily_return?.trim() || ''
   const effectiveChangePercent = actualDailyReturn || estimate?.change_percent
-  const delta = formatEstimatedDelta(holding.amount, effectiveChangePercent)
+  const delta = isCallAuction ? { text: '-', isPositive: false } : formatEstimatedDelta(holding.amount, effectiveChangePercent)
   const fundName = holding.fund?.name || fund?.name || estimate?.fund_name || holding.fund_id
   const tradeAtLabel = formatTradeAt(holding.trade_at)
   const isActualized = actualDailyReturn !== ''

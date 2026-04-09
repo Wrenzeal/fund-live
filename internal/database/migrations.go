@@ -17,6 +17,16 @@ type sqlMigration struct {
 
 var managedMigrations = []sqlMigration{
 	{
+		ID:             "20260409_core_fund_tables",
+		RequiredTables: []string{},
+		Statements:     coreFundTableMigrationStatements,
+	},
+	{
+		ID:             "20260409_core_user_tables",
+		RequiredTables: []string{},
+		Statements:     coreUserTableMigrationStatements,
+	},
+	{
 		ID:             "20260406_user_admin_flag",
 		RequiredTables: []string{"tb_user"},
 		Statements:     adminUserMigrationStatements,
@@ -25,6 +35,11 @@ var managedMigrations = []sqlMigration{
 		ID:             "20260406_issue_tables",
 		RequiredTables: []string{},
 		Statements:     issueMigrationStatements,
+	},
+	{
+		ID:             "20260408_issue_official_reply",
+		RequiredTables: []string{"issues"},
+		Statements:     issueOfficialReplyMigrationStatements,
 	},
 	{
 		ID:             "20260406_announcement_tables",

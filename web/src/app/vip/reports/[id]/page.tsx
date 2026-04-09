@@ -54,11 +54,11 @@ export default function VIPReportDetailPage() {
         description="查看结构化研究报告，包括摘要结论、操作建议、风险提示以及引用来源。"
       >
         <section className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6">
-          <div className="flex items-start gap-3 text-rose-100">
+          <div className="flex items-start gap-3 text-theme-primary">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
             <div>
               <div className="text-lg font-bold">报告不存在或当前账号无权查看</div>
-              <p className="mt-2 text-sm leading-6 text-rose-50/90">
+              <p className="mt-2 text-sm leading-6 text-theme-secondary">
                 {error instanceof Error ? error.message : '请返回任务中心，或查看系统内置示例报告。'}
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
@@ -169,11 +169,11 @@ export default function VIPReportDetailPage() {
           <div className="space-y-6">
             <article className="rounded-[32px] border border-cyan-500/25 bg-cyan-500/10 p-6">
               <div className="text-xs tracking-[0.22em] text-cyan-300">操作建议</div>
-              <div className="mt-3 text-3xl font-black text-cyan-50">{report.advice.action}</div>
-              <div className="mt-2 text-sm text-cyan-50/90">建议仓位区间：{report.advice.positionRange}</div>
+              <div className="mt-3 text-3xl font-black text-theme-primary">{report.advice.action}</div>
+              <div className="mt-2 text-sm text-theme-secondary">建议仓位区间：{report.advice.positionRange}</div>
               <div className="mt-5 space-y-3">
                 {report.advice.conditions.map((condition) => (
-                  <div key={condition} className="rounded-[22px] border border-cyan-400/20 bg-black/10 px-4 py-4 text-sm leading-6 text-cyan-50/90">
+                  <div key={condition} className="rounded-[22px] border border-[var(--card-border)] bg-[var(--input-bg)]/60 px-4 py-4 text-sm leading-6 text-theme-secondary">
                     {condition}
                   </div>
                 ))}
@@ -181,13 +181,13 @@ export default function VIPReportDetailPage() {
             </article>
 
             <article className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6">
-              <div className="mb-4 flex items-center gap-3 text-rose-100">
+              <div className="mb-4 flex items-center gap-3 text-theme-primary">
                 <AlertTriangle className="h-5 w-5" />
                 <div className="text-xl font-bold">风险提示</div>
               </div>
               <div className="space-y-3">
                 {report.risks.map((riskItem) => (
-                  <div key={riskItem} className="rounded-[22px] border border-rose-400/20 bg-black/10 px-4 py-4 text-sm leading-6 text-rose-50/90">
+                  <div key={riskItem} className="rounded-[22px] border border-[var(--card-border)] bg-[var(--input-bg)]/60 px-4 py-4 text-sm leading-6 text-theme-secondary">
                     {riskItem}
                   </div>
                 ))}
@@ -225,8 +225,8 @@ export default function VIPReportDetailPage() {
           </div>
         </section>
 
-        <section className="rounded-[32px] border border-amber-500/20 bg-amber-500/10 p-6 text-sm leading-7 text-amber-50/90">
-          <div className="mb-3 flex items-center gap-3">
+        <section className="rounded-[32px] border border-amber-500/20 bg-amber-500/10 p-6 text-sm leading-7 text-theme-secondary">
+          <div className="mb-3 flex items-center gap-3 text-theme-primary">
             <ShieldAlert className="h-5 w-5" />
             <div className="text-lg font-bold">免责声明</div>
           </div>

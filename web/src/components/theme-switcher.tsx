@@ -145,8 +145,8 @@ export function ThemeSwitcher({
                                         <div className="flex items-center gap-3">
                                             <div className={cn(
                                                 'p-2 rounded-lg',
-                                                theme.id === 'classic' && 'bg-white text-gray-900 border border-gray-200',
-                                                theme.id === 'dark' && 'bg-gray-800 text-white',
+                                                theme.id === 'classic' && 'border border-slate-200 bg-slate-50 text-slate-900',
+                                                theme.id === 'dark' && 'bg-slate-800 text-white',
                                                 theme.id === 'cyber' && 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white'
                                             )}>
                                                 {theme.icon}

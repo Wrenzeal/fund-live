@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/RomaticDOG/fund/internal/crawler"
@@ -14,22 +15,46 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type weightedTrendPoint struct {
-	weightedSum decimal.Decimal
-	totalWeight decimal.Decimal
+type weightedSeriesSample struct {
+	Timestamp time.Time
+	Price     decimal.Decimal
+}
+
+type weightedSeriesResult struct {
+	Holding     domain.StockHolding
+	SessionOpen *weightedSeriesSample
+	Samples     []weightedSeriesSample
+	PrevClose   decimal.Decimal
 }
 
 func (s *ValuationServiceImpl) preferredTimeSeriesDate(now time.Time) time.Time {
-	switch trading.GetCurrentSession(now) {
-	case trading.SessionMorning, trading.SessionAfternoon, trading.SessionLunchBreak:
+	if shouldUseCurrentTradingDayTimeSeries(now) {
 		return now
-	default:
-		return previousTradingDay(now)
 	}
+	return previousTradingDay(now)
 }
 
 func previousTradingDay(now time.Time) time.Time {
 	return trading.GetPreviousTradingDay(now)
+}
+
+func shouldUseCurrentTradingDayTimeSeries(now time.Time) bool {
+	local := now.In(trading.TradingLocation())
+	if !trading.IsTradingDay(local) {
+		return false
+	}
+
+	switch trading.GetCurrentSession(local) {
+	case trading.SessionMorning, trading.SessionLunchBreak, trading.SessionAfternoon, trading.SessionAfterHours:
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldAllowPreviousTradingDayTimeSeriesFallback(now time.Time) bool {
+	local := now.In(trading.TradingLocation())
+	return !(trading.IsTradingDay(local) && trading.GetCurrentSession(local) == trading.SessionAfterHours)
 }
 
 func needsTimeSeriesBackfill(points []domain.TimeSeriesPoint, targetDate, now time.Time) bool {
@@ -189,32 +214,30 @@ func (s *ValuationServiceImpl) backfillTimeSeries(ctx context.Context, fundID st
 
 func (s *ValuationServiceImpl) buildWeightedTimeSeries(ctx context.Context, fund *domain.Fund, holdings []domain.StockHolding, targetDate time.Time) ([]domain.TimeSeriesPoint, error) {
 	fetcher := crawler.NewSinaKLineFetcher()
-	aggregates := make(map[time.Time]*weightedTrendPoint)
-	hundred := decimal.NewFromInt(100)
+	minuteFetcher := crawler.NewTencentMinuteFetcher()
+	stockCodes := make([]string, 0, len(holdings))
+	for _, holding := range holdings {
+		stockCodes = append(stockCodes, holding.StockCode)
+	}
+	quotes, _ := s.fetchQuotesWithCache(ctx, stockCodes)
+	source, _ := s.resolveQuoteProvider(ctx)
+	now := time.Now()
+	if s.now != nil {
+		now = s.now()
+	}
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(5)
-
-	type seriesResult struct {
-		Holding   domain.StockHolding
-		Bars      []crawler.SinaKLinePoint
-		PrevClose decimal.Decimal
-	}
-
-	resultsCh := make(chan seriesResult, len(holdings))
+	resultsCh := make(chan weightedSeriesResult, len(holdings))
 
 	for _, holding := range holdings {
 		holding := holding
 		g.Go(func() error {
-			bars, err := fetcher.FetchFiveMinuteKLines(ctx, holding.StockCode, 300)
-			if err != nil {
+			result, err := buildHoldingWeightedSeries(ctx, fetcher, minuteFetcher, holding, targetDate, quotes[holding.StockCode].PrevClose)
+			if err != nil || result == nil {
 				return nil
 			}
-			dayBars, prevClose := selectBarsForDate(bars, targetDate)
-			if len(dayBars) == 0 || prevClose.IsZero() {
-				return nil
-			}
-			resultsCh <- seriesResult{Holding: holding, Bars: dayBars, PrevClose: prevClose}
+			resultsCh <- *result
 			return nil
 		})
 	}
@@ -224,18 +247,42 @@ func (s *ValuationServiceImpl) buildWeightedTimeSeries(ctx context.Context, fund
 	}
 	close(resultsCh)
 
+	seriesResults := make([]weightedSeriesResult, 0, len(holdings))
 	for result := range resultsCh {
-		sessionOpen := tradingDayOpen(result.Bars[0].Timestamp)
-		addWeightedAggregate(aggregates, sessionOpen, result.Bars[0].Open, result.PrevClose, result.Holding.HoldingRatio)
-		for _, bar := range result.Bars {
-			addWeightedAggregate(aggregates, bar.Timestamp, bar.Close, result.PrevClose, result.Holding.HoldingRatio)
-		}
+		seriesResults = append(seriesResults, result)
 	}
 
-	return buildWeightedSeriesPoints(aggregates, fund.NetAssetVal, hundred)
+	if len(seriesResults) == 0 {
+		return nil, fmt.Errorf("no holding intraday series built")
+	}
+
+	slots := buildIntradayTimeSeriesSlots(targetDate, now)
+	return buildWeightedSeriesPoints(fund, holdings, seriesResults, source, slots)
 }
 
 func (s *ValuationServiceImpl) buildDirectInstrumentTimeSeries(ctx context.Context, fund *domain.Fund, instrumentCode string, targetDate time.Time) ([]domain.TimeSeriesPoint, error) {
+	if isHongKongCode(instrumentCode) {
+		minuteFetcher := crawler.NewTencentMinuteFetcher()
+		quotes, _ := s.fetchQuotesWithCache(ctx, []string{instrumentCode})
+		prevClose := quotes[instrumentCode].PrevClose
+		minutePoints, err := minuteFetcher.FetchIntradayMinutes(ctx, instrumentCode)
+		if err != nil {
+			return nil, err
+		}
+
+		sessionOpen, samples := selectFiveMinuteMinuteSamples(minutePoints, targetDate)
+		if sessionOpen == nil || prevClose.IsZero() {
+			return nil, fmt.Errorf("no intraday minute data for %s on %s", instrumentCode, targetDate.Format("2006-01-02"))
+		}
+
+		points := make([]domain.TimeSeriesPoint, 0, len(samples)+1)
+		points = append(points, buildInstrumentSeriesPoint(sessionOpen.Timestamp, sessionOpen.Price, prevClose, fund.NetAssetVal))
+		for _, sample := range samples {
+			points = append(points, buildInstrumentSeriesPoint(sample.Timestamp, sample.Price, prevClose, fund.NetAssetVal))
+		}
+		return points, nil
+	}
+
 	fetcher := crawler.NewSinaKLineFetcher()
 	bars, err := fetcher.FetchFiveMinuteKLines(ctx, instrumentCode, 300)
 	if err != nil {
@@ -274,45 +321,104 @@ func buildInstrumentSeriesPoint(ts time.Time, price, prevClose, nav decimal.Deci
 	}
 }
 
-func addWeightedAggregate(aggregates map[time.Time]*weightedTrendPoint, ts time.Time, price, prevClose, holdingRatio decimal.Decimal) {
-	if prevClose.IsZero() || holdingRatio.IsZero() {
-		return
+func buildHoldingWeightedSeries(
+	ctx context.Context,
+	klineFetcher *crawler.SinaKLineFetcher,
+	minuteFetcher *crawler.TencentMinuteFetcher,
+	holding domain.StockHolding,
+	targetDate time.Time,
+	quotePrevClose decimal.Decimal,
+) (*weightedSeriesResult, error) {
+	if isHongKongHolding(holding) {
+		minutePoints, err := minuteFetcher.FetchIntradayMinutes(ctx, holding.StockCode)
+		if err != nil {
+			return nil, err
+		}
+
+		sessionOpen, samples := selectFiveMinuteMinuteSamples(minutePoints, targetDate)
+		if sessionOpen == nil || quotePrevClose.IsZero() {
+			return nil, fmt.Errorf("no hong kong minute data for %s on %s", holding.StockCode, targetDate.Format("2006-01-02"))
+		}
+
+		return &weightedSeriesResult{
+			Holding:     holding,
+			SessionOpen: sessionOpen,
+			Samples:     samples,
+			PrevClose:   quotePrevClose,
+		}, nil
 	}
 
-	changePercent := price.Sub(prevClose).Div(prevClose).Mul(decimal.NewFromInt(100))
-	if _, ok := aggregates[ts]; !ok {
-		aggregates[ts] = &weightedTrendPoint{}
+	bars, err := klineFetcher.FetchFiveMinuteKLines(ctx, holding.StockCode, 300)
+	if err != nil {
+		return nil, err
 	}
-	aggregates[ts].weightedSum = aggregates[ts].weightedSum.Add(changePercent.Mul(holdingRatio))
-	aggregates[ts].totalWeight = aggregates[ts].totalWeight.Add(holdingRatio)
+
+	dayBars, prevClose := selectBarsForDate(bars, targetDate)
+	if len(dayBars) == 0 {
+		return nil, fmt.Errorf("no kline data for %s on %s", holding.StockCode, targetDate.Format("2006-01-02"))
+	}
+	if prevClose.IsZero() {
+		prevClose = quotePrevClose
+	}
+	if prevClose.IsZero() {
+		return nil, fmt.Errorf("no previous close for %s", holding.StockCode)
+	}
+
+	samples := make([]weightedSeriesSample, 0, len(dayBars))
+	for _, bar := range dayBars {
+		samples = append(samples, weightedSeriesSample{
+			Timestamp: bar.Timestamp,
+			Price:     bar.Close,
+		})
+	}
+	sort.Slice(samples, func(i, j int) bool {
+		return samples[i].Timestamp.Before(samples[j].Timestamp)
+	})
+
+	sessionOpen := weightedSeriesSample{
+		Timestamp: tradingDayOpen(dayBars[0].Timestamp),
+		Price:     dayBars[0].Open,
+	}
+
+	return &weightedSeriesResult{
+		Holding:     holding,
+		SessionOpen: &sessionOpen,
+		Samples:     samples,
+		PrevClose:   prevClose,
+	}, nil
 }
 
-func buildWeightedSeriesPoints(aggregates map[time.Time]*weightedTrendPoint, nav, hundred decimal.Decimal) ([]domain.TimeSeriesPoint, error) {
-	if len(aggregates) == 0 {
+func buildWeightedSeriesPoints(
+	fund *domain.Fund,
+	holdings []domain.StockHolding,
+	seriesResults []weightedSeriesResult,
+	source domain.QuoteSource,
+	slots []time.Time,
+) ([]domain.TimeSeriesPoint, error) {
+	if len(seriesResults) == 0 {
 		return nil, fmt.Errorf("no aggregated intraday points built")
 	}
 
-	timestamps := make([]time.Time, 0, len(aggregates))
-	for ts := range aggregates {
-		timestamps = append(timestamps, ts)
-	}
-	sort.Slice(timestamps, func(i, j int) bool { return timestamps[i].Before(timestamps[j]) })
+	points := make([]domain.TimeSeriesPoint, 0, len(slots))
+	for _, slot := range slots {
+		quotes := make(map[string]domain.StockQuote, len(seriesResults))
+		for _, series := range seriesResults {
+			quote, ok := buildQuoteSnapshotAtSlot(series, slot)
+			if !ok {
+				continue
+			}
+			quotes[series.Holding.StockCode] = quote
+		}
 
-	points := make([]domain.TimeSeriesPoint, 0, len(timestamps))
-	for _, ts := range timestamps {
-		aggregate := aggregates[ts]
-		if aggregate.totalWeight.IsZero() {
+		estimate := buildEstimateSnapshotFromQuotes(fund, holdings, quotes, source, slot)
+		if estimate.TotalHoldRatio.IsZero() {
 			continue
 		}
-		changePercent := aggregate.weightedSum.Div(aggregate.totalWeight).Round(4)
-		estimateNav := decimal.Zero
-		if !nav.IsZero() {
-			estimateNav = nav.Mul(decimal.NewFromInt(1).Add(changePercent.Div(hundred))).Round(4)
-		}
+
 		points = append(points, domain.TimeSeriesPoint{
-			Timestamp:     ts,
-			ChangePercent: changePercent,
-			EstimateNav:   estimateNav,
+			Timestamp:     slot,
+			ChangePercent: estimate.ChangePercent,
+			EstimateNav:   estimate.EstimateNav,
 		})
 	}
 
@@ -322,14 +428,112 @@ func buildWeightedSeriesPoints(aggregates map[time.Time]*weightedTrendPoint, nav
 	return points, nil
 }
 
-func ensureLunchBreakResumePoint(points []domain.TimeSeriesPoint) []domain.TimeSeriesPoint {
+func buildQuoteSnapshotAtSlot(series weightedSeriesResult, slot time.Time) (domain.StockQuote, bool) {
+	price, ok := latestSeriesPriceAtOrBefore(series, slot)
+	if !ok || series.PrevClose.IsZero() {
+		return domain.StockQuote{}, false
+	}
+
+	changePercent := price.Sub(series.PrevClose).Div(series.PrevClose).Mul(decimal.NewFromInt(100)).Round(4)
+	return domain.StockQuote{
+		StockCode:     series.Holding.StockCode,
+		StockName:     series.Holding.StockName,
+		CurrentPrice:  price,
+		PrevClose:     series.PrevClose,
+		ChangePercent: changePercent,
+		UpdatedAt:     slot,
+	}, true
+}
+
+func latestSeriesPriceAtOrBefore(series weightedSeriesResult, slot time.Time) (decimal.Decimal, bool) {
+	slot = slot.In(trading.TradingLocation())
+	if series.SessionOpen == nil {
+		return decimal.Zero, false
+	}
+
+	baseTs := series.SessionOpen.Timestamp.In(trading.TradingLocation())
+	if slot.Before(baseTs) {
+		return decimal.Zero, false
+	}
+
+	price := series.SessionOpen.Price
+	if !slot.After(baseTs) {
+		return price, true
+	}
+
+	for _, sample := range series.Samples {
+		sampleTs := sample.Timestamp.In(trading.TradingLocation())
+		if sampleTs.After(slot) {
+			break
+		}
+		price = sample.Price
+	}
+	return price, true
+}
+
+func buildIntradayTimeSeriesSlots(targetDate, now time.Time) []time.Time {
+	loc := trading.TradingLocation()
+	targetLocal := targetDate.In(loc)
+	nowLocal := now.In(loc)
+	end := expectedLatestTimePoint(nowLocal, targetLocal)
+	day := time.Date(targetLocal.Year(), targetLocal.Month(), targetLocal.Day(), 0, 0, 0, 0, loc)
+
+	slots := make([]time.Time, 0, 64)
+	appendRange := func(startHour, startMinute, endHour, endMinute int) {
+		start := time.Date(day.Year(), day.Month(), day.Day(), startHour, startMinute, 0, 0, loc)
+		finish := time.Date(day.Year(), day.Month(), day.Day(), endHour, endMinute, 0, 0, loc)
+		for ts := start; !ts.After(finish) && !ts.After(end); ts = ts.Add(5 * time.Minute) {
+			slots = append(slots, ts)
+		}
+	}
+
+	appendRange(9, 30, 11, 30)
+
+	if shouldIncludeLunchResumeSlot(targetLocal, nowLocal) {
+		resume := time.Date(day.Year(), day.Month(), day.Day(), 13, 0, 0, 0, loc)
+		if !resume.After(end) {
+			slots = append(slots, resume)
+		}
+	}
+
+	appendRange(13, 5, 15, 0)
+	return slots
+}
+
+func shouldIncludeLunchResumeSlot(targetDate, now time.Time) bool {
+	if targetDate.Format("2006-01-02") != now.Format("2006-01-02") {
+		return true
+	}
+
+	switch trading.GetCurrentSession(now) {
+	case trading.SessionAfternoon, trading.SessionAfterHours:
+		return true
+	default:
+		return false
+	}
+}
+
+func ensureLunchBreakResumePoint(points []domain.TimeSeriesPoint, now time.Time) []domain.TimeSeriesPoint {
 	if len(points) == 0 {
 		return points
 	}
 
 	loc := points[0].Timestamp.Location()
 	if loc == nil {
-		loc = time.Local
+		loc = trading.TradingLocation()
+	}
+
+	pointDate := points[0].Timestamp.In(trading.TradingLocation()).Format("2006-01-02")
+	if !now.IsZero() {
+		localNow := now.In(trading.TradingLocation())
+		if pointDate == localNow.Format("2006-01-02") {
+			switch trading.GetCurrentSession(localNow) {
+			case trading.SessionAfternoon, trading.SessionAfterHours:
+				// allow synthetic 13:00 continuity point
+			default:
+				return removeLunchBreakResumePoint(points, loc)
+			}
+		}
 	}
 
 	var has1300 bool
@@ -347,20 +551,102 @@ func ensureLunchBreakResumePoint(points []domain.TimeSeriesPoint) []domain.TimeS
 		}
 	}
 
-	if has1300 || elevenThirty == nil {
+	if elevenThirty == nil {
 		return points
 	}
 
 	resumePoint := *elevenThirty
 	baseTs := elevenThirty.Timestamp.In(loc)
 	resumePoint.Timestamp = time.Date(baseTs.Year(), baseTs.Month(), baseTs.Day(), 13, 0, 0, 0, loc)
-	points = append(points, resumePoint)
+
+	if has1300 {
+		for i := range points {
+			localTs := points[i].Timestamp.In(loc)
+			if localTs.Hour() == 13 && localTs.Minute() == 0 {
+				points[i].ChangePercent = resumePoint.ChangePercent
+				points[i].EstimateNav = resumePoint.EstimateNav
+				points[i].Timestamp = resumePoint.Timestamp
+			}
+		}
+	} else {
+		points = append(points, resumePoint)
+	}
 
 	sort.Slice(points, func(i, j int) bool {
 		return points[i].Timestamp.Before(points[j].Timestamp)
 	})
 
 	return points
+}
+
+func removeLunchBreakResumePoint(points []domain.TimeSeriesPoint, loc *time.Location) []domain.TimeSeriesPoint {
+	filtered := make([]domain.TimeSeriesPoint, 0, len(points))
+	for _, point := range points {
+		localTs := point.Timestamp.In(loc)
+		if localTs.Hour() == 13 && localTs.Minute() == 0 {
+			continue
+		}
+		filtered = append(filtered, point)
+	}
+	return filtered
+}
+
+func isHongKongHolding(holding domain.StockHolding) bool {
+	return holding.Exchange == domain.ExchangeHK || isHongKongCode(holding.StockCode)
+}
+
+func isHongKongCode(code string) bool {
+	return len(strings.TrimSpace(code)) == 5
+}
+
+func selectFiveMinuteMinuteSamples(points []crawler.TencentMinutePoint, targetDate time.Time) (*weightedSeriesSample, []weightedSeriesSample) {
+	targetKey := targetDate.In(trading.TradingLocation()).Format("2006-01-02")
+	filtered := make([]weightedSeriesSample, 0, len(points))
+
+	for _, point := range points {
+		localTs := point.Timestamp.In(trading.TradingLocation())
+		if localTs.Format("2006-01-02") != targetKey {
+			continue
+		}
+
+		totalMinutes := localTs.Hour()*60 + localTs.Minute()
+		inMorning := totalMinutes >= 9*60+30 && totalMinutes <= 11*60+30
+		inAfternoon := totalMinutes >= 13*60 && totalMinutes <= 15*60
+		if !inMorning && !inAfternoon {
+			continue
+		}
+		if localTs.Hour() == 13 && localTs.Minute() == 0 {
+			continue
+		}
+		if localTs.Minute()%5 != 0 {
+			continue
+		}
+
+		filtered = append(filtered, weightedSeriesSample{
+			Timestamp: time.Date(localTs.Year(), localTs.Month(), localTs.Day(), localTs.Hour(), localTs.Minute(), 0, 0, trading.TradingLocation()),
+			Price:     point.Price,
+		})
+	}
+
+	if len(filtered) == 0 {
+		return nil, nil
+	}
+
+	sort.Slice(filtered, func(i, j int) bool {
+		return filtered[i].Timestamp.Before(filtered[j].Timestamp)
+	})
+
+	sessionOpen := filtered[0]
+	if sessionOpen.Timestamp.Hour() != 9 || sessionOpen.Timestamp.Minute() != 30 {
+		return &sessionOpen, filtered[1:]
+	}
+
+	samples := make([]weightedSeriesSample, 0, len(filtered)-1)
+	for _, sample := range filtered[1:] {
+		samples = append(samples, sample)
+	}
+
+	return &sessionOpen, samples
 }
 
 func selectBarsForDate(bars []crawler.SinaKLinePoint, targetDate time.Time) ([]crawler.SinaKLinePoint, decimal.Decimal) {

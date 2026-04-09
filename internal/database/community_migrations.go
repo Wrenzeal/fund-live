@@ -13,6 +13,11 @@ var issueMigrationStatements = []string{
 		body text NOT NULL,
 		type varchar(32) NOT NULL,
 		status varchar(32) NOT NULL,
+		official_reply_body text NOT NULL DEFAULT '',
+		official_reply_by_user_id varchar(40) NOT NULL DEFAULT '',
+		official_reply_by_display_name varchar(120) NOT NULL DEFAULT '',
+		official_reply_created_at timestamptz NULL,
+		official_reply_updated_at timestamptz NULL,
 		created_by_user_id varchar(40) NOT NULL,
 		created_by_display_name varchar(120) NOT NULL,
 		created_at timestamptz NOT NULL DEFAULT now(),
@@ -24,6 +29,14 @@ var issueMigrationStatements = []string{
 	`CREATE INDEX IF NOT EXISTS idx_issues_created_by_user_id ON issues (created_by_user_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_issues_title_trgm ON issues USING gin (title gin_trgm_ops)`,
 	`CREATE INDEX IF NOT EXISTS idx_issues_body_trgm ON issues USING gin (body gin_trgm_ops)`,
+}
+
+var issueOfficialReplyMigrationStatements = []string{
+	`ALTER TABLE issues ADD COLUMN IF NOT EXISTS official_reply_body text NOT NULL DEFAULT ''`,
+	`ALTER TABLE issues ADD COLUMN IF NOT EXISTS official_reply_by_user_id varchar(40) NOT NULL DEFAULT ''`,
+	`ALTER TABLE issues ADD COLUMN IF NOT EXISTS official_reply_by_display_name varchar(120) NOT NULL DEFAULT ''`,
+	`ALTER TABLE issues ADD COLUMN IF NOT EXISTS official_reply_created_at timestamptz NULL`,
+	`ALTER TABLE issues ADD COLUMN IF NOT EXISTS official_reply_updated_at timestamptz NULL`,
 }
 
 var announcementMigrationStatements = []string{

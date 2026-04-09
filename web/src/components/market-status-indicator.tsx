@@ -24,6 +24,7 @@ function MarketStatusIndicatorBody({
 
     const getSessionIcon = () => {
         switch (status.session) {
+            case 'call_auction':
             case 'morning':
             case 'afternoon':
                 return <TrendingUp className="w-4 h-4" />
@@ -45,7 +46,7 @@ function MarketStatusIndicatorBody({
         return (
             <div className={cn('flex items-center gap-3', className)}>
                 <div className="flex items-center gap-2">
-                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-gray-400 animate-pulse" />
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-[var(--text-muted)] animate-pulse" />
                     <span className="text-sm font-medium text-theme-muted">加载中...</span>
                 </div>
             </div>

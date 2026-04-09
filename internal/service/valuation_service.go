@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -400,68 +401,7 @@ func (s *ValuationServiceImpl) calculateWeightedEstimate(
 	quotes map[string]domain.StockQuote,
 	source domain.QuoteSource,
 ) *domain.FundEstimate {
-	estimate := &domain.FundEstimate{
-		FundID:       fund.ID,
-		FundName:     fund.Name,
-		PrevNav:      fund.NetAssetVal,
-		CalculatedAt: time.Now(),
-		DataSource:   string(source),
-	}
-
-	// Use decimal for all calculations
-	weightedSum := decimal.Zero       // Σ(StockChange × HoldingRatio)
-	totalHoldingRatio := decimal.Zero // Σ(HoldingRatio)
-	hundred := decimal.NewFromInt(100)
-
-	for _, holding := range holdings {
-		quote, exists := quotes[holding.StockCode]
-		if !exists {
-			// Skip stocks without quote data
-			continue
-		}
-
-		// Calculate contribution: (stock_change_percent / 100) * (holding_ratio / 100)
-		// Then multiply by 100 to get percentage contribution
-		holdingRatioDecimal := holding.HoldingRatio.Div(hundred)
-		stockChangeDecimal := quote.ChangePercent.Div(hundred)
-		contribution := stockChangeDecimal.Mul(holdingRatioDecimal).Mul(hundred)
-
-		weightedSum = weightedSum.Add(contribution)
-		totalHoldingRatio = totalHoldingRatio.Add(holding.HoldingRatio)
-
-		// Record detail for frontend display
-		detail := domain.HoldingDetail{
-			StockCode:    holding.StockCode,
-			StockName:    quote.StockName,
-			HoldingRatio: holding.HoldingRatio,
-			StockChange:  quote.ChangePercent,
-			Contribution: contribution.Round(4),
-			CurrentPrice: quote.CurrentPrice,
-			PrevClose:    quote.PrevClose,
-		}
-		estimate.HoldingDetails = append(estimate.HoldingDetails, detail)
-	}
-
-	estimate.TotalHoldRatio = totalHoldingRatio
-
-	// Calculate final change percent with normalization
-	// We normalize by the total holding ratio to account for the unknown portion
-	if !totalHoldingRatio.IsZero() {
-		// Normalized formula: (weightedSum / totalHoldingRatio) * 100
-		// This assumes the non-top-10 holdings behave similarly to top 10
-		normalizedChange := weightedSum.Div(totalHoldingRatio).Mul(hundred)
-		estimate.ChangePercent = normalizedChange.Round(4)
-	}
-
-	// Calculate estimated NAV
-	// EstimateNav = PrevNav × (1 + ChangePercent / 100)
-	if !fund.NetAssetVal.IsZero() {
-		changeFactor := decimal.NewFromInt(1).Add(estimate.ChangePercent.Div(hundred))
-		estimate.EstimateNav = fund.NetAssetVal.Mul(changeFactor).Round(4)
-		estimate.ChangeAmount = estimate.EstimateNav.Sub(fund.NetAssetVal).Round(4)
-	}
-
-	return estimate
+	return buildEstimateSnapshotFromQuotes(fund, holdings, quotes, source, time.Now())
 }
 
 // makeTimeSeriesKey creates a composite key for time series storage.
@@ -521,18 +461,21 @@ func (s *ValuationServiceImpl) cleanupOldDates() {
 // from external intraday kline data.
 func (s *ValuationServiceImpl) GetIntradayTimeSeries(ctx context.Context, fundID string) ([]domain.TimeSeriesPoint, error) {
 	now := time.Now()
+	if s.now != nil {
+		now = s.now()
+	}
 	targetDate := s.preferredTimeSeriesDate(now)
 	quoteSource, _ := s.resolveQuoteProvider(ctx)
 	targetKey := makeTimeSeriesKey(quoteSource, fundID, targetDate)
 
 	if points := s.getTimeSeriesForKey(targetKey); len(points) > 0 && !needsTimeSeriesBackfill(points, targetDate, now) {
-		return ensureLunchBreakResumePoint(points), nil
+		return s.finalizeIntradayTimeSeries(ctx, fundID, targetDate, now, points), nil
 	}
 
 	if points, err := s.fundRepo.GetTimeSeriesByDate(ctx, fundID, targetDate); err == nil && len(points) > 0 {
 		if !needsTimeSeriesBackfill(points, targetDate, now) {
 			s.cacheTimeSeriesPoints(fundID, quoteSource, points)
-			return ensureLunchBreakResumePoint(points), nil
+			return s.finalizeIntradayTimeSeries(ctx, fundID, targetDate, now, points), nil
 		}
 	}
 
@@ -541,7 +484,11 @@ func (s *ValuationServiceImpl) GetIntradayTimeSeries(ctx context.Context, fundID
 		if err := s.fundRepo.ReplaceTimeSeriesByDate(ctx, fundID, targetDate, points); err != nil {
 			log.Printf("⚠️ Failed to persist backfilled time series for %s: %v", fundID, err)
 		}
-		return ensureLunchBreakResumePoint(points), nil
+		return s.finalizeIntradayTimeSeries(ctx, fundID, targetDate, now, points), nil
+	}
+
+	if !shouldAllowPreviousTradingDayTimeSeriesFallback(now) {
+		return []domain.TimeSeriesPoint{}, nil
 	}
 
 	// Fallback: search backwards for up to 7 days to find valid data
@@ -549,15 +496,72 @@ func (s *ValuationServiceImpl) GetIntradayTimeSeries(ctx context.Context, fundID
 		prevDate := targetDate.AddDate(0, 0, -i)
 		prevKey := makeTimeSeriesKey(quoteSource, fundID, prevDate)
 		if points := s.getTimeSeriesForKey(prevKey); len(points) > 0 {
-			return ensureLunchBreakResumePoint(points), nil
+			return s.finalizeIntradayTimeSeries(ctx, fundID, prevDate, now, points), nil
 		}
 		if points, err := s.fundRepo.GetTimeSeriesByDate(ctx, fundID, prevDate); err == nil && len(points) > 0 {
 			s.cacheTimeSeriesPoints(fundID, quoteSource, points)
-			return ensureLunchBreakResumePoint(points), nil
+			return s.finalizeIntradayTimeSeries(ctx, fundID, prevDate, now, points), nil
 		}
 	}
 
 	return []domain.TimeSeriesPoint{}, nil
+}
+
+func (s *ValuationServiceImpl) finalizeIntradayTimeSeries(ctx context.Context, fundID string, targetDate, now time.Time, points []domain.TimeSeriesPoint) []domain.TimeSeriesPoint {
+	points = ensureLunchBreakResumePoint(points, now)
+	return s.alignAfterHoursTimeSeriesWithEstimate(ctx, fundID, targetDate, now, points)
+}
+
+func (s *ValuationServiceImpl) alignAfterHoursTimeSeriesWithEstimate(ctx context.Context, fundID string, targetDate, now time.Time, points []domain.TimeSeriesPoint) []domain.TimeSeriesPoint {
+	if !shouldAlignAfterHoursTimeSeriesWithEstimate(now, targetDate) {
+		return points
+	}
+
+	estimate, err := s.CalculateEstimate(ctx, fundID)
+	if err != nil || estimate == nil {
+		return points
+	}
+
+	closingPoint := domain.TimeSeriesPoint{
+		Timestamp:     time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), 15, 0, 0, 0, trading.TradingLocation()),
+		ChangePercent: estimate.ChangePercent,
+		EstimateNav:   estimate.EstimateNav,
+	}
+
+	updated := false
+	for i := range points {
+		localTs := points[i].Timestamp.In(trading.TradingLocation())
+		if localTs.Year() == closingPoint.Timestamp.Year() &&
+			localTs.Month() == closingPoint.Timestamp.Month() &&
+			localTs.Day() == closingPoint.Timestamp.Day() &&
+			localTs.Hour() == closingPoint.Timestamp.Hour() &&
+			localTs.Minute() == closingPoint.Timestamp.Minute() {
+			points[i].ChangePercent = closingPoint.ChangePercent
+			points[i].EstimateNav = closingPoint.EstimateNav
+			updated = true
+			break
+		}
+	}
+
+	if !updated {
+		points = append(points, closingPoint)
+		sort.Slice(points, func(i, j int) bool {
+			return points[i].Timestamp.Before(points[j].Timestamp)
+		})
+	}
+
+	return points
+}
+
+func shouldAlignAfterHoursTimeSeriesWithEstimate(now, targetDate time.Time) bool {
+	localNow := now.In(trading.TradingLocation())
+	if !trading.IsTradingDay(localNow) {
+		return false
+	}
+	if trading.GetCurrentSession(localNow) != trading.SessionAfterHours {
+		return false
+	}
+	return targetDate.In(trading.TradingLocation()).Format("2006-01-02") == localNow.Format("2006-01-02")
 }
 
 // cacheTimeSeriesPoints caches time series points in memory for fast access.

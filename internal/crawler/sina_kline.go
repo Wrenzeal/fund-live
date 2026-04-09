@@ -118,6 +118,9 @@ func buildSinaKLineSymbol(code string) string {
 	if code == "" {
 		return code
 	}
+	if len(code) == 5 {
+		return "hk" + code
+	}
 
 	firstChar := code[0]
 	switch {

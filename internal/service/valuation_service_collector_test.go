@@ -28,6 +28,10 @@ func (r *countingCollectorFundRepository) GetFundHoldings(ctx context.Context, f
 	return nil, nil
 }
 
+func (r *countingCollectorFundRepository) ListFundIDsWithHoldings(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
 func (r *countingCollectorFundRepository) SaveFund(ctx context.Context, fund *domain.Fund) error {
 	return nil
 }

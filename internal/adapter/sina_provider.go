@@ -48,6 +48,9 @@ func buildSinaSymbol(stockCode string) string {
 	if len(stockCode) < 1 {
 		return "sz" + stockCode
 	}
+	if len(stockCode) == 5 {
+		return "hk" + stockCode
+	}
 
 	firstChar := stockCode[0]
 	switch {
@@ -82,7 +85,6 @@ func (s *SinaFinanceProvider) GetRealTimeQuotes(ctx context.Context, stockCodes 
 	resp, err := s.client.R().
 		SetContext(ctx).
 		SetHeader("Referer", "https://finance.sina.com.cn").
-		SetQueryParam("list", symbolList).
 		Get(s.baseURL + "/list=" + symbolList)
 
 	if err != nil {
@@ -147,6 +149,8 @@ func (s *SinaFinanceProvider) parseResponse(body string, stockCodes []string) (m
 			// Beijing stocks may have different format
 			// Some only have ~20 fields
 			minFields = 6 // At least: name, open, prev_close, current, high, low
+		} else if exchange == "hk" {
+			minFields = 12 // HK quotes have a shorter layout than SH/SZ
 		}
 
 		if len(fields) < minFields {
@@ -174,8 +178,66 @@ func (s *SinaFinanceProvider) parseQuoteByExchange(stockCode string, fields []st
 	if exchange == "bj" {
 		return s.parseBJQuote(stockCode, fields)
 	}
+	if exchange == "hk" {
+		return s.parseHKQuote(stockCode, fields)
+	}
 	// Default: sh, sz stocks
 	return s.parseQuote(stockCode, fields)
+}
+
+// parseHKQuote parses Hong Kong market quote data.
+// Common format:
+// 0: 英文简称 1: 中文简称 2: 今开 3: 昨收 4: 最高 5: 最低 6: 现价 7: 涨跌额 8: 涨跌幅
+// 11: 成交额 12: 成交量
+func (s *SinaFinanceProvider) parseHKQuote(stockCode string, fields []string) (domain.StockQuote, error) {
+	quote := domain.StockQuote{
+		StockCode: stockCode,
+		StockName: strings.TrimSpace(firstNonEmptyString(fields[1], fields[0])),
+		UpdatedAt: time.Now(),
+	}
+
+	var err error
+	quote.OpenPrice, err = parseDecimal(fields[2])
+	if err != nil {
+		return quote, err
+	}
+	quote.PrevClose, err = parseDecimal(fields[3])
+	if err != nil {
+		return quote, err
+	}
+	quote.HighPrice, err = parseDecimal(fields[4])
+	if err != nil {
+		return quote, err
+	}
+	quote.LowPrice, err = parseDecimal(fields[5])
+	if err != nil {
+		return quote, err
+	}
+	quote.CurrentPrice, err = parseDecimal(fields[6])
+	if err != nil {
+		return quote, err
+	}
+	if len(fields) > 11 {
+		quote.Turnover, _ = parseDecimal(fields[11])
+	}
+	if len(fields) > 12 {
+		quote.Volume, _ = parseDecimal(fields[12])
+	}
+
+	quote.CurrentPrice = firstNonZeroDecimal(quote.CurrentPrice, quote.OpenPrice, quote.PrevClose)
+	if quote.HighPrice.IsZero() {
+		quote.HighPrice = quote.CurrentPrice
+	}
+	if quote.LowPrice.IsZero() {
+		quote.LowPrice = quote.CurrentPrice
+	}
+
+	if !quote.PrevClose.IsZero() {
+		quote.ChangeAmount = quote.CurrentPrice.Sub(quote.PrevClose)
+		quote.ChangePercent = quote.ChangeAmount.Div(quote.PrevClose).Mul(decimal.NewFromInt(100)).Round(4)
+	}
+
+	return quote, nil
 }
 
 // parseBJQuote parses Beijing Stock Exchange quote data.
@@ -322,4 +384,14 @@ func firstNonZeroDecimal(values ...decimal.Decimal) decimal.Decimal {
 		}
 	}
 	return decimal.Zero
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }

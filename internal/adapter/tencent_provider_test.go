@@ -22,3 +22,9 @@ func TestTencentParseQuoteUsesCurrentPrice(t *testing.T) {
 		t.Fatalf("current price = %s, want 1463.03", quote.CurrentPrice.String())
 	}
 }
+
+func TestBuildTencentSymbolSupportsHongKongCodes(t *testing.T) {
+	if got := buildTencentSymbol("00700"); got != "hk00700" {
+		t.Fatalf("buildTencentSymbol() = %q, want hk00700", got)
+	}
+}

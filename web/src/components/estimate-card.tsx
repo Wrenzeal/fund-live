@@ -9,6 +9,7 @@ interface EstimateCardProps {
     estimate: FundEstimate | undefined
     fund: Fund | undefined
     isLoading: boolean
+    isCallAuction?: boolean
     isValidating?: boolean
     lastUpdated?: Date | null
     className?: string
@@ -18,14 +19,17 @@ export function EstimateCard({
     estimate,
     fund,
     isLoading,
+    isCallAuction = false,
     isValidating,
     lastUpdated,
     className
 }: EstimateCardProps) {
 
     const changeInfo = useMemo(() =>
-        formatPercent(estimate?.change_percent),
-        [estimate?.change_percent]
+        isCallAuction
+            ? { text: '-', isPositive: false }
+            : formatPercent(estimate?.change_percent),
+        [estimate?.change_percent, isCallAuction]
     )
 
     // 使用 CSS 变量实现主题感知的颜色
@@ -54,11 +58,20 @@ export function EstimateCard({
                 {/* Fund name and info */}
                 <div className="mb-6">
                     <h2 className="text-2xl font-bold text-theme-primary">
-                        {estimate?.fund_name || fund?.name || '选择基金'}
+                        {isCallAuction ? '集合竞价中' : estimate?.fund_name || fund?.name || '选择基金'}
                     </h2>
+                    {!isCallAuction && (estimate?.fund_id || fund?.id) && (
+                        <p className="text-sm text-theme-secondary mt-1">
+                            基金代码：{estimate?.fund_id || fund?.id}
+                        </p>
+                    )}
                     <p className="text-sm text-theme-secondary mt-1">
-                        {fund?.manager && `基金经理: ${fund.manager}`}
-                        {fund?.company && ` · ${fund.company}`}
+                        {isCallAuction
+                            ? '等待 09:30 开盘后更新基金估值数据'
+                            : [
+                                fund?.manager ? `基金经理: ${fund.manager}` : '',
+                                fund?.company ? fund.company : '',
+                            ].filter(Boolean).join(' · ')}
                     </p>
                 </div>
 
@@ -73,16 +86,16 @@ export function EstimateCard({
                             'text-6xl sm:text-7xl font-black tracking-tight transition-all duration-300',
                             isPositive ? 'text-up' : 'text-down'
                         )}>
-                            {isLoading && !estimate ? (
+                            {isLoading && !estimate && !isCallAuction ? (
                                 <RefreshCw className="w-16 h-16 animate-spin" />
                             ) : (
                                 changeInfo.text
                             )}
                         </div>
                         <div className="text-lg text-theme-secondary mt-1 flex items-center gap-2">
-                            实时预估涨跌幅
+                            {isCallAuction ? '等待开盘' : '实时预估涨跌幅'}
                             {/* 后台刷新指示器 */}
-                            {isValidating && (
+                            {isValidating && !isCallAuction && (
                                 <RefreshCw className="w-4 h-4 animate-spin text-theme-muted" />
                             )}
                         </div>
@@ -94,28 +107,28 @@ export function EstimateCard({
                     <div className="glass rounded-xl p-4">
                         <div className="text-sm text-theme-muted">预估净值</div>
                         <div className="text-xl sm:text-2xl font-bold text-theme-primary mt-1">
-                            {formatCurrency(estimate?.estimate_nav)}
+                            {isCallAuction ? '-' : formatCurrency(estimate?.estimate_nav)}
                         </div>
                     </div>
                     <div className="glass rounded-xl p-4">
                         <div className="text-sm text-theme-muted">昨日净值</div>
                         <div className="text-xl sm:text-2xl font-bold text-theme-primary mt-1">
-                            {formatCurrency(estimate?.prev_nav)}
+                            {isCallAuction ? '-' : formatCurrency(estimate?.prev_nav)}
                         </div>
                     </div>
                 </div>
 
                 {/* Update time */}
                 <div className="mt-4 text-xs text-theme-muted flex flex-wrap items-center gap-2">
-                    {lastUpdated && (
+                    {lastUpdated && !isCallAuction && (
                         <>
                             <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                             <span>更新: {lastUpdated.toLocaleTimeString('zh-CN')}</span>
                             <span>·</span>
                         </>
                     )}
-                    <span>数据源: {estimate?.data_source || 'N/A'}</span>
-                    {estimate?.total_hold_ratio && (
+                    <span>数据源: {isCallAuction ? '-' : estimate?.data_source || 'N/A'}</span>
+                    {estimate?.total_hold_ratio && !isCallAuction && (
                         <>
                             <span>·</span>
                             <span>覆盖率: {parseFloat(estimate.total_hold_ratio).toFixed(1)}%</span>

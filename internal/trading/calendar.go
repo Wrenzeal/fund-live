@@ -11,6 +11,8 @@ import (
 
 const (
 	tradingTimeZone     = "Asia/Shanghai"
+	callAuctionHour     = 9
+	callAuctionMinute   = 0
 	marketOpenHour      = 9
 	marketOpenMinute    = 30
 	lunchBreakHour      = 11
@@ -36,13 +38,14 @@ var defaultCalendar = newCalendar(beijingLoc, holidayDatesByYear)
 type SessionType string
 
 const (
-	SessionPreMarket  SessionType = "pre_market"
-	SessionMorning    SessionType = "morning"
-	SessionLunchBreak SessionType = "lunch_break"
-	SessionAfternoon  SessionType = "afternoon"
-	SessionAfterHours SessionType = "after_hours"
-	SessionWeekend    SessionType = "weekend"
-	SessionHoliday    SessionType = "holiday"
+	SessionCallAuction SessionType = "call_auction"
+	SessionPreMarket   SessionType = "pre_market"
+	SessionMorning     SessionType = "morning"
+	SessionLunchBreak  SessionType = "lunch_break"
+	SessionAfternoon   SessionType = "afternoon"
+	SessionAfterHours  SessionType = "after_hours"
+	SessionWeekend     SessionType = "weekend"
+	SessionHoliday     SessionType = "holiday"
 )
 
 // PricingDateRule describes how a pricing date was resolved.
@@ -200,8 +203,10 @@ func GetCurrentSession(t time.Time) SessionType {
 
 	totalMinutes := local.Hour()*60 + local.Minute()
 	switch {
-	case totalMinutes < marketOpenHour*60+marketOpenMinute:
+	case totalMinutes < callAuctionHour*60+callAuctionMinute:
 		return SessionPreMarket
+	case isTradeMinutesInRange(totalMinutes, callAuctionHour, callAuctionMinute, marketOpenHour, marketOpenMinute):
+		return SessionCallAuction
 	case isTradeMinutesInRange(totalMinutes, marketOpenHour, marketOpenMinute, lunchBreakHour, lunchBreakMinute):
 		return SessionMorning
 	case totalMinutes < afternoonOpenHour*60+afternoonOpenMinute:
@@ -261,6 +266,9 @@ func nextSessionStartAt(t time.Time) *time.Time {
 
 	switch GetCurrentSession(local) {
 	case SessionPreMarket:
+		next := dayStart.Add(callAuctionHour*time.Hour + callAuctionMinute*time.Minute)
+		return &next
+	case SessionCallAuction:
 		next := dayStart.Add(marketOpenHour*time.Hour + marketOpenMinute*time.Minute)
 		return &next
 	case SessionLunchBreak:
@@ -288,6 +296,9 @@ func nextTransitionAt(t time.Time) *time.Time {
 
 	switch GetCurrentSession(local) {
 	case SessionPreMarket:
+		next := dayStart.Add(callAuctionHour*time.Hour + callAuctionMinute*time.Minute)
+		return &next
+	case SessionCallAuction:
 		next := dayStart.Add(marketOpenHour*time.Hour + marketOpenMinute*time.Minute)
 		return &next
 	case SessionMorning:

@@ -132,6 +132,19 @@ func (r *PostgresFundRepository) GetFundHoldings(ctx context.Context, fundID str
 	return holdings, nil
 }
 
+// ListFundIDsWithHoldings returns fund IDs that currently have persisted holdings.
+func (r *PostgresFundRepository) ListFundIDsWithHoldings(ctx context.Context) ([]string, error) {
+	var fundIDs []string
+	if err := r.db.WithContext(ctx).
+		Model(&database.StockHolding{}).
+		Distinct("fund_id").
+		Order("fund_id ASC").
+		Pluck("fund_id", &fundIDs).Error; err != nil {
+		return nil, fmt.Errorf("failed to list fund ids with holdings: %w", err)
+	}
+	return fundIDs, nil
+}
+
 // SaveFund saves or updates a fund (upsert).
 func (r *PostgresFundRepository) SaveFund(ctx context.Context, fund *domain.Fund) error {
 	dbFund := r.toDBFund(fund)
@@ -152,6 +165,10 @@ func (r *PostgresFundRepository) SaveFund(ctx context.Context, fund *domain.Fund
 // SaveHoldings saves the holdings for a fund.
 // This replaces all existing holdings for the fund.
 func (r *PostgresFundRepository) SaveHoldings(ctx context.Context, fundID string, holdings []domain.StockHolding) error {
+	if holdings == nil {
+		return nil
+	}
+
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Delete existing holdings for this fund
 		if err := tx.Where("fund_id = ?", fundID).Delete(&database.StockHolding{}).Error; err != nil {

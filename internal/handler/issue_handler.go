@@ -29,6 +29,10 @@ type updateIssueStatusRequest struct {
 	Status domain.IssueStatus `json:"status"`
 }
 
+type updateIssueReplyRequest struct {
+	Body string `json:"body"`
+}
+
 func (h *IssueHandler) List(c *gin.Context) {
 	issues, err := h.issueService.ListPublicIssues(c.Request.Context(), domain.IssueSearchParams{
 		Query:  c.Query("q"),
@@ -110,6 +114,37 @@ func (h *IssueHandler) UpdateStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, APIResponse{Success: true, Data: issue})
 }
 
+func (h *IssueHandler) UpdateReply(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"},
+		})
+		return
+	}
+
+	var req updateIssueReplyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_REQUEST", Message: "Invalid issue reply payload"},
+		})
+		return
+	}
+
+	issue, err := h.issueService.UpdateIssueReply(c.Request.Context(), user, c.Param("id"), domain.IssueReplyUpdateInput{
+		Body: req.Body,
+	})
+	if err != nil {
+		statusCode, apiErr := mapIssueError(err)
+		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: issue})
+}
+
 func mapIssueError(err error) (int, *APIError) {
 	switch {
 	case errors.Is(err, service.ErrIssueInvalidType):
@@ -118,6 +153,8 @@ func mapIssueError(err error) (int, *APIError) {
 		return http.StatusBadRequest, &APIError{Code: "INVALID_ISSUE_STATUS", Message: err.Error()}
 	case errors.Is(err, service.ErrIssueInvalidContent):
 		return http.StatusBadRequest, &APIError{Code: "INVALID_ISSUE_CONTENT", Message: err.Error()}
+	case errors.Is(err, service.ErrIssueInvalidReply):
+		return http.StatusBadRequest, &APIError{Code: "INVALID_ISSUE_REPLY", Message: err.Error()}
 	case errors.Is(err, service.ErrIssueNotFound):
 		return http.StatusNotFound, &APIError{Code: "ISSUE_NOT_FOUND", Message: err.Error()}
 	default:

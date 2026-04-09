@@ -43,6 +43,7 @@ interface IntradayChartProps {
     timeSeries: TimeSeriesPoint[]
     estimate?: FundEstimate
     isLoading?: boolean
+    isCallAuction?: boolean
     displayDate?: string
     isHistorical?: boolean
     session?: string
@@ -291,6 +292,7 @@ export function IntradayChart({
     timeSeries,
     estimate,
     isLoading,
+    isCallAuction = false,
     displayDate,
     isHistorical = false,
     className
@@ -380,7 +382,9 @@ export function IntradayChart({
                     )}
                 </div>
                 <div className="flex items-center gap-2 text-xs text-theme-muted">
-                    {isTrading ? (
+                    {isCallAuction ? (
+                        <span>集合竞价中</span>
+                    ) : isTrading ? (
                         <>
                             <span className="inline-block w-2 h-2 rounded-full bg-green-500 live-indicator" />
                             <span>实时更新</span>
@@ -392,7 +396,14 @@ export function IntradayChart({
             </div>
 
             <div className="h-64">
-                {isLoading && !hasData ? (
+                {isCallAuction ? (
+                    <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/40 text-center">
+                        <div>
+                            <div className="text-lg font-semibold text-theme-primary">集合竞价中</div>
+                            <div className="mt-2 text-sm text-theme-secondary">等待 09:30 开盘后更新分时走势图</div>
+                        </div>
+                    </div>
+                ) : isLoading && !hasData ? (
                     <div className="h-full flex items-center justify-center">
                         <div className="skeleton w-full h-full rounded-lg" />
                     </div>

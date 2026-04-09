@@ -63,6 +63,10 @@ func (r *MemoryIssueRepository) GetIssueByID(ctx context.Context, issueID string
 		return nil, nil
 	}
 	copyIssue := issue
+	if issue.OfficialReply != nil {
+		replyCopy := *issue.OfficialReply
+		copyIssue.OfficialReply = &replyCopy
+	}
 	return &copyIssue, nil
 }
 
@@ -81,6 +85,10 @@ func (r *MemoryIssueRepository) SaveIssue(ctx context.Context, issue *domain.Iss
 	}
 	if copyIssue.UpdatedAt.IsZero() {
 		copyIssue.UpdatedAt = now
+	}
+	if copyIssue.OfficialReply != nil {
+		replyCopy := *copyIssue.OfficialReply
+		copyIssue.OfficialReply = &replyCopy
 	}
 	r.issues[copyIssue.ID] = copyIssue
 	return nil

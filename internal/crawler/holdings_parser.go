@@ -242,7 +242,7 @@ func (p *EastmoneyHoldingsParser) extractReportPeriod(content string) string {
 
 // isStockCode checks if a string looks like a stock code.
 func (p *EastmoneyHoldingsParser) isStockCode(s string) bool {
-	matched, _ := regexp.MatchString(`^\d{6}$`, s)
+	matched, _ := regexp.MatchString(`^\d{5,6}$`, s)
 	return matched
 }
 
@@ -310,6 +310,10 @@ func (p *EastmoneyHoldingsParser) ToStockHoldings(rawHoldings []HoldingRawData) 
 
 // inferExchange infers the stock exchange from the stock code.
 func (p *EastmoneyHoldingsParser) inferExchange(code string) domain.Exchange {
+	if len(code) == 5 {
+		return domain.ExchangeHK
+	}
+
 	if len(code) != 6 {
 		return domain.ExchangeSH
 	}

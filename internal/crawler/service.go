@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/RomaticDOG/fund/internal/domain"
 	"github.com/go-resty/resty/v2"
@@ -186,10 +187,12 @@ func (s *CrawlService) fetchHoldings(ctx context.Context, fundCode string) ([]do
 
 	body := resp.Body()
 
-	// Try GBK to UTF-8 conversion
-	utf8Body, convErr := GBKToUTF8(body)
-	if convErr != nil {
-		utf8Body = body
+	utf8Body := body
+	if !utf8.Valid(body) {
+		convertedBody, convErr := GBKToUTF8(body)
+		if convErr == nil {
+			utf8Body = convertedBody
+		}
 	}
 
 	content := string(utf8Body)

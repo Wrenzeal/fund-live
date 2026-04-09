@@ -2,11 +2,11 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { useState } from 'react'
-import { AlertTriangle, ArrowLeft, LoaderCircle, WandSparkles } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { AlertTriangle, ArrowLeft, LoaderCircle, MessageSquareQuote, Send, WandSparkles } from 'lucide-react'
 import { SiteShell } from '@/components/site-shell'
 import { useCurrentUser } from '@/hooks/use-auth'
-import { type IssueStatus, useIssue, updateIssueStatus } from '@/hooks/use-issues'
+import { type IssueStatus, useIssue, updateIssueReply, updateIssueStatus } from '@/hooks/use-issues'
 import { cn } from '@/lib/utils'
 
 function issueTypeMeta(type: 'bug' | 'feature' | 'improvement') {
@@ -38,24 +38,54 @@ export default function IssueDetailPage() {
   const issueID = typeof params?.id === 'string' ? params.id : ''
   const { issue, error, isLoading, refresh } = useIssue(issueID)
   const { user } = useCurrentUser()
-  const [isUpdating, setIsUpdating] = useState(false)
-  const [feedback, setFeedback] = useState<string | null>(null)
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [isSavingReply, setIsSavingReply] = useState(false)
+  const [replyDraft, setReplyDraft] = useState('')
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  useEffect(() => {
+    setReplyDraft(issue?.official_reply?.body ?? '')
+  }, [issue?.id, issue?.official_reply?.body])
 
   const handleStatusUpdate = async (status: IssueStatus) => {
-    if (!issue || !user?.is_admin || isUpdating) {
+    if (!issue || !user?.is_admin || isUpdatingStatus || isSavingReply) {
       return
     }
 
     setFeedback(null)
-    setIsUpdating(true)
+    setIsUpdatingStatus(true)
     try {
       await updateIssueStatus(issue.id, status)
       await refresh()
-      setFeedback('Issue 状态已更新。')
+      setFeedback({ type: 'success', message: '想法处理状态已更新。' })
     } catch (requestError) {
-      setFeedback(requestError instanceof Error ? requestError.message : '更新状态失败。')
+      setFeedback({
+        type: 'error',
+        message: requestError instanceof Error ? requestError.message : '更新状态失败。',
+      })
     } finally {
-      setIsUpdating(false)
+      setIsUpdatingStatus(false)
+    }
+  }
+
+  const handleReplyUpdate = async () => {
+    if (!issue || !user?.is_admin || isSavingReply || isUpdatingStatus) {
+      return
+    }
+
+    setFeedback(null)
+    setIsSavingReply(true)
+    try {
+      await updateIssueReply(issue.id, replyDraft)
+      await refresh()
+      setFeedback({ type: 'success', message: '官方回复已保存。' })
+    } catch (requestError) {
+      setFeedback({
+        type: 'error',
+        message: requestError instanceof Error ? requestError.message : '保存官方回复失败。',
+      })
+    } finally {
+      setIsSavingReply(false)
     }
   }
 
@@ -92,6 +122,10 @@ export default function IssueDetailPage() {
 
   const typeMeta = issueTypeMeta(issue.type)
   const statusMeta = issueStatusMeta(issue.status)
+  const officialReply = issue.official_reply ?? null
+  const normalizedReplyDraft = replyDraft.trim()
+  const existingReplyBody = officialReply?.body.trim() ?? ''
+  const canSaveReply = normalizedReplyDraft !== '' && normalizedReplyDraft !== existingReplyBody && !isSavingReply && !isUpdatingStatus
 
   return (
     <SiteShell
@@ -140,7 +174,7 @@ export default function IssueDetailPage() {
                       key={status}
                       type="button"
                       onClick={() => void handleStatusUpdate(status)}
-                      disabled={isUpdating || issue.status === status}
+                      disabled={isUpdatingStatus || isSavingReply || issue.status === status}
                       className={cn(
                         'rounded-2xl border px-4 py-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60',
                         issue.status === status
@@ -153,14 +187,48 @@ export default function IssueDetailPage() {
                   ))}
                 </div>
 
+                <div className="mt-5">
+                  <div className="mb-2 text-xs tracking-[0.18em] text-theme-muted">编辑公开官方回复</div>
+                  <textarea
+                    value={replyDraft}
+                    onChange={(event) => setReplyDraft(event.target.value)}
+                    rows={6}
+                    placeholder="例如：这个问题已经确认，已在 2026.4.8 修复 XXX；若仍复现，请提供浏览器和截图。"
+                    className="w-full rounded-[22px] border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm leading-7 text-theme-primary outline-none placeholder:text-theme-muted"
+                  />
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <div className="text-xs text-theme-muted">
+                      这段回复会在详情页中公开展示给所有访问者。
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleReplyUpdate()}
+                      disabled={!canSaveReply}
+                      className={cn(
+                        'inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                        canSaveReply
+                          ? 'border-cyan-500/30 bg-cyan-500/15 text-cyan-100 hover:border-cyan-400/40'
+                          : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-muted'
+                      )}
+                    >
+                      {isSavingReply ? (
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                      {officialReply ? '更新回复' : '发布回复'}
+                    </button>
+                  </div>
+                </div>
+
                 {feedback && (
                   <div className={cn(
                     'mt-4 rounded-[20px] border px-4 py-3 text-sm',
-                    feedback.includes('已更新')
+                    feedback.type === 'success'
                       ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100'
                       : 'border-rose-500/20 bg-rose-500/10 text-rose-100'
                   )}>
-                    {feedback}
+                    {feedback.message}
                   </div>
                 )}
               </div>
@@ -175,12 +243,41 @@ export default function IssueDetailPage() {
           </div>
         </section>
 
+        <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-500/20 bg-cyan-500/10 text-cyan-200">
+              <MessageSquareQuote className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-xl font-bold text-theme-primary">官方回复</div>
+              <div className="text-sm text-theme-muted">管理员会在这里公开补充确认结果、修改点与处理说明。</div>
+            </div>
+          </div>
+
+          {officialReply ? (
+            <div className="space-y-4">
+              <div className="whitespace-pre-wrap rounded-[24px] border border-cyan-500/20 bg-cyan-500/10 px-5 py-4 text-sm leading-8 text-cyan-50">
+                {officialReply.body}
+              </div>
+              <div className="text-sm text-theme-muted">
+                回复人：{officialReply.replied_by_display_name}
+                {' · '}
+                更新时间：{new Date(officialReply.updated_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-[24px] border border-dashed border-[var(--card-border)] px-5 py-5 text-sm leading-7 text-theme-secondary">
+              管理员暂未公开回复这条想法，当前只同步了处理状态。
+            </div>
+          )}
+        </section>
+
         {!user?.is_admin && (
           <section className="rounded-[32px] border border-amber-500/20 bg-amber-500/10 p-6">
             <div className="flex items-start gap-3 text-amber-100">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
               <div className="text-sm leading-6">
-                当前页面对所有用户公开展示，只有管理员账号可以修改处理状态。
+                当前页面对所有用户公开展示，只有管理员账号可以修改处理状态并发布官方回复。
               </div>
             </div>
           </section>

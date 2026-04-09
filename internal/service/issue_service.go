@@ -14,6 +14,7 @@ var (
 	ErrIssueInvalidType    = errors.New("invalid issue type")
 	ErrIssueInvalidStatus  = errors.New("invalid issue status")
 	ErrIssueInvalidContent = errors.New("issue title and body are required")
+	ErrIssueInvalidReply   = errors.New("issue official reply is required")
 )
 
 type IssueServiceImpl struct {
@@ -103,6 +104,44 @@ func (s *IssueServiceImpl) UpdateIssueStatus(ctx context.Context, issueID string
 
 	issue.Status = normalizedStatus
 	issue.UpdatedAt = s.now()
+	if err := s.repo.SaveIssue(ctx, issue); err != nil {
+		return nil, err
+	}
+	return issue, nil
+}
+
+func (s *IssueServiceImpl) UpdateIssueReply(ctx context.Context, user *domain.User, issueID string, input domain.IssueReplyUpdateInput) (*domain.Issue, error) {
+	if user == nil {
+		return nil, ErrInvalidSession
+	}
+
+	replyBody := strings.TrimSpace(input.Body)
+	if replyBody == "" {
+		return nil, ErrIssueInvalidReply
+	}
+
+	issue, err := s.repo.GetIssueByID(ctx, strings.TrimSpace(issueID))
+	if err != nil {
+		return nil, err
+	}
+	if issue == nil {
+		return nil, ErrIssueNotFound
+	}
+
+	now := s.now()
+	replyCreatedAt := now
+	if issue.OfficialReply != nil && !issue.OfficialReply.CreatedAt.IsZero() {
+		replyCreatedAt = issue.OfficialReply.CreatedAt
+	}
+
+	issue.OfficialReply = &domain.IssueOfficialReply{
+		Body:                 replyBody,
+		RepliedByUserID:      user.ID,
+		RepliedByDisplayName: strings.TrimSpace(firstNonEmpty(user.DisplayName, user.Email)),
+		CreatedAt:            replyCreatedAt,
+		UpdatedAt:            now,
+	}
+	issue.UpdatedAt = now
 	if err := s.repo.SaveIssue(ctx, issue); err != nil {
 		return nil, err
 	}

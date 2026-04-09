@@ -8,6 +8,7 @@ const STATUS_KEY = `${API_BASE_URL}/api/v1/market/status`
 const STATUS_FALLBACK_REFRESH_MS = 5 * 60 * 1000
 
 export type MarketSession =
+  | 'call_auction'
   | 'pre_market'
   | 'morning'
   | 'lunch_break'
@@ -297,6 +298,7 @@ export function usePricingDatePreview(tradeAt: string | null) {
 
 export function getSessionLabel(session: MarketSession): string {
   const labels: Record<MarketSession, string> = {
+    call_auction: '集合竞价中',
     pre_market: '盘前',
     morning: '上午盘',
     lunch_break: '午间休市',

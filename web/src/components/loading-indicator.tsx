@@ -55,7 +55,10 @@ export function LoadingOverlay({ isLoading, text = '加载中...', children }: L
         <div className="relative">
             {children}
             {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-[var(--bg-primary)]/80 backdrop-blur-sm rounded-2xl z-20">
+                <div
+                    className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl backdrop-blur-sm"
+                    style={{ backgroundColor: 'color-mix(in srgb, var(--background) 82%, transparent)' }}
+                >
                     <LoadingSpinner size="lg" text={text} />
                 </div>
             )}
@@ -73,7 +76,10 @@ export function FundLoadingIndicator({ isVisible, fundName, detailText }: FundLo
     if (!isVisible) return null
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-primary)]/90 backdrop-blur-md">
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-md"
+            style={{ backgroundColor: 'color-mix(in srgb, var(--background) 90%, transparent)' }}
+        >
             <div className="glass rounded-3xl p-8 max-w-md w-full mx-4 text-center">
                 {/* Animated logo */}
                 <div className="relative w-20 h-20 mx-auto mb-6">

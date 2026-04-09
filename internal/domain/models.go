@@ -37,6 +37,7 @@ const (
 	ExchangeSH Exchange = "SH" // Shanghai Stock Exchange
 	ExchangeSZ Exchange = "SZ" // Shenzhen Stock Exchange
 	ExchangeBJ Exchange = "BJ" // Beijing Stock Exchange
+	ExchangeHK Exchange = "HK" // Hong Kong Stock Exchange
 )
 
 // StockQuote represents real-time stock quote data.

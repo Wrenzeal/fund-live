@@ -82,7 +82,7 @@ export function GoogleSignInButton({ onCredential }: GoogleSignInButtonProps) {
     <div className="space-y-3">
       <div
         ref={containerRef}
-        className="flex min-h-11 items-center justify-center rounded-2xl border border-[var(--input-border)] bg-white/90 px-3 py-2"
+        className="flex min-h-11 items-center justify-center rounded-2xl border border-[var(--input-border)] bg-[var(--card-bg)] px-3 py-2 shadow-[var(--card-shadow)]"
       />
       <p className="text-xs leading-5 text-theme-muted">
         使用 Google 首次登录时，系统会自动创建本地账户并绑定当前 Google 身份。

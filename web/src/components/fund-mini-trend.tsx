@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 interface FundMiniTrendProps {
   timeSeries: TimeSeriesPoint[]
   isPositive: boolean
+  isCallAuction?: boolean
 }
 
 interface MiniTrendTooltipProps {
@@ -45,13 +46,21 @@ function MiniTrendTooltip({ active, payload }: MiniTrendTooltipProps) {
   )
 }
 
-export function FundMiniTrend({ timeSeries, isPositive }: FundMiniTrendProps) {
+export function FundMiniTrend({ timeSeries, isPositive, isCallAuction = false }: FundMiniTrendProps) {
   const data = timeSeries.map((point) => ({
     value: Number.parseFloat(point.change_percent),
   }))
 
   const gradientID = isPositive ? 'mini-trend-up' : 'mini-trend-down'
   const stroke = isPositive ? 'var(--accent-up)' : 'var(--accent-down)'
+
+  if (isCallAuction) {
+    return (
+      <div className="flex h-20 items-center justify-center rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/35 px-4 text-center">
+        <div className="text-xs text-theme-muted">集合竞价中</div>
+      </div>
+    )
+  }
 
   if (data.length === 0) {
     return (

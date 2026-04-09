@@ -34,8 +34,53 @@ func TestGetMarketStatusPreMarketUsesUnifiedTradingCalendar(t *testing.T) {
 	if status.NextTradingDay != "2025-04-08" {
 		t.Fatalf("expected next trading day 2025-04-08, got %s", status.NextTradingDay)
 	}
-	if status.NextSessionStart == nil || status.NextSessionStart.Format(time.RFC3339) != "2025-04-07T09:30:00+08:00" {
+	if status.NextSessionStart == nil || status.NextSessionStart.Format(time.RFC3339) != "2025-04-07T09:00:00+08:00" {
 		t.Fatalf("unexpected next session start: %#v", status.NextSessionStart)
+	}
+}
+
+func TestGetMarketStatusCallAuctionUsesUnifiedTradingCalendar(t *testing.T) {
+	now := time.Date(2025, time.April, 7, 9, 5, 0, 0, TradingLocation())
+	status := GetMarketStatus(now)
+
+	if status.Session != SessionCallAuction {
+		t.Fatalf("expected call auction session, got %s", status.Session)
+	}
+	if status.IsTrading {
+		t.Fatalf("expected call auction to be non-trading")
+	}
+	if status.DisplayDate != "2025-04-03" {
+		t.Fatalf("expected display date 2025-04-03 during call auction, got %s", status.DisplayDate)
+	}
+	if status.NextTransitionAt == nil || status.NextTransitionAt.Format(time.RFC3339) != "2025-04-07T09:30:00+08:00" {
+		t.Fatalf("unexpected next transition: %#v", status.NextTransitionAt)
+	}
+}
+
+func TestGetCurrentSessionCallAuctionBoundary(t *testing.T) {
+	beforeAuction := time.Date(2025, time.April, 7, 8, 59, 0, 0, TradingLocation())
+	if session := GetCurrentSession(beforeAuction); session != SessionPreMarket {
+		t.Fatalf("before 09:00 session = %s, want %s", session, SessionPreMarket)
+	}
+
+	startAuction := time.Date(2025, time.April, 7, 9, 0, 0, 0, TradingLocation())
+	if session := GetCurrentSession(startAuction); session != SessionCallAuction {
+		t.Fatalf("09:00 session = %s, want %s", session, SessionCallAuction)
+	}
+
+	endAuction := time.Date(2025, time.April, 7, 9, 29, 0, 0, TradingLocation())
+	if session := GetCurrentSession(endAuction); session != SessionCallAuction {
+		t.Fatalf("09:29 session = %s, want %s", session, SessionCallAuction)
+	}
+
+	openMarket := time.Date(2025, time.April, 7, 9, 30, 0, 0, TradingLocation())
+	if session := GetCurrentSession(openMarket); session != SessionMorning {
+		t.Fatalf("09:30 session = %s, want %s", session, SessionMorning)
+	}
+
+	holidayAuction := time.Date(2025, time.October, 2, 9, 10, 0, 0, TradingLocation())
+	if session := GetCurrentSession(holidayAuction); session == SessionCallAuction {
+		t.Fatalf("holiday session should not be call auction")
 	}
 }
 

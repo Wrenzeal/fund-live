@@ -22,15 +22,24 @@ const (
 )
 
 type Issue struct {
-	ID                   string      `json:"id"`
-	Title                string      `json:"title"`
-	Body                 string      `json:"body"`
-	Type                 IssueType   `json:"type"`
-	Status               IssueStatus `json:"status"`
-	CreatedByUserID      string      `json:"created_by_user_id"`
-	CreatedByDisplayName string      `json:"created_by_display_name"`
-	CreatedAt            time.Time   `json:"created_at"`
-	UpdatedAt            time.Time   `json:"updated_at"`
+	ID                   string              `json:"id"`
+	Title                string              `json:"title"`
+	Body                 string              `json:"body"`
+	Type                 IssueType           `json:"type"`
+	Status               IssueStatus         `json:"status"`
+	OfficialReply        *IssueOfficialReply `json:"official_reply,omitempty"`
+	CreatedByUserID      string              `json:"created_by_user_id"`
+	CreatedByDisplayName string              `json:"created_by_display_name"`
+	CreatedAt            time.Time           `json:"created_at"`
+	UpdatedAt            time.Time           `json:"updated_at"`
+}
+
+type IssueOfficialReply struct {
+	Body                 string    `json:"body"`
+	RepliedByUserID      string    `json:"replied_by_user_id"`
+	RepliedByDisplayName string    `json:"replied_by_display_name"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 type IssueSearchParams struct {
@@ -47,6 +56,10 @@ type IssueCreateInput struct {
 
 type IssueStatusUpdateInput struct {
 	Status IssueStatus `json:"status"`
+}
+
+type IssueReplyUpdateInput struct {
+	Body string `json:"body"`
 }
 
 type AnnouncementSourceType string
@@ -95,6 +108,7 @@ type IssueService interface {
 	GetIssueByID(ctx context.Context, issueID string) (*Issue, error)
 	CreateIssue(ctx context.Context, user *User, input IssueCreateInput) (*Issue, error)
 	UpdateIssueStatus(ctx context.Context, issueID string, status IssueStatus) (*Issue, error)
+	UpdateIssueReply(ctx context.Context, user *User, issueID string, input IssueReplyUpdateInput) (*Issue, error)
 }
 
 type AnnouncementService interface {

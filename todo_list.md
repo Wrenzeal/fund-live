@@ -1,21 +1,11 @@
 # 活跃待办
 
-更新时间：2026-04-06
+更新时间：2026-04-09
 
 说明：
 - 本文件只保留当前尚未完成、后续仍需继续判断的事项。
 - 已完成内容已从本文件移除，以避免影响后续判断。
 - 已完成的历史工作请以 `git` 提交记录和 `CHANGELOG.md` 为准。
-
-## 1. 数据库迁移补全
-- 状态：`pending`
-- 背景：
-  - 当前已经完成受控 SQL migration、搜索索引和关键唯一约束。
-  - 但全新空库的首次建表仍更依赖显式打开 `database.auto_migrate=true`，还没有完整的“空库首启 migration”方案。
-- 待做：
-  - 为核心业务表补充可重复执行的建表 migration
-  - 明确空库初始化顺序
-  - 确保新环境不需要临时开启 `auto_migrate`
 
 ## 2. VIP 真实数据源与模型链路
 - 状态：`pending`
@@ -51,12 +41,13 @@
   - 补齐退款 / 售后 / 关单策略
   - 明确支付失败、订单过期和人工补单处理流程
 
-## 5. 主题验收与定点修整
+## 5. VIP 页面主题验收与定点修整
 - 状态：`in_progress`
 - 当前情况：
   - `dark` 主题最稳定
   - `cyber` 已完成两轮样式补强
-  - `classic` 已完成多轮可读性修复，但仍需按页面验收式微调
+  - 非 VIP 页面（`/`、`/watchlist`、`/holdings`、`/issues`、`/announcements`）已完成主题收尾
+  - `classic` 在 VIP 页面仍需按页面验收式微调
 - 待做：
   - 继续按页面验收 `classic`
   - 如有需要继续微调 `cyber`
@@ -65,8 +56,3 @@
     - `/vip/checkout`
     - `/vip/tasks`
     - `/vip/reports/:id`
-    - `/watchlist`
-    - `/holdings`
-    - `/issues`
-    - `/announcements`
-    - `/`

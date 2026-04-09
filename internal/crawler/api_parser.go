@@ -237,7 +237,9 @@ func (p *EastmoneyAPIParser) ConvertAPIHoldings(apiHoldings []HoldingFromAPI, re
 		}
 
 		// Infer exchange
-		if len(h.StockCode) == 6 {
+		if len(h.StockCode) == 5 {
+			holding.Exchange = domain.ExchangeHK
+		} else if len(h.StockCode) == 6 {
 			prefix := h.StockCode[:2]
 			if prefix == "60" || prefix == "68" {
 				holding.Exchange = domain.ExchangeSH

@@ -72,6 +72,9 @@ func buildTencentSymbol(stockCode string) string {
 	if len(stockCode) < 1 {
 		return "sz" + stockCode
 	}
+	if len(stockCode) == 5 {
+		return "hk" + stockCode
+	}
 
 	firstChar := stockCode[0]
 	switch {

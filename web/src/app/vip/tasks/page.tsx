@@ -51,13 +51,13 @@ export default function VIPTasksPage() {
             <div className="flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-200" />
               <div>
-                <div className="text-lg font-bold text-amber-50">当前账号尚未开通 VIP</div>
+                <div className="text-lg font-bold text-theme-primary">当前账号尚未开通 VIP</div>
                 <p className="mt-2 text-sm leading-6 text-amber-50/85">
                   先前往会员介绍页和开通页体验 VIP 页面与流程，开通后即可在这里看到分析任务。
                 </p>
                 <Link
                   href="/vip"
-                  className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-amber-400/30 bg-black/10 px-4 py-3 text-sm font-medium text-amber-50"
+                  className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-theme-primary"
                 >
                   去查看 VIP 介绍
                 </Link>
@@ -69,12 +69,12 @@ export default function VIPTasksPage() {
         <section className="grid gap-5 lg:grid-cols-3">
           <article className="rounded-[28px] border border-[var(--card-border)] p-6 glass">
             <div className="text-xs tracking-[0.22em] text-theme-muted">板块分析额度</div>
-            <div className="mt-3 text-4xl font-black text-cyan-50">{remainingQuota.sectorAnalysis}</div>
+            <div className="mt-3 text-4xl font-black text-theme-primary">{remainingQuota.sectorAnalysis}</div>
             <div className="mt-2 text-sm text-theme-secondary">今日剩余可用次数</div>
           </article>
           <article className="rounded-[28px] border border-[var(--card-border)] p-6 glass">
             <div className="text-xs tracking-[0.22em] text-theme-muted">组合分析额度</div>
-            <div className="mt-3 text-4xl font-black text-cyan-50">{remainingQuota.portfolioAnalysis}</div>
+            <div className="mt-3 text-4xl font-black text-theme-primary">{remainingQuota.portfolioAnalysis}</div>
             <div className="mt-2 text-sm text-theme-secondary">今日剩余可用次数</div>
           </article>
           <article className="rounded-[28px] border border-[var(--card-border)] p-6 glass">
@@ -91,8 +91,8 @@ export default function VIPTasksPage() {
         {focusTask && (
           <section className="rounded-[32px] border border-cyan-500/25 bg-cyan-500/10 p-6">
             <div className="text-xs tracking-[0.22em] text-cyan-300">当前聚焦任务</div>
-            <div className="mt-2 text-2xl font-bold text-cyan-50">{focusTask.targetName}</div>
-            <div className="mt-3 text-sm leading-6 text-cyan-50/90">{focusTask.progressText}</div>
+            <div className="mt-2 text-2xl font-bold text-theme-primary">{focusTask.targetName}</div>
+            <div className="mt-3 text-sm leading-6 text-theme-secondary">{focusTask.progressText}</div>
           </section>
         )}
 
