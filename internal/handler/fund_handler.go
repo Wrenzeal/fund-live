@@ -73,6 +73,22 @@ type APIMeta struct {
 	CacheStatus string `json:"cache_status,omitempty"`
 }
 
+type OfficialCloseDisplayStatus string
+
+const (
+	OfficialCloseDisplayHidden  OfficialCloseDisplayStatus = "hidden"
+	OfficialCloseDisplayPending OfficialCloseDisplayStatus = "pending"
+	OfficialCloseDisplayReady   OfficialCloseDisplayStatus = "ready"
+)
+
+type OfficialCloseInfo struct {
+	DisplayStatus OfficialCloseDisplayStatus `json:"display_status"`
+	Date          string                     `json:"date,omitempty"`
+	DailyReturn   string                     `json:"daily_return,omitempty"`
+	NetAssetVal   string                     `json:"net_asset_val,omitempty"`
+	Message       string                     `json:"message,omitempty"`
+}
+
 // Search handles fund search requests.
 // GET /api/v1/fund/search?q=000001
 func (h *FundHandler) Search(c *gin.Context) {
@@ -149,9 +165,19 @@ func (h *FundHandler) GetEstimate(c *gin.Context) {
 		return
 	}
 
+	officialClose := h.resolveOfficialCloseInfo(c.Request.Context(), fundID, trading.GetMarketStatus(time.Now()))
+
+	type EstimateResponse struct {
+		*domain.FundEstimate
+		OfficialClose *OfficialCloseInfo `json:"official_close,omitempty"`
+	}
+
 	c.JSON(http.StatusOK, APIResponse{
 		Success: true,
-		Data:    estimate,
+		Data: EstimateResponse{
+			FundEstimate:  estimate,
+			OfficialClose: officialClose,
+		},
 		Meta: &APIMeta{
 			DataSource: estimate.DataSource,
 		},
@@ -308,7 +334,10 @@ func (h *FundHandler) GetTimeSeries(c *gin.Context) {
 		IsHistorical   bool                     `json:"is_historical"`
 		Session        trading.SessionType      `json:"session"`
 		LastTradingDay string                   `json:"last_trading_day"`
+		OfficialClose  *OfficialCloseInfo       `json:"official_close,omitempty"`
 	}
+
+	officialClose := h.resolveOfficialCloseInfo(c.Request.Context(), fundID, marketStatus)
 
 	c.JSON(http.StatusOK, APIResponse{
 		Success: true,
@@ -319,6 +348,7 @@ func (h *FundHandler) GetTimeSeries(c *gin.Context) {
 			IsHistorical:   isHistorical,
 			Session:        marketStatus.Session,
 			LastTradingDay: marketStatus.LastTradingDay,
+			OfficialClose:  officialClose,
 		},
 	})
 }
@@ -462,4 +492,41 @@ func buildResponseMeta(dataSource, cacheStatus string) *APIMeta {
 		DataSource:  dataSource,
 		CacheStatus: cacheStatus,
 	}
+}
+
+func (h *FundHandler) resolveOfficialCloseInfo(ctx context.Context, fundID string, marketStatus trading.MarketStatus) *OfficialCloseInfo {
+	history, err := h.fundRepo.GetLatestFundHistory(ctx, fundID)
+	if err != nil {
+		log.Printf("⚠️ Official close info lookup failed for %s: %v", fundID, err)
+		return &OfficialCloseInfo{DisplayStatus: OfficialCloseDisplayHidden}
+	}
+
+	switch marketStatus.Session {
+	case trading.SessionAfterHours:
+		if marketStatus.IsTradingDay {
+			if history != nil && history.Date == marketStatus.CurrentDate {
+				return &OfficialCloseInfo{
+					DisplayStatus: OfficialCloseDisplayReady,
+					Date:          history.Date,
+					DailyReturn:   history.DailyReturn.String(),
+					NetAssetVal:   history.NetAssetVal.String(),
+				}
+			}
+			return &OfficialCloseInfo{
+				DisplayStatus: OfficialCloseDisplayPending,
+				Message:       "真实涨跌情况稍后更新",
+			}
+		}
+	case trading.SessionPreMarket, trading.SessionWeekend, trading.SessionHoliday:
+		if history != nil && history.Date == marketStatus.LastTradingDay {
+			return &OfficialCloseInfo{
+				DisplayStatus: OfficialCloseDisplayReady,
+				Date:          history.Date,
+				DailyReturn:   history.DailyReturn.String(),
+				NetAssetVal:   history.NetAssetVal.String(),
+			}
+		}
+	}
+
+	return &OfficialCloseInfo{DisplayStatus: OfficialCloseDisplayHidden}
 }

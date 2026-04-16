@@ -115,6 +115,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     timeSeries,
     displayDate,
     isHistorical,
+    officialClose,
     isLoading: isTimeSeriesLoading,
     isWarming: isTimeSeriesWarming,
   } = useTimeSeries(isCallAuction ? null : currentFundId)
@@ -449,6 +450,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
               isCallAuction={isCallAuction}
               displayDate={displayDate}
               isHistorical={isHistorical}
+              officialClose={officialClose}
             />
 
             {/* Holdings Table */}

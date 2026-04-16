@@ -68,6 +68,7 @@ func TestInitDBCreatesCoreSchemaWithoutAutoMigrate(t *testing.T) {
 	appliedMigrations := []string{
 		"20260409_core_fund_tables",
 		"20260409_core_user_tables",
+		"20260416_user_holding_confirmation",
 		"20260404_fund_search_indexes",
 		"20260404_fund_history_unique_index",
 		"20260404_fund_time_series_unique_index",

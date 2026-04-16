@@ -7,6 +7,7 @@ import (
 
 	"github.com/RomaticDOG/fund/internal/database"
 	"github.com/RomaticDOG/fund/internal/domain"
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -444,17 +445,78 @@ func (r *PostgresUserRepository) ListFundHoldings(ctx context.Context, userID st
 		if holding.TradeAt != nil {
 			tradeAt = holding.TradeAt.Format(time.RFC3339)
 		}
+		shares := decimal.Zero
+		if holding.Shares != nil {
+			shares = *holding.Shares
+		}
+		confirmedNav := decimal.Zero
+		if holding.ConfirmedNav != nil {
+			confirmedNav = *holding.ConfirmedNav
+		}
+		confirmedNavDate := ""
+		if holding.ConfirmedNavDate != nil {
+			confirmedNavDate = holding.ConfirmedNavDate.Format("2006-01-02")
+		}
 
 		result = append(result, domain.UserFundHolding{
-			ID:        holding.ID,
-			UserID:    holding.UserID,
-			FundID:    holding.FundID,
-			Amount:    holding.Amount,
-			TradeAt:   tradeAt,
-			AsOfDate:  holding.AsOfDate.Format("2006-01-02"),
-			Note:      holding.Note,
-			CreatedAt: holding.CreatedAt,
-			UpdatedAt: holding.UpdatedAt,
+			ID:               holding.ID,
+			UserID:           holding.UserID,
+			FundID:           holding.FundID,
+			Amount:           holding.Amount,
+			Shares:           shares,
+			ConfirmedNav:     confirmedNav,
+			ConfirmedNavDate: confirmedNavDate,
+			TradeAt:          tradeAt,
+			AsOfDate:         holding.AsOfDate.Format("2006-01-02"),
+			Note:             holding.Note,
+			CreatedAt:        holding.CreatedAt,
+			UpdatedAt:        holding.UpdatedAt,
+		})
+	}
+	return result, nil
+}
+
+func (r *PostgresUserRepository) ListFundHoldingsMissingConfirmation(ctx context.Context) ([]domain.UserFundHolding, error) {
+	var dbHoldings []database.UserFundHolding
+	if err := r.db.WithContext(ctx).
+		Where("shares IS NULL OR confirmed_nav IS NULL OR confirmed_nav_date IS NULL").
+		Order("created_at ASC").
+		Find(&dbHoldings).Error; err != nil {
+		return nil, fmt.Errorf("failed to list fund holdings missing confirmation: %w", err)
+	}
+
+	result := make([]domain.UserFundHolding, 0, len(dbHoldings))
+	for _, holding := range dbHoldings {
+		tradeAt := ""
+		if holding.TradeAt != nil {
+			tradeAt = holding.TradeAt.Format(time.RFC3339)
+		}
+		shares := decimal.Zero
+		if holding.Shares != nil {
+			shares = *holding.Shares
+		}
+		confirmedNav := decimal.Zero
+		if holding.ConfirmedNav != nil {
+			confirmedNav = *holding.ConfirmedNav
+		}
+		confirmedNavDate := ""
+		if holding.ConfirmedNavDate != nil {
+			confirmedNavDate = holding.ConfirmedNavDate.Format("2006-01-02")
+		}
+
+		result = append(result, domain.UserFundHolding{
+			ID:               holding.ID,
+			UserID:           holding.UserID,
+			FundID:           holding.FundID,
+			Amount:           holding.Amount,
+			Shares:           shares,
+			ConfirmedNav:     confirmedNav,
+			ConfirmedNavDate: confirmedNavDate,
+			TradeAt:          tradeAt,
+			AsOfDate:         holding.AsOfDate.Format("2006-01-02"),
+			Note:             holding.Note,
+			CreatedAt:        holding.CreatedAt,
+			UpdatedAt:        holding.UpdatedAt,
 		})
 	}
 	return result, nil
@@ -485,23 +547,47 @@ func (r *PostgresUserRepository) SaveFundHolding(ctx context.Context, holding *d
 		}
 		tradeAt = &parsedTradeAt
 	}
+	var shares *decimal.Decimal
+	if holding.Shares.GreaterThan(decimal.Zero) {
+		value := holding.Shares
+		shares = &value
+	}
+	var confirmedNav *decimal.Decimal
+	if holding.ConfirmedNav.GreaterThan(decimal.Zero) {
+		value := holding.ConfirmedNav
+		confirmedNav = &value
+	}
+	var confirmedNavDate *time.Time
+	if holding.ConfirmedNavDate != "" {
+		parsedConfirmedNavDate, err := time.Parse("2006-01-02", holding.ConfirmedNavDate)
+		if err != nil {
+			return fmt.Errorf("failed to parse confirmed nav date: %w", err)
+		}
+		confirmedNavDate = &parsedConfirmedNavDate
+	}
 
 	dbHolding := &database.UserFundHolding{
-		ID:        holding.ID,
-		UserID:    holding.UserID,
-		FundID:    holding.FundID,
-		Amount:    holding.Amount,
-		TradeAt:   tradeAt,
-		AsOfDate:  asOfDate,
-		Note:      holding.Note,
-		CreatedAt: holding.CreatedAt,
-		UpdatedAt: holding.UpdatedAt,
+		ID:               holding.ID,
+		UserID:           holding.UserID,
+		FundID:           holding.FundID,
+		Amount:           holding.Amount,
+		Shares:           shares,
+		ConfirmedNav:     confirmedNav,
+		ConfirmedNavDate: confirmedNavDate,
+		TradeAt:          tradeAt,
+		AsOfDate:         asOfDate,
+		Note:             holding.Note,
+		CreatedAt:        holding.CreatedAt,
+		UpdatedAt:        holding.UpdatedAt,
 	}
 	result := r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{
 			"fund_id",
 			"amount",
+			"shares",
+			"confirmed_nav",
+			"confirmed_nav_date",
 			"trade_at",
 			"as_of_date",
 			"note",

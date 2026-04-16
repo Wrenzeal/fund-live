@@ -116,29 +116,58 @@ type UserHoldingOverrideSet struct {
 
 // UserFundHolding stores a user's fund-level position record.
 type UserFundHolding struct {
-	ID        string          `json:"id"`
-	UserID    string          `json:"user_id"`
-	FundID    string          `json:"fund_id"`
-	Amount    decimal.Decimal `json:"amount"`
-	TradeAt   string          `json:"trade_at,omitempty"`
-	AsOfDate  string          `json:"as_of_date"`
-	Note      string          `json:"note"`
-	CreatedAt time.Time       `json:"created_at"`
-	UpdatedAt time.Time       `json:"updated_at"`
+	ID               string          `json:"id"`
+	UserID           string          `json:"user_id"`
+	FundID           string          `json:"fund_id"`
+	Amount           decimal.Decimal `json:"amount"`
+	Shares           decimal.Decimal `json:"shares"`
+	ConfirmedNav     decimal.Decimal `json:"confirmed_nav"`
+	ConfirmedNavDate string          `json:"confirmed_nav_date,omitempty"`
+	TradeAt          string          `json:"trade_at,omitempty"`
+	AsOfDate         string          `json:"as_of_date"`
+	Note             string          `json:"note"`
+	CreatedAt        time.Time       `json:"created_at"`
+	UpdatedAt        time.Time       `json:"updated_at"`
 }
 
 // UserFundHoldingDetail enriches a fund holding with current fund profile data.
 type UserFundHoldingDetail struct {
-	ID                string          `json:"id"`
-	FundID            string          `json:"fund_id"`
-	Amount            decimal.Decimal `json:"amount"`
-	TradeAt           string          `json:"trade_at,omitempty"`
-	AsOfDate          string          `json:"as_of_date"`
-	ActualDate        string          `json:"actual_date,omitempty"`
-	ActualNav         string          `json:"actual_nav,omitempty"`
-	ActualDailyReturn string          `json:"actual_daily_return,omitempty"`
-	Note              string          `json:"note"`
-	CreatedAt         time.Time       `json:"created_at"`
-	UpdatedAt         time.Time       `json:"updated_at"`
-	Fund              *Fund           `json:"fund,omitempty"`
+	ID                 string          `json:"id"`
+	FundID             string          `json:"fund_id"`
+	Amount             decimal.Decimal `json:"amount"`
+	Shares             string          `json:"shares,omitempty"`
+	ConfirmedNav       string          `json:"confirmed_nav,omitempty"`
+	ConfirmedNavDate   string          `json:"confirmed_nav_date,omitempty"`
+	TradeAt            string          `json:"trade_at,omitempty"`
+	AsOfDate           string          `json:"as_of_date"`
+	ActualDate         string          `json:"actual_date,omitempty"`
+	ActualNav          string          `json:"actual_nav,omitempty"`
+	ActualDailyReturn  string          `json:"actual_daily_return,omitempty"`
+	CurrentMarketValue string          `json:"current_market_value,omitempty"`
+	TodayProfit        string          `json:"today_profit,omitempty"`
+	TodayChangePercent string          `json:"today_change_percent,omitempty"`
+	RealMetricsReady   bool            `json:"real_metrics_ready"`
+	RealMetricsMessage string          `json:"real_metrics_message,omitempty"`
+	Note               string          `json:"note"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
+	Fund               *Fund           `json:"fund,omitempty"`
+}
+
+// UserFundHoldingSummary aggregates the user's holdings page totals.
+type UserFundHoldingSummary struct {
+	TotalPrincipal          decimal.Decimal `json:"total_principal"`
+	TotalCurrentMarketValue string          `json:"total_current_market_value,omitempty"`
+	TotalTodayProfit        string          `json:"total_today_profit,omitempty"`
+	TotalTodayChangePercent string          `json:"total_today_change_percent,omitempty"`
+	RealMetricsReady        bool            `json:"real_metrics_ready"`
+	RealMetricsReadyCount   int             `json:"real_metrics_ready_count"`
+	TotalHoldings           int             `json:"total_holdings"`
+	Message                 string          `json:"message,omitempty"`
+}
+
+// UserFundHoldingList groups holding items and summary totals.
+type UserFundHoldingList struct {
+	Items   []UserFundHoldingDetail `json:"items"`
+	Summary UserFundHoldingSummary  `json:"summary"`
 }

@@ -6,10 +6,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/RomaticDOG/fund/internal/domain"
 	"github.com/RomaticDOG/fund/internal/repository"
 	"github.com/RomaticDOG/fund/internal/service"
+	"github.com/RomaticDOG/fund/internal/trading"
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 )
@@ -359,5 +361,65 @@ func TestGetEstimateReturnsWarmupStatusForColdFunds(t *testing.T) {
 	}
 	if retryAfter := rec.Header().Get("Retry-After"); retryAfter != "5" {
 		t.Fatalf("Retry-After = %q, want 5", retryAfter)
+	}
+}
+
+func TestResolveOfficialCloseInfoReturnsPendingAfterCloseBeforeSync(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	handler := &FundHandler{fundRepo: fundRepo}
+
+	status := trading.GetMarketStatus(time.Date(2026, time.April, 8, 20, 30, 0, 0, trading.TradingLocation()))
+	info := handler.resolveOfficialCloseInfo(context.Background(), "005827", status)
+
+	if info == nil || info.DisplayStatus != OfficialCloseDisplayPending {
+		t.Fatalf("info = %+v, want pending", info)
+	}
+	if info.Message == "" {
+		t.Fatalf("pending info should include message")
+	}
+}
+
+func TestResolveOfficialCloseInfoReturnsReadyBeforeNineWithLatestTradingDayHistory(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	if err := fundRepo.SaveFundHistory(context.Background(), &domain.FundHistory{
+		FundID:      "005827",
+		Date:        "2026-04-08",
+		NetAssetVal: decimal.RequireFromString("1.7877"),
+		DailyReturn: decimal.RequireFromString("2.0027"),
+		CreatedAt:   time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFundHistory() error = %v", err)
+	}
+
+	handler := &FundHandler{fundRepo: fundRepo}
+	status := trading.GetMarketStatus(time.Date(2026, time.April, 9, 8, 30, 0, 0, trading.TradingLocation()))
+	info := handler.resolveOfficialCloseInfo(context.Background(), "005827", status)
+
+	if info == nil || info.DisplayStatus != OfficialCloseDisplayReady {
+		t.Fatalf("info = %+v, want ready", info)
+	}
+	if info.Date != "2026-04-08" || info.DailyReturn != "2.0027" {
+		t.Fatalf("ready info = %+v", info)
+	}
+}
+
+func TestResolveOfficialCloseInfoHidesAfterNineEvenIfHistoryExists(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	if err := fundRepo.SaveFundHistory(context.Background(), &domain.FundHistory{
+		FundID:      "005827",
+		Date:        "2026-04-08",
+		NetAssetVal: decimal.RequireFromString("1.7877"),
+		DailyReturn: decimal.RequireFromString("2.0027"),
+		CreatedAt:   time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFundHistory() error = %v", err)
+	}
+
+	handler := &FundHandler{fundRepo: fundRepo}
+	status := trading.GetMarketStatus(time.Date(2026, time.April, 9, 9, 5, 0, 0, trading.TradingLocation()))
+	info := handler.resolveOfficialCloseInfo(context.Background(), "005827", status)
+
+	if info == nil || info.DisplayStatus != OfficialCloseDisplayHidden {
+		t.Fatalf("info = %+v, want hidden", info)
 	}
 }

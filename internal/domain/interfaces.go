@@ -57,6 +57,9 @@ type FundRepository interface {
 
 	// GetLatestFundHistoriesByFundIDs retrieves the latest official NAV snapshots for multiple funds.
 	GetLatestFundHistoriesByFundIDs(ctx context.Context, fundIDs []string) (map[string]*FundHistory, error)
+
+	// GetFundHistoriesByLookupKeys retrieves specific official NAV snapshots keyed by fund/date pairs.
+	GetFundHistoriesByLookupKeys(ctx context.Context, keys []FundHistoryLookupKey) (map[FundHistoryLookupKey]*FundHistory, error)
 }
 
 // CacheRepository defines the interface for caching.

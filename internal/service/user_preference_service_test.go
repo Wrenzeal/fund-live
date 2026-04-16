@@ -18,6 +18,7 @@ type countingFundRepository struct {
 	getFundsByIDsCalls          int
 	getLatestFundHistoryCalls   int
 	getLatestFundHistoriesCalls int
+	getHistoryLookupCalls       int
 }
 
 func newCountingFundRepository() *countingFundRepository {
@@ -44,6 +45,11 @@ func (r *countingFundRepository) GetLatestFundHistory(ctx context.Context, fundI
 func (r *countingFundRepository) GetLatestFundHistoriesByFundIDs(ctx context.Context, fundIDs []string) (map[string]*domain.FundHistory, error) {
 	r.getLatestFundHistoriesCalls++
 	return r.MemoryFundRepository.GetLatestFundHistoriesByFundIDs(ctx, fundIDs)
+}
+
+func (r *countingFundRepository) GetFundHistoriesByLookupKeys(ctx context.Context, keys []domain.FundHistoryLookupKey) (map[domain.FundHistoryLookupKey]*domain.FundHistory, error) {
+	r.getHistoryLookupCalls++
+	return r.MemoryFundRepository.GetFundHistoriesByLookupKeys(ctx, keys)
 }
 
 func TestUserPreferenceServiceAddFavoriteFund(t *testing.T) {
@@ -140,7 +146,7 @@ func TestUserPreferenceServiceCreatesFundHolding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListFundHoldings() error = %v", err)
 	}
-	if len(holdings) != 1 || holdings[0].Fund == nil || holdings[0].Fund.ID != "005827" {
+	if len(holdings.Items) != 1 || holdings.Items[0].Fund == nil || holdings.Items[0].Fund.ID != "005827" {
 		t.Fatalf("holdings = %+v", holdings)
 	}
 }
@@ -199,17 +205,119 @@ func TestUserPreferenceServiceListFundHoldingsUsesLatestOfficialHistory(t *testi
 	if err != nil {
 		t.Fatalf("ListFundHoldings() error = %v", err)
 	}
-	if len(holdings) != 1 {
-		t.Fatalf("holdings len = %d, want 1", len(holdings))
+	if len(holdings.Items) != 1 {
+		t.Fatalf("holdings len = %d, want 1", len(holdings.Items))
 	}
-	if holdings[0].ID != holding.ID {
-		t.Fatalf("holding id = %s, want %s", holdings[0].ID, holding.ID)
+	if holdings.Items[0].ID != holding.ID {
+		t.Fatalf("holding id = %s, want %s", holdings.Items[0].ID, holding.ID)
 	}
-	if holdings[0].ActualDate != expectedDate {
-		t.Fatalf("actual date = %s, want %s", holdings[0].ActualDate, expectedDate)
+	if holdings.Items[0].ActualDate != expectedDate {
+		t.Fatalf("actual date = %s, want %s", holdings.Items[0].ActualDate, expectedDate)
 	}
-	if holdings[0].ActualDailyReturn != "1.2345" {
-		t.Fatalf("actual daily return = %s, want 1.2345", holdings[0].ActualDailyReturn)
+	if holdings.Items[0].ActualDailyReturn != "1.2345" {
+		t.Fatalf("actual daily return = %s, want 1.2345", holdings.Items[0].ActualDailyReturn)
+	}
+}
+
+func TestUserPreferenceServiceCreateFundHoldingStoresConfirmedNavAndSharesWhenHistoryExists(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	if err := fundRepo.SaveFundHistory(context.Background(), &domain.FundHistory{
+		FundID:      "005827",
+		Date:        "2026-03-30",
+		NetAssetVal: decimal.RequireFromString("1.2500"),
+		AccumVal:    decimal.RequireFromString("1.2500"),
+		DailyReturn: decimal.RequireFromString("0.1000"),
+		CreatedAt:   time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFundHistory() error = %v", err)
+	}
+
+	holding, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓")
+	if err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+
+	if holding.ConfirmedNav != "1.25" {
+		t.Fatalf("confirmed nav = %s, want 1.25", holding.ConfirmedNav)
+	}
+	if holding.ConfirmedNavDate != "2026-03-30" {
+		t.Fatalf("confirmed nav date = %s, want 2026-03-30", holding.ConfirmedNavDate)
+	}
+	if holding.Shares != "40000" {
+		t.Fatalf("shares = %s, want 40000", holding.Shares)
+	}
+}
+
+func TestUserPreferenceServiceListFundHoldingsComputesRealMetricsAndSummary(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+	expectedDate := expectedOfficialHistoryDate(time.Now())
+
+	if err := fundRepo.SaveFundHistory(context.Background(), &domain.FundHistory{
+		FundID:      "005827",
+		Date:        "2026-03-30",
+		NetAssetVal: decimal.RequireFromString("1.2500"),
+		AccumVal:    decimal.RequireFromString("1.2500"),
+		DailyReturn: decimal.RequireFromString("0.1000"),
+		CreatedAt:   time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFundHistory() error = %v", err)
+	}
+	if err := fundRepo.SaveFundHistory(context.Background(), &domain.FundHistory{
+		FundID:      "005827",
+		Date:        expectedDate,
+		NetAssetVal: decimal.RequireFromString("1.5000"),
+		AccumVal:    decimal.RequireFromString("1.7000"),
+		DailyReturn: decimal.RequireFromString("2.0000"),
+		CreatedAt:   time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFundHistory() error = %v", err)
+	}
+
+	if _, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓"); err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+
+	holdings, err := service.ListFundHoldings(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("ListFundHoldings() error = %v", err)
+	}
+	if len(holdings.Items) != 1 {
+		t.Fatalf("holdings len = %d, want 1", len(holdings.Items))
+	}
+
+	item := holdings.Items[0]
+	if !item.RealMetricsReady {
+		t.Fatalf("expected real metrics ready, got %+v", item)
+	}
+	if item.CurrentMarketValue != "60000.00" {
+		t.Fatalf("current market value = %s, want 60000.00", item.CurrentMarketValue)
+	}
+	if item.TodayProfit != "1176.47" {
+		t.Fatalf("today profit = %s, want 1176.47", item.TodayProfit)
+	}
+	if item.TodayChangePercent != "2" {
+		t.Fatalf("today change percent = %s, want 2", item.TodayChangePercent)
+	}
+
+	if !holdings.Summary.RealMetricsReady {
+		t.Fatalf("expected summary real metrics ready, got %+v", holdings.Summary)
+	}
+	if holdings.Summary.TotalPrincipal.String() != "50000" {
+		t.Fatalf("total principal = %s, want 50000", holdings.Summary.TotalPrincipal.String())
+	}
+	if holdings.Summary.TotalCurrentMarketValue != "60000.00" {
+		t.Fatalf("total current market value = %s, want 60000.00", holdings.Summary.TotalCurrentMarketValue)
+	}
+	if holdings.Summary.TotalTodayProfit != "1176.47" {
+		t.Fatalf("total today profit = %s, want 1176.47", holdings.Summary.TotalTodayProfit)
+	}
+	if holdings.Summary.TotalTodayChangePercent != "2" {
+		t.Fatalf("total today change percent = %s, want 2", holdings.Summary.TotalTodayChangePercent)
 	}
 }
 
@@ -273,13 +381,14 @@ func TestUserPreferenceServiceListFundHoldingsUsesBatchHistoryLookup(t *testing.
 	fundRepo.getFundsByIDsCalls = 0
 	fundRepo.getLatestFundHistoryCalls = 0
 	fundRepo.getLatestFundHistoriesCalls = 0
+	fundRepo.getHistoryLookupCalls = 0
 
 	holdings, err := service.ListFundHoldings(context.Background(), "user-1")
 	if err != nil {
 		t.Fatalf("ListFundHoldings() error = %v", err)
 	}
-	if len(holdings) != 2 {
-		t.Fatalf("holdings len = %d, want 2", len(holdings))
+	if len(holdings.Items) != 2 {
+		t.Fatalf("holdings len = %d, want 2", len(holdings.Items))
 	}
 	if fundRepo.getFundByIDCalls != 0 {
 		t.Fatalf("GetFundByID() calls = %d, want 0", fundRepo.getFundByIDCalls)
@@ -292,5 +401,8 @@ func TestUserPreferenceServiceListFundHoldingsUsesBatchHistoryLookup(t *testing.
 	}
 	if fundRepo.getLatestFundHistoriesCalls != 1 {
 		t.Fatalf("GetLatestFundHistoriesByFundIDs() calls = %d, want 1", fundRepo.getLatestFundHistoriesCalls)
+	}
+	if fundRepo.getHistoryLookupCalls != 1 {
+		t.Fatalf("GetFundHistoriesByLookupKeys() calls = %d, want 1", fundRepo.getHistoryLookupCalls)
 	}
 }

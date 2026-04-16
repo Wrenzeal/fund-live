@@ -239,8 +239,8 @@ func (s *UserPreferenceService) RemoveWatchlistFund(ctx context.Context, userID,
 	return s.watchlistRepo.DeleteWatchlistFund(ctx, userID, group.ID, strings.TrimSpace(fundID))
 }
 
-// ListFundHoldings returns the user's stored fund position records enriched with fund metadata.
-func (s *UserPreferenceService) ListFundHoldings(ctx context.Context, userID string) ([]domain.UserFundHoldingDetail, error) {
+// ListFundHoldings returns the user's stored fund position records enriched with fund metadata and summary totals.
+func (s *UserPreferenceService) ListFundHoldings(ctx context.Context, userID string) (*domain.UserFundHoldingList, error) {
 	holdings, err := s.fundHoldingRepo.ListFundHoldings(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -248,9 +248,11 @@ func (s *UserPreferenceService) ListFundHoldings(ctx context.Context, userID str
 
 	expectedOfficialDate := expectedOfficialHistoryDate(time.Now())
 	fundIDs := collectHoldingFundIDs(holdings)
+	confirmationKeys := collectHoldingHistoryLookupKeys(holdings)
 	var (
-		fundsByID   map[string]*domain.Fund
-		historyByID map[string]*domain.FundHistory
+		fundsByID             map[string]*domain.Fund
+		historyByID           map[string]*domain.FundHistory
+		confirmationHistoryBy map[domain.FundHistoryLookupKey]*domain.FundHistory
 	)
 
 	group, groupCtx := errgroup.WithContext(ctx)
@@ -270,34 +272,58 @@ func (s *UserPreferenceService) ListFundHoldings(ctx context.Context, userID str
 		historyByID = histories
 		return nil
 	})
+	group.Go(func() error {
+		histories, loadErr := s.fundRepo.GetFundHistoriesByLookupKeys(groupCtx, confirmationKeys)
+		if loadErr != nil {
+			return loadErr
+		}
+		confirmationHistoryBy = histories
+		return nil
+	})
 	if err := group.Wait(); err != nil {
 		return nil, err
 	}
 
-	result := make([]domain.UserFundHoldingDetail, 0, len(holdings))
+	items := make([]domain.UserFundHoldingDetail, 0, len(holdings))
+	totalCurrentMarketValue := decimal.Zero
+	totalTodayProfit := decimal.Zero
+	totalPreviousMarketValue := decimal.Zero
+	readyCount := 0
+
 	for _, holding := range holdings {
-		detail := domain.UserFundHoldingDetail{
-			ID:        holding.ID,
-			FundID:    holding.FundID,
-			Amount:    holding.Amount,
-			TradeAt:   holding.TradeAt,
-			AsOfDate:  holding.AsOfDate,
-			Note:      holding.Note,
-			CreatedAt: holding.CreatedAt,
-			UpdatedAt: holding.UpdatedAt,
-			Fund:      fundsByID[holding.FundID],
+		resolvedHolding := holding
+		if needsHoldingConfirmationData(resolvedHolding) {
+			if history := confirmationHistoryBy[holdingHistoryLookupKey(holding)]; history != nil {
+				applyHoldingConfirmationData(&resolvedHolding, history)
+			}
 		}
 
-		history := historyByID[holding.FundID]
-		if history != nil && history.Date == expectedOfficialDate {
-			detail.ActualDate = history.Date
-			detail.ActualNav = history.NetAssetVal.String()
-			detail.ActualDailyReturn = history.DailyReturn.String()
+		detail, metrics := buildUserFundHoldingDetail(
+			resolvedHolding,
+			fundsByID[holding.FundID],
+			historyByID[holding.FundID],
+			expectedOfficialDate,
+		)
+		if metrics != nil {
+			readyCount++
+			totalCurrentMarketValue = totalCurrentMarketValue.Add(metrics.currentMarketValue)
+			totalTodayProfit = totalTodayProfit.Add(metrics.todayProfit)
+			totalPreviousMarketValue = totalPreviousMarketValue.Add(metrics.currentMarketValue.Sub(metrics.todayProfit))
 		}
 
-		result = append(result, detail)
+		items = append(items, detail)
 	}
-	return result, nil
+
+	return &domain.UserFundHoldingList{
+		Items: items,
+		Summary: buildUserFundHoldingSummary(
+			holdings,
+			readyCount,
+			totalCurrentMarketValue,
+			totalTodayProfit,
+			totalPreviousMarketValue,
+		),
+	}, nil
 }
 
 // CreateFundHolding creates a user fund-level position record.
@@ -339,20 +365,29 @@ func (s *UserPreferenceService) CreateFundHolding(ctx context.Context, userID, f
 		UpdatedAt: now,
 	}
 
+	if confirmationHistory, err := s.lookupFundHistory(ctx, fundID, holding.AsOfDate); err != nil {
+		return nil, err
+	} else if confirmationHistory != nil {
+		applyHoldingConfirmationData(holding, confirmationHistory)
+	}
+
 	if err := s.fundHoldingRepo.SaveFundHolding(ctx, holding); err != nil {
 		return nil, err
 	}
 
 	return &domain.UserFundHoldingDetail{
-		ID:        holding.ID,
-		FundID:    holding.FundID,
-		Amount:    holding.Amount,
-		TradeAt:   holding.TradeAt,
-		AsOfDate:  holding.AsOfDate,
-		Note:      holding.Note,
-		CreatedAt: holding.CreatedAt,
-		UpdatedAt: holding.UpdatedAt,
-		Fund:      fund,
+		ID:               holding.ID,
+		FundID:           holding.FundID,
+		Amount:           holding.Amount,
+		Shares:           decimalStringOrEmpty(holding.Shares),
+		ConfirmedNav:     decimalStringOrEmpty(holding.ConfirmedNav),
+		ConfirmedNavDate: holding.ConfirmedNavDate,
+		TradeAt:          holding.TradeAt,
+		AsOfDate:         holding.AsOfDate,
+		Note:             holding.Note,
+		CreatedAt:        holding.CreatedAt,
+		UpdatedAt:        holding.UpdatedAt,
+		Fund:             fund,
 	}, nil
 }
 
@@ -543,4 +578,189 @@ func resolveHoldingPricingDate(tradeAt time.Time) time.Time {
 		return tradeAt.In(holdingTradeLocation)
 	}
 	return pricingDate
+}
+
+type holdingRealMetrics struct {
+	currentMarketValue decimal.Decimal
+	todayProfit        decimal.Decimal
+	todayChangePercent decimal.Decimal
+}
+
+func buildUserFundHoldingDetail(
+	holding domain.UserFundHolding,
+	fund *domain.Fund,
+	latestHistory *domain.FundHistory,
+	expectedOfficialDate string,
+) (domain.UserFundHoldingDetail, *holdingRealMetrics) {
+	detail := domain.UserFundHoldingDetail{
+		ID:               holding.ID,
+		FundID:           holding.FundID,
+		Amount:           holding.Amount,
+		Shares:           decimalStringOrEmpty(holding.Shares),
+		ConfirmedNav:     decimalStringOrEmpty(holding.ConfirmedNav),
+		ConfirmedNavDate: holding.ConfirmedNavDate,
+		TradeAt:          holding.TradeAt,
+		AsOfDate:         holding.AsOfDate,
+		Note:             holding.Note,
+		CreatedAt:        holding.CreatedAt,
+		UpdatedAt:        holding.UpdatedAt,
+		Fund:             fund,
+	}
+
+	if latestHistory != nil && latestHistory.Date == expectedOfficialDate {
+		detail.ActualDate = latestHistory.Date
+		detail.ActualNav = latestHistory.NetAssetVal.String()
+		detail.ActualDailyReturn = latestHistory.DailyReturn.String()
+	}
+
+	metrics, ready, message := calculateHoldingRealMetrics(holding, latestHistory, expectedOfficialDate)
+	if !ready {
+		detail.RealMetricsMessage = message
+		return detail, nil
+	}
+
+	detail.CurrentMarketValue = metrics.currentMarketValue.StringFixedBank(2)
+	detail.TodayProfit = metrics.todayProfit.StringFixedBank(2)
+	detail.TodayChangePercent = metrics.todayChangePercent.String()
+	detail.RealMetricsReady = true
+	return detail, metrics
+}
+
+func buildUserFundHoldingSummary(
+	holdings []domain.UserFundHolding,
+	readyCount int,
+	totalCurrentMarketValue decimal.Decimal,
+	totalTodayProfit decimal.Decimal,
+	totalPreviousMarketValue decimal.Decimal,
+) domain.UserFundHoldingSummary {
+	summary := domain.UserFundHoldingSummary{
+		TotalPrincipal:        decimal.Zero,
+		RealMetricsReady:      false,
+		RealMetricsReadyCount: readyCount,
+		TotalHoldings:         len(holdings),
+	}
+
+	for _, holding := range holdings {
+		summary.TotalPrincipal = summary.TotalPrincipal.Add(holding.Amount)
+	}
+
+	switch {
+	case len(holdings) == 0:
+		return summary
+	case readyCount == 0:
+		summary.Message = "待官方净值与确认份额齐备后展示真实市值与盈亏。"
+		return summary
+	case readyCount < len(holdings):
+		summary.Message = "部分持仓仍缺少确认净值，暂不展示总仓真实市值与盈亏。"
+		return summary
+	}
+
+	summary.RealMetricsReady = true
+	summary.TotalCurrentMarketValue = totalCurrentMarketValue.StringFixedBank(2)
+	summary.TotalTodayProfit = totalTodayProfit.StringFixedBank(2)
+	if totalPreviousMarketValue.GreaterThan(decimal.Zero) {
+		summary.TotalTodayChangePercent = totalTodayProfit.
+			DivRound(totalPreviousMarketValue, 8).
+			Mul(decimal.NewFromInt(100)).
+			String()
+	}
+	return summary
+}
+
+func calculateHoldingRealMetrics(
+	holding domain.UserFundHolding,
+	latestHistory *domain.FundHistory,
+	expectedOfficialDate string,
+) (*holdingRealMetrics, bool, string) {
+	if latestHistory == nil || latestHistory.Date != expectedOfficialDate {
+		return nil, false, "待今日官方净值同步完成后展示真实市值与盈亏。"
+	}
+	if !holding.Shares.GreaterThan(decimal.Zero) {
+		return nil, false, "待确认净值补齐后展示真实市值与盈亏。"
+	}
+	if !latestHistory.NetAssetVal.GreaterThan(decimal.Zero) {
+		return nil, false, "官方净值异常，暂无法计算真实市值。"
+	}
+
+	changeRatio := latestHistory.DailyReturn.DivRound(decimal.NewFromInt(100), 8)
+	divisor := decimal.NewFromInt(1).Add(changeRatio)
+	if !divisor.GreaterThan(decimal.Zero) {
+		return nil, false, "真实涨跌幅异常，暂无法计算今日盈亏。"
+	}
+
+	previousNav := latestHistory.NetAssetVal.DivRound(divisor, 8)
+	currentMarketValue := holding.Shares.Mul(latestHistory.NetAssetVal)
+	todayProfit := holding.Shares.Mul(latestHistory.NetAssetVal.Sub(previousNav))
+
+	return &holdingRealMetrics{
+		currentMarketValue: currentMarketValue,
+		todayProfit:        todayProfit,
+		todayChangePercent: latestHistory.DailyReturn,
+	}, true, ""
+}
+
+func (s *UserPreferenceService) lookupFundHistory(ctx context.Context, fundID, date string) (*domain.FundHistory, error) {
+	histories, err := s.fundRepo.GetFundHistoriesByLookupKeys(ctx, []domain.FundHistoryLookupKey{{
+		FundID: strings.TrimSpace(fundID),
+		Date:   strings.TrimSpace(date),
+	}})
+	if err != nil {
+		return nil, err
+	}
+	return histories[domain.FundHistoryLookupKey{
+		FundID: strings.TrimSpace(fundID),
+		Date:   strings.TrimSpace(date),
+	}], nil
+}
+
+func needsHoldingConfirmationData(holding domain.UserFundHolding) bool {
+	return !holding.Shares.GreaterThan(decimal.Zero) || !holding.ConfirmedNav.GreaterThan(decimal.Zero) || strings.TrimSpace(holding.ConfirmedNavDate) == ""
+}
+
+func collectHoldingHistoryLookupKeys(holdings []domain.UserFundHolding) []domain.FundHistoryLookupKey {
+	keys := make([]domain.FundHistoryLookupKey, 0, len(holdings))
+	seen := make(map[domain.FundHistoryLookupKey]struct{}, len(holdings))
+	for _, holding := range holdings {
+		if !needsHoldingConfirmationData(holding) {
+			continue
+		}
+		key := holdingHistoryLookupKey(holding)
+		if key.FundID == "" || key.Date == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+func holdingHistoryLookupKey(holding domain.UserFundHolding) domain.FundHistoryLookupKey {
+	return domain.FundHistoryLookupKey{
+		FundID: strings.TrimSpace(holding.FundID),
+		Date:   strings.TrimSpace(holding.AsOfDate),
+	}
+}
+
+func applyHoldingConfirmationData(holding *domain.UserFundHolding, history *domain.FundHistory) bool {
+	if holding == nil || history == nil {
+		return false
+	}
+	if !holding.Amount.GreaterThan(decimal.Zero) || !history.NetAssetVal.GreaterThan(decimal.Zero) {
+		return false
+	}
+
+	holding.ConfirmedNav = history.NetAssetVal
+	holding.ConfirmedNavDate = history.Date
+	holding.Shares = holding.Amount.DivRound(history.NetAssetVal, 6)
+	return holding.Shares.GreaterThan(decimal.Zero)
+}
+
+func decimalStringOrEmpty(value decimal.Decimal) string {
+	if !value.GreaterThan(decimal.Zero) {
+		return ""
+	}
+	return value.String()
 }

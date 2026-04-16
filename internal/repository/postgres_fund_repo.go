@@ -372,6 +372,57 @@ func (r *PostgresFundRepository) GetLatestFundHistoriesByFundIDs(ctx context.Con
 	return resultMap, nil
 }
 
+// GetFundHistoriesByLookupKeys retrieves specific official NAV snapshots for multiple fund/date pairs.
+func (r *PostgresFundRepository) GetFundHistoriesByLookupKeys(ctx context.Context, keys []domain.FundHistoryLookupKey) (map[domain.FundHistoryLookupKey]*domain.FundHistory, error) {
+	resultMap := make(map[domain.FundHistoryLookupKey]*domain.FundHistory)
+	if len(keys) == 0 {
+		return resultMap, nil
+	}
+
+	fundIDs := make([]string, 0, len(keys))
+	dates := make([]time.Time, 0, len(keys))
+	requested := make(map[domain.FundHistoryLookupKey]struct{}, len(keys))
+	for _, key := range keys {
+		if key.FundID == "" || key.Date == "" {
+			continue
+		}
+		requested[key] = struct{}{}
+		fundIDs = append(fundIDs, key.FundID)
+		parsedDate, err := time.Parse("2006-01-02", key.Date)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse lookup date %s: %w", key.Date, err)
+		}
+		dates = append(dates, parsedDate)
+	}
+
+	var records []database.FundHistory
+	if err := r.db.WithContext(ctx).
+		Where("fund_id IN ? AND date IN ?", uniqueStrings(fundIDs), uniqueTimes(dates)).
+		Find(&records).Error; err != nil {
+		return nil, fmt.Errorf("failed to get fund histories by lookup keys: %w", err)
+	}
+
+	for _, record := range records {
+		key := domain.FundHistoryLookupKey{
+			FundID: record.FundID,
+			Date:   record.Date.Format("2006-01-02"),
+		}
+		if _, ok := requested[key]; !ok {
+			continue
+		}
+		resultMap[key] = &domain.FundHistory{
+			FundID:      record.FundID,
+			Date:        key.Date,
+			NetAssetVal: record.NetAssetVal,
+			AccumVal:    record.AccumVal,
+			DailyReturn: record.DailyReturn,
+			CreatedAt:   record.CreatedAt,
+		}
+	}
+
+	return resultMap, nil
+}
+
 // --- Conversion helpers ---
 
 func (r *PostgresFundRepository) toDomainFund(dbFund *database.Fund) *domain.Fund {
@@ -385,6 +436,20 @@ func (r *PostgresFundRepository) toDomainFund(dbFund *database.Fund) *domain.Fun
 		TotalScale:  dbFund.TotalScale,
 		UpdatedAt:   dbFund.UpdatedAt,
 	}
+}
+
+func uniqueTimes(values []time.Time) []time.Time {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]time.Time, 0, len(values))
+	for _, value := range values {
+		key := value.Format("2006-01-02")
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 func (r *PostgresFundRepository) toDBFund(fund *domain.Fund) *database.Fund {

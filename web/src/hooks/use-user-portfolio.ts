@@ -25,15 +25,39 @@ export interface HoldingEntry {
   id: string
   fund_id: string
   amount: string
+  shares?: string
+  confirmed_nav?: string
+  confirmed_nav_date?: string
   trade_at?: string
   as_of_date: string
   actual_date?: string
   actual_nav?: string
   actual_daily_return?: string
+  current_market_value?: string
+  today_profit?: string
+  today_change_percent?: string
+  real_metrics_ready: boolean
+  real_metrics_message?: string
   note: string
   created_at: string
   updated_at: string
   fund?: Fund
+}
+
+export interface HoldingSummary {
+  total_principal: string
+  total_current_market_value?: string
+  total_today_profit?: string
+  total_today_change_percent?: string
+  real_metrics_ready: boolean
+  real_metrics_ready_count: number
+  total_holdings: number
+  message?: string
+}
+
+interface HoldingsResponse {
+  items: HoldingEntry[]
+  summary: HoldingSummary
 }
 
 interface ApiEnvelope<T> {
@@ -84,7 +108,7 @@ export function useUserPortfolio(userID: string | null) {
     }
   )
 
-  const { data: holdings = [], mutate: mutateHoldings } = useSWR<HoldingEntry[]>(
+  const { data: holdingsPayload, mutate: mutateHoldings } = useSWR<HoldingsResponse>(
     userID ? `${API_BASE_URL}/api/v1/user/holdings` : null,
     fetcher,
     {
@@ -93,9 +117,19 @@ export function useUserPortfolio(userID: string | null) {
     }
   )
 
+  const holdings = holdingsPayload?.items ?? []
+  const holdingSummary = holdingsPayload?.summary ?? {
+    total_principal: '0',
+    real_metrics_ready: false,
+    real_metrics_ready_count: 0,
+    total_holdings: 0,
+    message: '',
+  }
+
   return {
     watchlistGroups,
     holdings,
+    holdingSummary,
     totalWatchlistFunds: watchlistGroups.reduce((sum, group) => sum + group.funds.length, 0),
     seedDemoData: async () => {
       if (!userID) {

@@ -1,9 +1,9 @@
 'use client'
 
 import { useMemo, memo } from 'react'
-import { cn } from '@/lib/utils'
+import { cn, formatPercent } from '@/lib/utils'
 import { useMarketTradingState } from '@/hooks/use-market-status'
-import type { TimeSeriesPoint, FundEstimate } from '@/hooks/use-fund-data'
+import type { TimeSeriesPoint, FundEstimate, OfficialCloseInfo } from '@/hooks/use-fund-data'
 import {
     ResponsiveContainer,
     ComposedChart,
@@ -12,6 +12,7 @@ import {
     YAxis,
     Tooltip,
     ReferenceLine,
+    ReferenceDot,
     CartesianGrid,
 } from 'recharts'
 
@@ -37,6 +38,7 @@ interface ChartDataPoint {
     nav: number | null
     isMorning?: boolean
     isAfternoon?: boolean
+    officialCloseChange?: number | null
 }
 
 interface IntradayChartProps {
@@ -47,6 +49,7 @@ interface IntradayChartProps {
     displayDate?: string
     isHistorical?: boolean
     session?: string
+    officialClose?: OfficialCloseInfo
     className?: string
 }
 
@@ -111,7 +114,8 @@ function roundToNearestFiveMinutes(hours: number, minutes: number): string {
  */
 function mergeDataIntoTemplate(
     template: ChartDataPoint[],
-    realData: TimeSeriesPoint[]
+    realData: TimeSeriesPoint[],
+    officialClose?: OfficialCloseInfo
 ): ChartDataPoint[] {
     // Create a lookup map for real data by time slot (HH:mm format, rounded to 5 min)
     const dataMap = new Map<string, { change: number; nav: number }>()
@@ -134,14 +138,21 @@ function mergeDataIntoTemplate(
     // Fill in the template with real data where available
     return template.map(slot => {
         const realPoint = dataMap.get(slot.time)
+        const officialCloseChange = slot.time === '15:00' && officialClose?.display_status === 'ready' && officialClose.daily_return
+            ? parseFloat(officialClose.daily_return)
+            : null
         if (realPoint) {
             return {
                 ...slot,
                 change: realPoint.change,
                 nav: realPoint.nav,
+                officialCloseChange,
             }
         }
-        return slot
+        return {
+            ...slot,
+            officialCloseChange,
+        }
     })
 }
 
@@ -167,14 +178,64 @@ interface PreparedChartDataPoint extends ChartDataPoint {
     afternoonChange: number | null
 }
 
+function OfficialCloseTooltip({
+    active,
+    payload,
+    label,
+}: {
+    active?: boolean
+    payload?: Array<{ value?: number; payload?: PreparedChartDataPoint }>
+    label?: string
+}) {
+    if (!active || !payload || payload.length === 0) {
+        return null
+    }
+
+    const point = payload[0]?.payload
+    const estimateValue = point?.change
+    const officialValue = point?.officialCloseChange
+
+    return (
+        <div
+            style={{
+                backgroundColor: 'var(--card-bg)',
+                border: '1px solid var(--card-border)',
+                borderRadius: '8px',
+                color: 'var(--text-primary)',
+            }}
+            className="min-w-[180px] px-3 py-2 text-sm shadow-lg"
+        >
+            <div className="mb-2 text-xs text-theme-muted">时间: {label}</div>
+            {estimateValue !== null && estimateValue !== undefined && (
+                <div className="flex items-center justify-between gap-4">
+                    <span className="text-theme-secondary">预估涨跌幅</span>
+                    <span className={estimateValue >= 0 ? 'text-up' : 'text-down'}>
+                        {estimateValue >= 0 ? '+' : ''}{estimateValue.toFixed(2)}%
+                    </span>
+                </div>
+            )}
+            {label === '15:00' && officialValue !== null && officialValue !== undefined && (
+                <div className="mt-2 flex items-center justify-between gap-4 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-2 py-1.5">
+                    <span className="text-theme-secondary">官方真实涨跌</span>
+                    <span className={officialValue >= 0 ? 'text-up' : 'text-down'}>
+                        {officialValue >= 0 ? '+' : ''}{officialValue.toFixed(2)}%
+                    </span>
+                </div>
+            )}
+        </div>
+    )
+}
+
 const ChartContent = memo(function ChartContent({
     chartData,
     isPositive,
     yDomain,
+    officialClose,
 }: {
     chartData: ChartDataPoint[]
     isPositive: boolean
     yDomain: [number, number]
+    officialClose?: OfficialCloseInfo
 }) {
     // Prepare data with separate morning/afternoon fields
     const preparedData = useMemo(
@@ -238,22 +299,7 @@ const ChartContent = memo(function ChartContent({
                 />
 
                 <Tooltip
-                    contentStyle={{
-                        backgroundColor: 'var(--card-bg)',
-                        border: '1px solid var(--card-border)',
-                        borderRadius: '8px',
-                        color: 'var(--text-primary)',
-                    }}
-                    formatter={(value) => {
-                        if (value === null || value === undefined) return null
-                        const numValue = Number(value)
-                        if (isNaN(numValue)) return null
-                        return [
-                            `${numValue >= 0 ? '+' : ''}${numValue.toFixed(2)}%`,
-                            '涨跌幅'
-                        ]
-                    }}
-                    labelFormatter={(label) => `时间: ${label}`}
+                    content={<OfficialCloseTooltip />}
                 />
 
                 {/* Morning Session Line (09:30 - 11:30) */}
@@ -279,6 +325,18 @@ const ChartContent = memo(function ChartContent({
                     connectNulls={false}
                     activeDot={{ r: 4, strokeWidth: 2, fill: 'var(--background)' }}
                 />
+
+                {officialClose?.display_status === 'ready' && officialClose.daily_return && (
+                    <ReferenceDot
+                        x="15:00"
+                        y={parseFloat(officialClose.daily_return)}
+                        r={6}
+                        fill="var(--background)"
+                        stroke="var(--accent-primary)"
+                        strokeWidth={3}
+                        ifOverflow="visible"
+                    />
+                )}
             </ComposedChart>
         </ResponsiveContainer>
     )
@@ -295,6 +353,7 @@ export function IntradayChart({
     isCallAuction = false,
     displayDate,
     isHistorical = false,
+    officialClose,
     className
 }: IntradayChartProps) {
     const { isTrading } = useMarketTradingState()
@@ -306,12 +365,12 @@ export function IntradayChart({
 
         // If we have real data, merge it in
         if (timeSeries.length > 0) {
-            const merged = mergeDataIntoTemplate(template, timeSeries)
+            const merged = mergeDataIntoTemplate(template, timeSeries, officialClose)
             return { chartData: merged, hasData: true }
         }
 
-        return { chartData: template, hasData: false }
-    }, [timeSeries])
+        return { chartData: mergeDataIntoTemplate(template, [], officialClose), hasData: false }
+    }, [officialClose, timeSeries])
 
     // Determine overall trend direction
     const isPositive = useMemo(() => {
@@ -380,6 +439,11 @@ export function IntradayChart({
                             {formattedDate}
                         </span>
                     )}
+                    {officialClose?.display_status === 'ready' && officialClose.date && (
+                        <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-200">
+                            官方收盘：{formatPercent(officialClose.daily_return).text}
+                        </span>
+                    )}
                 </div>
                 <div className="flex items-center gap-2 text-xs text-theme-muted">
                     {isCallAuction ? (
@@ -412,6 +476,7 @@ export function IntradayChart({
                         chartData={chartData}
                         isPositive={isPositive}
                         yDomain={yDomain}
+                        officialClose={officialClose}
                     />
                 )}
             </div>

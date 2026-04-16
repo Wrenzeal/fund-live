@@ -99,3 +99,54 @@ func TestOfficialNAVSyncServiceSkipsImmediateSyncOnWeekend(t *testing.T) {
 		t.Fatalf("shouldSyncImmediately() = true, want false on weekend")
 	}
 }
+
+func TestOfficialNAVSyncServiceBackfillsHoldingConfirmationWhenHistoryExists(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewOfficialNAVSyncService(fundRepo, userRepo)
+
+	if err := userRepo.SaveFundHolding(context.Background(), &domain.UserFundHolding{
+		ID:       "ufh_1",
+		UserID:   "user-1",
+		FundID:   "005827",
+		Amount:   decimal.RequireFromString("1000"),
+		AsOfDate: "2026-03-31",
+	}); err != nil {
+		t.Fatalf("SaveFundHolding() error = %v", err)
+	}
+	if err := fundRepo.SaveFundHistory(context.Background(), &domain.FundHistory{
+		FundID:      "005827",
+		Date:        "2026-03-31",
+		NetAssetVal: decimal.RequireFromString("2.0000"),
+		AccumVal:    decimal.RequireFromString("2.0000"),
+		DailyReturn: decimal.RequireFromString("1.0000"),
+		CreatedAt:   time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFundHistory() error = %v", err)
+	}
+
+	backfilledCount, err := service.backfillHoldingConfirmations(context.Background())
+	if err != nil {
+		t.Fatalf("backfillHoldingConfirmations() error = %v", err)
+	}
+	if backfilledCount != 1 {
+		t.Fatalf("backfilledCount = %d, want 1", backfilledCount)
+	}
+
+	holdings, err := userRepo.ListFundHoldings(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("ListFundHoldings() error = %v", err)
+	}
+	if len(holdings) != 1 {
+		t.Fatalf("holdings len = %d, want 1", len(holdings))
+	}
+	if holdings[0].ConfirmedNavDate != "2026-03-31" {
+		t.Fatalf("confirmed nav date = %s, want 2026-03-31", holdings[0].ConfirmedNavDate)
+	}
+	if holdings[0].ConfirmedNav.String() != "2" {
+		t.Fatalf("confirmed nav = %s, want 2", holdings[0].ConfirmedNav.String())
+	}
+	if holdings[0].Shares.String() != "500" {
+		t.Fatalf("shares = %s, want 500", holdings[0].Shares.String())
+	}
+}

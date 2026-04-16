@@ -64,11 +64,41 @@ function resolveTradeTimingFromServerClock(currentTime: Date) {
   return beijingTime >= '15:00' ? 'after_close' : 'before_close'
 }
 
+function formatSummaryMoney(value?: string) {
+  if (!value) {
+    return '--'
+  }
+
+  const parsed = Number.parseFloat(value)
+  if (Number.isNaN(parsed)) {
+    return '--'
+  }
+
+  return new Intl.NumberFormat('zh-CN', {
+    style: 'currency',
+    currency: 'CNY',
+    maximumFractionDigits: 2,
+  }).format(parsed)
+}
+
+function formatSummaryPercent(value?: string) {
+  if (!value) {
+    return '--'
+  }
+
+  const parsed = Number.parseFloat(value)
+  if (Number.isNaN(parsed)) {
+    return '--'
+  }
+
+  return `${parsed >= 0 ? '+' : ''}${parsed.toFixed(2)}%`
+}
+
 export default function HoldingsPage() {
   const router = useRouter()
   const { user, isLoading } = useCurrentUser()
   const marketStatus = useMarketStatus()
-  const { holdings, seedDemoData, addHolding, removeHolding } = useUserPortfolio(user?.id ?? null)
+  const { holdings, holdingSummary, seedDemoData, addHolding, removeHolding } = useUserPortfolio(user?.id ?? null)
   const [query, setQuery] = useState('')
   const [selectedFundID, setSelectedFundID] = useState('')
   const [selectedFundName, setSelectedFundName] = useState('')
@@ -266,7 +296,7 @@ export default function HoldingsPage() {
 
   if (isLoading) {
     return (
-      <AccountAreaShell title="持仓明细" description="按基金记录你的持仓金额，并实时查看预估涨跌额。">
+      <AccountAreaShell title="持仓明细" description="记录持仓本金，并在官方净值同步后查看真实市值与今日盈亏。">
         <div className="glass h-64 rounded-[32px] border border-[var(--card-border)]" />
       </AccountAreaShell>
     )
@@ -274,7 +304,7 @@ export default function HoldingsPage() {
 
   if (!user) {
     return (
-      <AccountAreaShell title="持仓明细" description="按基金记录你的持仓金额，并实时查看预估涨跌额。">
+      <AccountAreaShell title="持仓明细" description="记录持仓本金，并在官方净值同步后查看真实市值与今日盈亏。">
         <div className="glass rounded-[32px] border border-[var(--card-border)] p-8 text-center">
           <div className="mb-3 text-2xl font-bold text-theme-primary">登录后可查看持仓明细</div>
           <p className="mx-auto max-w-xl text-sm leading-6 text-theme-secondary">
@@ -294,7 +324,7 @@ export default function HoldingsPage() {
   }
 
   return (
-    <AccountAreaShell title="持仓明细" description="记录你的持仓金额、日期与备注，快速看到每只基金的实时预估涨跌额。数据已改为服务端存储。">
+    <AccountAreaShell title="持仓明细" description="记录你的持仓本金、日期与备注，并在官方净值同步后查看每只基金和总仓的真实市值与今日盈亏。">
       <div className="space-y-8">
         {feedback && (
           <div
@@ -332,6 +362,11 @@ export default function HoldingsPage() {
               <div>
                 <div className="text-sm text-theme-muted">持仓总览</div>
                 <div className="mt-1 text-3xl font-black text-theme-primary">{holdings.length} 条持仓记录</div>
+                <div className="mt-2 text-xs text-theme-muted">
+                  {holdingSummary.real_metrics_ready
+                    ? '总仓真实市值与今日盈亏已按最新官方净值计算。'
+                    : holdingSummary.message || '总仓真实口径会在官方净值和确认份额齐备后展示。'}
+                </div>
               </div>
 
               {holdings.length === 0 && (
@@ -355,6 +390,49 @@ export default function HoldingsPage() {
                   <span className="relative z-10">{isSeedingDemo ? '载入中...' : '载入演示持仓'}</span>
                 </button>
               )}
+            </div>
+
+            <div className="mb-6 grid gap-4 lg:grid-cols-4">
+              {[
+                {
+                  label: '总本金',
+                  value: formatSummaryMoney(holdingSummary.total_principal),
+                  tone: 'text-theme-primary',
+                  note: '按录入持仓本金汇总',
+                },
+                {
+                  label: '总当前市值',
+                  value: holdingSummary.real_metrics_ready ? formatSummaryMoney(holdingSummary.total_current_market_value) : '--',
+                  tone: 'text-theme-primary',
+                  note: holdingSummary.real_metrics_ready ? '基于最新官方净值' : '待真实净值与份额齐备',
+                },
+                {
+                  label: '总今日盈亏',
+                  value: holdingSummary.real_metrics_ready ? formatSummaryMoney(holdingSummary.total_today_profit) : '--',
+                  tone: !holdingSummary.real_metrics_ready
+                    ? 'text-theme-primary'
+                    : Number.parseFloat(holdingSummary.total_today_profit || '0') >= 0
+                      ? 'text-up'
+                      : 'text-down',
+                  note: holdingSummary.real_metrics_ready ? '仅按真实口径统计' : '暂不混入盘中预估',
+                },
+                {
+                  label: '总今日涨跌幅',
+                  value: holdingSummary.real_metrics_ready ? formatSummaryPercent(holdingSummary.total_today_change_percent) : '--',
+                  tone: !holdingSummary.real_metrics_ready
+                    ? 'text-theme-primary'
+                    : Number.parseFloat(holdingSummary.total_today_change_percent || '0') >= 0
+                      ? 'text-up'
+                      : 'text-down',
+                  note: holdingSummary.real_metrics_ready ? '按总仓位加权计算' : `已就绪 ${holdingSummary.real_metrics_ready_count}/${holdingSummary.total_holdings} 条`,
+                },
+              ].map((metric) => (
+                <div key={metric.label} className="rounded-[24px] border border-[var(--card-border)] bg-[var(--card-bg)]/76 p-4">
+                  <div className="text-xs text-theme-muted">{metric.label}</div>
+                  <div className={cn('mt-3 text-2xl font-black', metric.tone)}>{metric.value}</div>
+                  <div className="mt-2 text-xs text-theme-secondary">{metric.note}</div>
+                </div>
+              ))}
             </div>
 
             <div className="space-y-5">
@@ -455,7 +533,7 @@ export default function HoldingsPage() {
                       <div className="mt-1 text-xs text-theme-secondary">{pricingRuleLabel}</div>
                     </div>
                     <p className="mt-2 text-sm leading-6 text-theme-secondary">
-                      当前版本会把交易日期和提交时段一并保存，后端自动计算确认净值日，便于后续收益分析和持仓回溯。
+                      当前版本会把交易日期和提交时段一并保存，后端自动计算确认净值日，并在拿到对应官方净值后补齐份额与真实口径。
                     </p>
                     <button
                       type="button"
@@ -607,7 +685,7 @@ export default function HoldingsPage() {
             <Wallet className="mx-auto h-10 w-10 text-theme-muted" />
             <div className="mt-4 text-xl font-semibold text-theme-primary">还没有持仓记录</div>
             <p className="mt-2 text-sm leading-6 text-theme-secondary">
-              你可以在上方选择基金、录入持仓金额和日期。当前版本会把数据保存到服务端。
+              你可以在上方选择基金、录入持仓金额和日期。当前版本会把数据保存到服务端，并在官方净值同步后展示真实市值与盈亏。
             </p>
           </div>
         ) : (

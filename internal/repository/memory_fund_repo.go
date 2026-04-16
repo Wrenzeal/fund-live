@@ -281,3 +281,23 @@ func (r *MemoryFundRepository) GetLatestFundHistoriesByFundIDs(ctx context.Conte
 	}
 	return result, nil
 }
+
+// GetFundHistoriesByLookupKeys retrieves specific official NAV snapshots from memory.
+func (r *MemoryFundRepository) GetFundHistoriesByLookupKeys(ctx context.Context, keys []domain.FundHistoryLookupKey) (map[domain.FundHistoryLookupKey]*domain.FundHistory, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make(map[domain.FundHistoryLookupKey]*domain.FundHistory, len(keys))
+	for _, key := range keys {
+		records := r.history[key.FundID]
+		for _, record := range records {
+			if record.Date != key.Date {
+				continue
+			}
+			copyRecord := record
+			result[key] = &copyRecord
+			break
+		}
+	}
+	return result, nil
+}

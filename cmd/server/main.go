@@ -178,7 +178,7 @@ func main() {
 			"status":       "ok",
 			"timestamp":    time.Now().Unix(),
 			"service":      "FundLive API",
-			"version":      "2026.4.8",
+			"version":      "2026.4.16",
 			"storage_mode": storageMode,
 		})
 	})

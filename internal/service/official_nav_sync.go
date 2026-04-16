@@ -174,5 +174,53 @@ func (s *OfficialNAVSyncService) SyncOnce(ctx context.Context) error {
 		failureCount.Load(),
 	)
 
+	backfilledCount, backfillErr := s.backfillHoldingConfirmations(ctx)
+	if backfillErr != nil {
+		return backfillErr
+	}
+	if backfilledCount > 0 {
+		log.Printf("🧮 Official NAV sync backfilled %d holding confirmation records", backfilledCount)
+	}
+
 	return nil
+}
+
+func (s *OfficialNAVSyncService) backfillHoldingConfirmations(ctx context.Context) (int, error) {
+	holdings, err := s.fundHoldingRepo.ListFundHoldingsMissingConfirmation(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if len(holdings) == 0 {
+		return 0, nil
+	}
+
+	historiesByKey, err := s.fundRepo.GetFundHistoriesByLookupKeys(ctx, collectHoldingHistoryLookupKeys(holdings))
+	if err != nil {
+		return 0, err
+	}
+
+	backfilledCount := 0
+	for _, holding := range holdings {
+		if !needsHoldingConfirmationData(holding) {
+			continue
+		}
+
+		history := historiesByKey[holdingHistoryLookupKey(holding)]
+		if history == nil {
+			continue
+		}
+
+		updatedHolding := holding
+		if !applyHoldingConfirmationData(&updatedHolding, history) {
+			continue
+		}
+		updatedHolding.UpdatedAt = time.Now()
+
+		if err := s.fundHoldingRepo.SaveFundHolding(ctx, &updatedHolding); err != nil {
+			return backfilledCount, err
+		}
+		backfilledCount++
+	}
+
+	return backfilledCount, nil
 }

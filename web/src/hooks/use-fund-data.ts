@@ -145,12 +145,21 @@ export interface FundEstimate {
     holding_details: HoldingDetail[]
     calculated_at: string
     data_source: string
+    official_close?: OfficialCloseInfo
 }
 
 export interface TimeSeriesPoint {
     timestamp: string
     change_percent: string
     estimate_nav: string
+}
+
+export interface OfficialCloseInfo {
+    display_status: 'hidden' | 'pending' | 'ready'
+    date?: string
+    daily_return?: string
+    net_asset_val?: string
+    message?: string
 }
 
 // 默认 SWR 配置
@@ -334,6 +343,7 @@ export interface TimeSeriesResponse {
     is_historical: boolean
     session: 'pre_market' | 'morning' | 'lunch_break' | 'afternoon' | 'after_hours' | 'weekend' | 'holiday'
     last_trading_day: string
+    official_close?: OfficialCloseInfo
 }
 
 /**
@@ -395,6 +405,7 @@ export function useTimeSeries(fundId: string | null) {
         isHistorical: payload?.is_historical || false,
         session: payload?.session || 'after_hours',
         lastTradingDay: payload?.last_trading_day || '',
+        officialClose: payload?.official_close,
         isLoading,
         isError: !!error,
         isTrading,

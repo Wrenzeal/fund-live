@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/RomaticDOG/fund/internal/domain"
+	"github.com/shopspring/decimal"
 )
 
 // MemoryUserRepository stores user-related data in memory.
@@ -374,6 +375,22 @@ func (r *MemoryUserRepository) ListFundHoldings(ctx context.Context, userID stri
 	result := make([]domain.UserFundHolding, 0, len(holdingMap))
 	for _, holding := range holdingMap {
 		result = append(result, holding)
+	}
+	return result, nil
+}
+
+func (r *MemoryUserRepository) ListFundHoldingsMissingConfirmation(ctx context.Context) ([]domain.UserFundHolding, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make([]domain.UserFundHolding, 0)
+	for _, holdingMap := range r.fundHoldings {
+		for _, holding := range holdingMap {
+			if holding.Shares.GreaterThan(decimal.Zero) && holding.ConfirmedNav.GreaterThan(decimal.Zero) && holding.ConfirmedNavDate != "" {
+				continue
+			}
+			result = append(result, holding)
+		}
 	}
 	return result, nil
 }

@@ -12,7 +12,7 @@ type UserPreferenceService interface {
 	DeleteWatchlistGroup(ctx context.Context, userID, groupID string) error
 	AddWatchlistFund(ctx context.Context, userID, groupID, fundID string) error
 	RemoveWatchlistFund(ctx context.Context, userID, groupID, fundID string) error
-	ListFundHoldings(ctx context.Context, userID string) ([]UserFundHoldingDetail, error)
+	ListFundHoldings(ctx context.Context, userID string) (*UserFundHoldingList, error)
 	CreateFundHolding(ctx context.Context, userID, fundID, amount, tradeAt, note string) (*UserFundHoldingDetail, error)
 	DeleteFundHolding(ctx context.Context, userID, holdingID string) error
 	GetHoldingOverrideSet(ctx context.Context, userID, fundID string) (*UserHoldingOverrideSet, error)

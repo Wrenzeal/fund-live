@@ -24,6 +24,8 @@ export function EstimateCard({
     lastUpdated,
     className
 }: EstimateCardProps) {
+    const officialClose = estimate?.official_close
+    const officialCloseChangeInfo = useMemo(() => formatPercent(officialClose?.daily_return), [officialClose?.daily_return])
 
     const changeInfo = useMemo(() =>
         isCallAuction
@@ -135,6 +137,33 @@ export function EstimateCard({
                         </>
                     )}
                 </div>
+
+                {!isCallAuction && officialClose?.display_status === 'pending' && (
+                    <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                        {officialClose.message || '真实涨跌情况稍后更新'}
+                    </div>
+                )}
+
+                {!isCallAuction && officialClose?.display_status === 'ready' && (
+                    <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3">
+                        <div className="text-xs tracking-[0.18em] text-theme-muted">
+                            {officialClose.date ? `${officialClose.date} 官方收盘结果` : '官方收盘结果'}
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+                            <div className={cn(
+                                'text-2xl font-bold',
+                                officialCloseChangeInfo.isPositive ? 'text-up' : 'text-down'
+                            )}>
+                                {officialCloseChangeInfo.text}
+                            </div>
+                            {officialClose.net_asset_val && (
+                                <div className="text-sm text-theme-secondary">
+                                    官方净值：{formatCurrency(officialClose.net_asset_val)}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     )

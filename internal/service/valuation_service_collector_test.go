@@ -64,6 +64,10 @@ func (r *countingCollectorFundRepository) GetLatestFundHistoriesByFundIDs(ctx co
 	return map[string]*domain.FundHistory{}, nil
 }
 
+func (r *countingCollectorFundRepository) GetFundHistoriesByLookupKeys(ctx context.Context, keys []domain.FundHistoryLookupKey) (map[domain.FundHistoryLookupKey]*domain.FundHistory, error) {
+	return map[domain.FundHistoryLookupKey]*domain.FundHistory{}, nil
+}
+
 type noopQuoteProvider struct{}
 
 func (noopQuoteProvider) GetRealTimeQuotes(ctx context.Context, stockCodes []string) (map[string]domain.StockQuote, error) {

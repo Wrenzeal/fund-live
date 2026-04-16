@@ -97,3 +97,9 @@ type FundHistory struct {
 	DailyReturn decimal.Decimal `json:"daily_return"`
 	CreatedAt   time.Time       `json:"created_at"`
 }
+
+// FundHistoryLookupKey identifies a single official NAV snapshot.
+type FundHistoryLookupKey struct {
+	FundID string
+	Date   string
+}
