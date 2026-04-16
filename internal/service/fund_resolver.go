@@ -2,13 +2,16 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,7 +20,12 @@ import (
 	"gorm.io/gorm"
 )
 
-const defaultFailedMappingRetryCooldown = 12 * time.Hour
+const defaultFailedMappingRetryCooldown = 30 * time.Minute
+
+var (
+	relatedETFLinkPattern = regexp.MustCompile(`href="https?://fund\.eastmoney\.com/(\d{6})\.html">查看相关ETF`)
+	trackingTargetPattern = regexp.MustCompile(`跟踪标的：</a>\s*([^|<]+)`)
+)
 
 type fundMappingStore interface {
 	GetByFeederCode(ctx context.Context, feederCode string) (*database.FundMapping, error)
@@ -72,23 +80,25 @@ func (s *gormFundMappingStore) Save(ctx context.Context, mapping *database.FundM
 // It keeps a persistent mapping and uses deterministic Eastmoney search instead
 // of AI so runtime behavior stays predictable.
 type FundResolver struct {
-	mappingStore  fundMappingStore
-	fundRepo      domain.FundRepository
-	dataLoader    *FundDataLoader
-	searchByQuery func(ctx context.Context, query string) ([]eastmoneySearchResult, error)
-	now           func() time.Time
-	retryCooldown time.Duration
+	mappingStore    fundMappingStore
+	fundRepo        domain.FundRepository
+	dataLoader      *FundDataLoader
+	searchByQuery   func(ctx context.Context, query string) ([]eastmoneySearchResult, error)
+	loadDetailHints func(ctx context.Context, fundCode string) (*fundDetailResolutionHints, error)
+	now             func() time.Time
+	retryCooldown   time.Duration
 }
 
 // NewFundResolver creates a new fund resolver.
 func NewFundResolver(db *gorm.DB, fundRepo domain.FundRepository) *FundResolver {
 	return &FundResolver{
-		mappingStore:  &gormFundMappingStore{db: db},
-		fundRepo:      fundRepo,
-		dataLoader:    NewFundDataLoader(fundRepo),
-		searchByQuery: searchFundsByKeyword,
-		now:           time.Now,
-		retryCooldown: defaultFailedMappingRetryCooldown,
+		mappingStore:    &gormFundMappingStore{db: db},
+		fundRepo:        fundRepo,
+		dataLoader:      NewFundDataLoader(fundRepo),
+		searchByQuery:   searchFundsByKeyword,
+		loadDetailHints: fetchFundDetailResolutionHints,
+		now:             time.Now,
+		retryCooldown:   defaultFailedMappingRetryCooldown,
 	}
 }
 
@@ -114,11 +124,10 @@ func (r *FundResolver) GetHoldingsWithFallback(ctx context.Context, fundID strin
 		return holdings, fundID, nil
 	}
 
-	if !IsFeederFund(fundName) {
-		return nil, fundID, nil
+	allowSearchFallback := IsFeederFund(fundName)
+	if allowSearchFallback {
+		log.Printf("🔍 Fund %s (%s) is a feeder fund with no direct holdings, attempting to resolve target ETF...", fundID, fundName)
 	}
-
-	log.Printf("🔍 Fund %s (%s) is a feeder fund with no direct holdings, attempting to resolve target ETF...", fundID, fundName)
 
 	cachedMapping, err := r.getCachedMapping(ctx, fundID)
 	if err != nil {
@@ -128,13 +137,40 @@ func (r *FundResolver) GetHoldingsWithFallback(ctx context.Context, fundID strin
 	if cachedMapping != nil && cachedMapping.IsResolved && cachedMapping.TargetCode != "" {
 		targetCode := cachedMapping.TargetCode
 		log.Printf("✅ Found existing mapping: %s -> %s", fundID, targetCode)
-		holdings, err := r.fundRepo.GetFundHoldings(ctx, targetCode)
+		holdings, err := r.loadTargetHoldingsWithFallback(ctx, targetCode)
 		if err != nil {
 			return nil, fundID, fmt.Errorf("failed to get holdings for target ETF %s: %w", targetCode, err)
 		}
 		if len(holdings) > 0 {
 			return holdings, targetCode, nil
 		}
+		log.Printf("⚠️ Cached target ETF %s has no holdings, will fallback to direct quote", targetCode)
+		return nil, targetCode, nil
+	}
+
+	detailHints, err := r.fetchResolutionHints(ctx, fundID)
+	if err != nil {
+		log.Printf("⚠️ Failed to load fund detail hints for %s: %v", fundID, err)
+	}
+	if detailHints != nil && detailHints.RelatedETFCode != "" && detailHints.RelatedETFCode != fundID {
+		targetCode := detailHints.RelatedETFCode
+		targetName := r.lookupTargetFundName(ctx, targetCode)
+		r.saveMapping(ctx, fundID, fundName, targetCode, targetName, "")
+
+		holdings, err := r.loadTargetHoldingsWithFallback(ctx, targetCode)
+		if err != nil {
+			return nil, fundID, fmt.Errorf("failed to get holdings for target ETF %s: %w", targetCode, err)
+		}
+		if len(holdings) > 0 {
+			return holdings, targetCode, nil
+		}
+
+		log.Printf("⚠️ Target ETF %s has no holdings, will fallback to direct quote", targetCode)
+		return nil, targetCode, nil
+	}
+
+	if !allowSearchFallback {
+		return nil, fundID, nil
 	}
 
 	if cachedMapping != nil && !cachedMapping.IsResolved && !r.shouldRetryFailedMapping(cachedMapping) {
@@ -142,7 +178,7 @@ func (r *FundResolver) GetHoldingsWithFallback(ctx context.Context, fundID strin
 		return nil, fundID, fmt.Errorf("target ETF resolution temporarily skipped after recent failure")
 	}
 
-	targetCode, err := r.resolveAndSaveMapping(ctx, fundID, fundName)
+	targetCode, err := r.resolveAndSaveMapping(ctx, fundID, fundName, detailHints)
 	if err != nil {
 		return nil, fundID, fmt.Errorf("failed to resolve target ETF: %w", err)
 	}
@@ -150,16 +186,7 @@ func (r *FundResolver) GetHoldingsWithFallback(ctx context.Context, fundID strin
 		return nil, fundID, fmt.Errorf("could not find target ETF for feeder fund: %s", fundName)
 	}
 
-	holdings, err = r.fundRepo.GetFundHoldings(ctx, targetCode)
-	if (err != nil || len(holdings) == 0) && r.dataLoader != nil {
-		_, cachedHoldings, cached := r.dataLoader.PeekCachedFundData(targetCode)
-		if cached && len(cachedHoldings) > 0 {
-			holdings = cachedHoldings
-			err = nil
-		} else {
-			r.dataLoader.ScheduleEnsureFundData(targetCode)
-		}
-	}
+	holdings, err = r.loadTargetHoldingsWithFallback(ctx, targetCode)
 
 	// Some target ETFs do not expose stock holdings. The caller can then fall back to direct ETF quotes.
 	if err != nil || len(holdings) == 0 {
@@ -199,20 +226,20 @@ func (r *FundResolver) shouldRetryFailedMapping(mapping *database.FundMapping) b
 }
 
 // resolveAndSaveMapping resolves the target ETF via deterministic Eastmoney search and stores the mapping.
-func (r *FundResolver) resolveAndSaveMapping(ctx context.Context, feederCode, feederName string) (string, error) {
-	targetCode, err := r.resolveBySearch(ctx, feederCode, feederName)
+func (r *FundResolver) resolveAndSaveMapping(ctx context.Context, feederCode, feederName string, detailHints *fundDetailResolutionHints) (string, error) {
+	targetCode, err := r.resolveBySearch(ctx, feederCode, feederName, detailHints)
 	if err != nil {
-		r.saveMapping(ctx, feederCode, feederName, "", err.Error())
+		r.saveMapping(ctx, feederCode, feederName, "", "", err.Error())
 		return "", err
 	}
 
-	r.saveMapping(ctx, feederCode, feederName, targetCode, "")
+	r.saveMapping(ctx, feederCode, feederName, targetCode, r.lookupTargetFundName(ctx, targetCode), "")
 	log.Printf("✅ Resolved and saved mapping via search: %s -> %s", feederCode, targetCode)
 	return targetCode, nil
 }
 
-func (r *FundResolver) resolveBySearch(ctx context.Context, feederCode, feederName string) (string, error) {
-	queries := buildResolverQueries(feederName)
+func (r *FundResolver) resolveBySearch(ctx context.Context, feederCode, feederName string, detailHints *fundDetailResolutionHints) (string, error) {
+	queries := buildResolverQueries(feederName, detailHints)
 	searchFunc := r.searchByQuery
 	if searchFunc == nil {
 		searchFunc = searchFundsByKeyword
@@ -225,6 +252,9 @@ func (r *FundResolver) resolveBySearch(ctx context.Context, feederCode, feederNa
 		for _, candidate := range results {
 			name := normalizeFundName(candidate.Name)
 			if candidate.Code == feederCode {
+				continue
+			}
+			if !isStandardFundCode(candidate.Code) {
 				continue
 			}
 			if strings.Contains(name, "联接") {
@@ -280,7 +310,39 @@ func searchFundsByKeyword(ctx context.Context, query string) ([]eastmoneySearchR
 	return parsed.Datas, nil
 }
 
-func buildResolverQueries(feederName string) []string {
+type fundDetailResolutionHints struct {
+	RelatedETFCode string
+	TrackingTarget string
+}
+
+func fetchFundDetailResolutionHints(ctx context.Context, fundCode string) (*fundDetailResolutionHints, error) {
+	pageURL := fmt.Sprintf("https://fund.eastmoney.com/%s.html", fundCode)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Referer", "http://fund.eastmoney.com/")
+
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("detail page returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	body = bytes.TrimPrefix(body, []byte{0xEF, 0xBB, 0xBF})
+	return parseFundDetailResolutionHintsHTML(string(body)), nil
+}
+
+func buildResolverQueries(feederName string, detailHints *fundDetailResolutionHints) []string {
 	base := normalizeFundName(feederName)
 	if idx := strings.Index(base, "联接"); idx > 0 {
 		base = base[:idx]
@@ -294,6 +356,12 @@ func buildResolverQueries(feederName string) []string {
 	queries := []string{base}
 	if !strings.Contains(strings.ToUpper(base), "ETF") {
 		queries = append(queries, base+"ETF")
+	}
+	if detailHints != nil {
+		trackingTarget := normalizeFundName(detailHints.TrackingTarget)
+		if trackingTarget != "" {
+			queries = append(queries, trackingTarget, trackingTarget+"ETF")
+		}
 	}
 
 	seen := make(map[string]struct{})
@@ -317,8 +385,64 @@ func normalizeFundName(name string) string {
 	return replacer.Replace(strings.TrimSpace(name))
 }
 
+func isStandardFundCode(code string) bool {
+	if len(code) != 6 {
+		return false
+	}
+	for _, ch := range code {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func parseFundDetailResolutionHintsHTML(text string) *fundDetailResolutionHints {
+	hints := &fundDetailResolutionHints{}
+	if matches := relatedETFLinkPattern.FindStringSubmatch(text); len(matches) == 2 {
+		hints.RelatedETFCode = strings.TrimSpace(matches[1])
+	}
+	if matches := trackingTargetPattern.FindStringSubmatch(text); len(matches) == 2 {
+		hints.TrackingTarget = strings.TrimSpace(html.UnescapeString(matches[1]))
+	}
+	if hints.RelatedETFCode == "" && hints.TrackingTarget == "" {
+		return nil
+	}
+	return hints
+}
+
+func (r *FundResolver) fetchResolutionHints(ctx context.Context, fundCode string) (*fundDetailResolutionHints, error) {
+	if r.loadDetailHints == nil {
+		return nil, nil
+	}
+	return r.loadDetailHints(ctx, fundCode)
+}
+
+func (r *FundResolver) loadTargetHoldingsWithFallback(ctx context.Context, targetCode string) ([]domain.StockHolding, error) {
+	holdings, err := r.fundRepo.GetFundHoldings(ctx, targetCode)
+	if (err != nil || len(holdings) == 0) && r.dataLoader != nil {
+		_, cachedHoldings, cached := r.dataLoader.PeekCachedFundData(targetCode)
+		if cached && len(cachedHoldings) > 0 {
+			return cachedHoldings, nil
+		}
+		r.dataLoader.ScheduleEnsureFundData(targetCode)
+	}
+	return holdings, err
+}
+
+func (r *FundResolver) lookupTargetFundName(ctx context.Context, targetCode string) string {
+	if r == nil || r.fundRepo == nil || targetCode == "" {
+		return ""
+	}
+	targetFund, err := r.fundRepo.GetFundByID(ctx, targetCode)
+	if err != nil || targetFund == nil {
+		return ""
+	}
+	return strings.TrimSpace(targetFund.Name)
+}
+
 // saveMapping saves a fund mapping to the database.
-func (r *FundResolver) saveMapping(ctx context.Context, feederCode, feederName, targetCode, errorMsg string) {
+func (r *FundResolver) saveMapping(ctx context.Context, feederCode, feederName, targetCode, targetName, errorMsg string) {
 	if r.mappingStore == nil {
 		return
 	}
@@ -327,6 +451,7 @@ func (r *FundResolver) saveMapping(ctx context.Context, feederCode, feederName, 
 		FeederCode: feederCode,
 		FeederName: feederName,
 		TargetCode: targetCode,
+		TargetName: targetName,
 		IsResolved: targetCode != "" && errorMsg == "",
 	}
 

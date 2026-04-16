@@ -77,6 +77,65 @@ func TestFundResolverSkipsSearchWhenRecentFailureIsCached(t *testing.T) {
 	}
 }
 
+func TestFundResolverUsesRelatedETFLinkBeforeSearchAndBypassesCooldown(t *testing.T) {
+	now := time.Date(2026, 4, 16, 12, 0, 0, 0, time.UTC)
+	store := &stubFundMappingStore{
+		mapping: &database.FundMapping{
+			FeederCode:   "010524",
+			FeederName:   "银华中证5G通信主题ETF联接C",
+			IsResolved:   false,
+			ResolveError: "search fallback could not find target ETF",
+			UpdatedAt:    now.Add(-10 * time.Minute),
+		},
+	}
+	repo := repository.NewMemoryFundRepository()
+	if err := repo.SaveHoldings(context.Background(), "159994", []domain.StockHolding{
+		{
+			StockCode:    "300308",
+			StockName:    "中际旭创",
+			Exchange:     domain.ExchangeSZ,
+			HoldingRatio: decimal.RequireFromString("8.80"),
+		},
+	}); err != nil {
+		t.Fatalf("SaveHoldings() error = %v", err)
+	}
+
+	searchCalls := 0
+	resolver := &FundResolver{
+		mappingStore: store,
+		fundRepo:     repo,
+		searchByQuery: func(ctx context.Context, query string) ([]eastmoneySearchResult, error) {
+			searchCalls++
+			return []eastmoneySearchResult{{Code: "515050", Name: "华夏中证5G通信主题ETF"}}, nil
+		},
+		loadDetailHints: func(ctx context.Context, fundCode string) (*fundDetailResolutionHints, error) {
+			return &fundDetailResolutionHints{
+				RelatedETFCode: "159994",
+				TrackingTarget: "中证5G通信主题指数",
+			}, nil
+		},
+		now:           func() time.Time { return now },
+		retryCooldown: 30 * time.Minute,
+	}
+
+	holdings, source, err := resolver.GetHoldingsWithFallback(context.Background(), "010524", "银华中证5G通信主题ETF联接C")
+	if err != nil {
+		t.Fatalf("GetHoldingsWithFallback() error = %v", err)
+	}
+	if searchCalls != 0 {
+		t.Fatalf("search calls = %d, want 0", searchCalls)
+	}
+	if source != "159994" {
+		t.Fatalf("source = %s, want 159994", source)
+	}
+	if len(holdings) != 1 {
+		t.Fatalf("holdings len = %d, want 1", len(holdings))
+	}
+	if store.saved == nil || !store.saved.IsResolved || store.saved.TargetCode != "159994" {
+		t.Fatalf("saved mapping = %+v", store.saved)
+	}
+}
+
 func TestFundResolverRetriesAfterFailureCooldownExpires(t *testing.T) {
 	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
 	store := &stubFundMappingStore{
@@ -130,5 +189,51 @@ func TestFundResolverRetriesAfterFailureCooldownExpires(t *testing.T) {
 	}
 	if !store.saved.IsResolved || store.saved.TargetCode != "510300" {
 		t.Fatalf("saved mapping = %+v", store.saved)
+	}
+}
+
+func TestFundResolverReturnsTargetCodeWhenCachedResolvedTargetHasNoHoldings(t *testing.T) {
+	store := &stubFundMappingStore{
+		mapping: &database.FundMapping{
+			FeederCode: "010524",
+			FeederName: "银华中证5G通信主题ETF联接C",
+			TargetCode: "159994",
+			IsResolved: true,
+		},
+	}
+	repo := repository.NewMemoryFundRepository()
+	resolver := &FundResolver{
+		mappingStore: store,
+		fundRepo:     repo,
+		loadDetailHints: func(ctx context.Context, fundCode string) (*fundDetailResolutionHints, error) {
+			t.Fatalf("detail hints should not be loaded when resolved cache exists")
+			return nil, nil
+		},
+	}
+
+	holdings, source, err := resolver.GetHoldingsWithFallback(context.Background(), "010524", "银华中证5G通信主题ETF联接C")
+	if err != nil {
+		t.Fatalf("GetHoldingsWithFallback() error = %v", err)
+	}
+	if source != "159994" {
+		t.Fatalf("source = %s, want 159994", source)
+	}
+	if len(holdings) != 0 {
+		t.Fatalf("holdings len = %d, want 0 for direct quote fallback", len(holdings))
+	}
+}
+
+func TestParseFundDetailResolutionHintsHTML(t *testing.T) {
+	html := `银华中证5G通信主题ETF联接C<a style='float: right;' href="http://fund.eastmoney.com/159994.html">查看相关ETF></a><tr><td class='specialData'><a href="http://fundf10.eastmoney.com/tsdata_010524.html">跟踪标的：</a>中证5G通信主题指数 | <a href="http://fundf10.eastmoney.com/tsdata_010524.html">年化跟踪误差：</a>2.81%</td></tr>`
+
+	hints := parseFundDetailResolutionHintsHTML(html)
+	if hints == nil {
+		t.Fatalf("expected hints, got nil")
+	}
+	if hints.RelatedETFCode != "159994" {
+		t.Fatalf("related ETF code = %s, want 159994", hints.RelatedETFCode)
+	}
+	if hints.TrackingTarget != "中证5G通信主题指数" {
+		t.Fatalf("tracking target = %s, want 中证5G通信主题指数", hints.TrackingTarget)
 	}
 }
