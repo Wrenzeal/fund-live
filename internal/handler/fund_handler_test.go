@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -361,6 +362,36 @@ func TestGetEstimateReturnsWarmupStatusForColdFunds(t *testing.T) {
 	}
 	if retryAfter := rec.Header().Get("Retry-After"); retryAfter != "5" {
 		t.Fatalf("Retry-After = %q, want 5", retryAfter)
+	}
+}
+
+func TestGetEstimateReturnsUnsupportedPricingModelForQDIIDetailsFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	handler := &FundHandler{
+		valuationService: stubValuationService{estimateErr: errors.New("qdii details available without live estimate support")},
+	}
+
+	router := gin.New()
+	router.GET("/api/v1/fund/:id/estimate", handler.GetEstimate)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fund/017437/estimate", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", rec.Code)
+	}
+
+	var response struct {
+		Success bool      `json:"success"`
+		Error   *APIError `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Error == nil || response.Error.Code != "UNSUPPORTED_PRICING_MODEL" {
+		t.Fatalf("error = %+v, want UNSUPPORTED_PRICING_MODEL", response.Error)
 	}
 }
 

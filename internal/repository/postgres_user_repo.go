@@ -342,9 +342,13 @@ func (r *PostgresUserRepository) SaveWatchlistGroup(ctx context.Context, group *
 
 func (r *PostgresUserRepository) DeleteWatchlistGroup(ctx context.Context, userID, groupID string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		ownedGroup := tx.
+			Model(&database.UserWatchlistGroup{}).
+			Select("id").
+			Where("id = ? AND user_id = ?", groupID, userID)
+
 		if err := tx.
-			Joins("JOIN tb_user_watchlist_group ON tb_user_watchlist_group.id = tb_user_watchlist_fund.group_id").
-			Where("tb_user_watchlist_group.user_id = ? AND tb_user_watchlist_fund.group_id = ?", userID, groupID).
+			Where("group_id IN (?)", ownedGroup).
 			Delete(&database.UserWatchlistFund{}).Error; err != nil {
 			return fmt.Errorf("failed to delete watchlist group funds: %w", err)
 		}
@@ -420,10 +424,13 @@ func (r *PostgresUserRepository) SaveWatchlistFund(ctx context.Context, fund *do
 }
 
 func (r *PostgresUserRepository) DeleteWatchlistFund(ctx context.Context, userID, groupID, fundID string) error {
+	ownedGroup := r.db.WithContext(ctx).
+		Model(&database.UserWatchlistGroup{}).
+		Select("id").
+		Where("id = ? AND user_id = ?", groupID, userID)
+
 	if err := r.db.WithContext(ctx).
-		Table("tb_user_watchlist_fund").
-		Joins("JOIN tb_user_watchlist_group ON tb_user_watchlist_group.id = tb_user_watchlist_fund.group_id").
-		Where("tb_user_watchlist_group.user_id = ? AND tb_user_watchlist_fund.group_id = ? AND tb_user_watchlist_fund.fund_id = ?", userID, groupID, fundID).
+		Where("group_id IN (?) AND fund_id = ?", ownedGroup, fundID).
 		Delete(&database.UserWatchlistFund{}).Error; err != nil {
 		return fmt.Errorf("failed to delete watchlist fund: %w", err)
 	}

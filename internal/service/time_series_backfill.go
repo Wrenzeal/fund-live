@@ -179,7 +179,7 @@ func (s *ValuationServiceImpl) loadTimeSeriesInputs(ctx context.Context, fundID 
 
 	fund, holdings, warmupScheduled := useCachedFundDataOrScheduleWarmup(s.dataLoader, fundID, fund, holdings)
 
-	if len(holdings) == 0 && s.fundResolver != nil {
+	if !hasEffectiveHoldings(holdings) && s.fundResolver != nil {
 		holdings, holdingsSource, err = s.fundResolver.GetHoldingsWithFallback(ctx, fundID, fund.Name)
 		if err != nil {
 			log.Printf("⚠️ Feeder fund resolution for time series failed for %s: %v", fundID, err)
@@ -199,7 +199,7 @@ func (s *ValuationServiceImpl) backfillTimeSeries(ctx context.Context, fundID st
 		return nil, ErrFundDataWarmupInProgress
 	}
 
-	if len(holdings) == 0 {
+	if !hasEffectiveHoldings(holdings) {
 		if holdingsSource != fundID && holdingsSource != "" {
 			return s.buildDirectInstrumentTimeSeries(ctx, fund, holdingsSource, targetDate)
 		}

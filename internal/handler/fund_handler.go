@@ -13,6 +13,7 @@ import (
 	"github.com/RomaticDOG/fund/internal/service"
 	"github.com/RomaticDOG/fund/internal/trading"
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 )
 
 type transientFundDataLoader interface {
@@ -147,6 +148,9 @@ func (h *FundHandler) GetEstimate(c *gin.Context) {
 			statusCode = http.StatusServiceUnavailable
 			errorCode = "FUND_DATA_WARMING"
 			c.Header("Retry-After", "5")
+		} else if strings.Contains(err.Error(), "qdii details available without live estimate support") {
+			statusCode = http.StatusUnprocessableEntity
+			errorCode = "UNSUPPORTED_PRICING_MODEL"
 		} else if strings.Contains(err.Error(), "pricing profile not configured") || strings.Contains(err.Error(), "unsupported pricing method") {
 			statusCode = http.StatusUnprocessableEntity
 			errorCode = "UNSUPPORTED_PRICING_MODEL"
@@ -248,7 +252,7 @@ func (h *FundHandler) GetHoldings(c *gin.Context) {
 	}
 	dataSource := ""
 
-	if len(holdings) == 0 && h.holdingsResolver != nil {
+	if !hasEffectiveFundHoldings(holdings) && h.holdingsResolver != nil {
 		resolvedHoldings, holdingsSource, resolveErr := h.holdingsResolver.GetHoldingsWithFallback(c.Request.Context(), fundID, fund.Name)
 		if resolveErr != nil {
 			log.Printf("⚠️ Holdings resolver fallback failed for %s: %v", fundID, resolveErr)
@@ -479,7 +483,21 @@ func shouldHydrateFundProfile(fund *domain.Fund) bool {
 }
 
 func shouldHydrateFundHoldings(fund *domain.Fund, holdings []domain.StockHolding) bool {
-	return shouldHydrateFundProfile(fund) || len(holdings) == 0
+	return shouldHydrateFundProfile(fund) || !hasEffectiveFundHoldings(holdings)
+}
+
+func hasEffectiveFundHoldings(holdings []domain.StockHolding) bool {
+	if len(holdings) == 0 {
+		return false
+	}
+
+	totalRatio := decimal.Zero
+	for _, holding := range holdings {
+		if holding.HoldingRatio.GreaterThan(decimal.Zero) {
+			totalRatio = totalRatio.Add(holding.HoldingRatio)
+		}
+	}
+	return totalRatio.GreaterThan(decimal.Zero)
 }
 
 func buildResponseMeta(dataSource, cacheStatus string) *APIMeta {

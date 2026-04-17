@@ -272,7 +272,7 @@ func needsRuntimeFundData(fund *domain.Fund, holdings []domain.StockHolding) boo
 	if fund == nil {
 		return true
 	}
-	return fund.NetAssetVal.IsZero() || len(holdings) == 0
+	return fund.NetAssetVal.IsZero() || !hasEffectiveHoldings(holdings)
 }
 
 func useCachedFundDataOrScheduleWarmup(loader *FundDataLoader, fundID string, fund *domain.Fund, holdings []domain.StockHolding) (*domain.Fund, []domain.StockHolding, bool) {

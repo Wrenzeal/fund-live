@@ -120,7 +120,7 @@ func (r *FundResolver) GetHoldingsWithFallback(ctx context.Context, fundID strin
 	if err != nil {
 		return nil, fundID, err
 	}
-	if len(holdings) > 0 {
+	if hasEffectiveHoldings(holdings) {
 		return holdings, fundID, nil
 	}
 
@@ -141,7 +141,7 @@ func (r *FundResolver) GetHoldingsWithFallback(ctx context.Context, fundID strin
 		if err != nil {
 			return nil, fundID, fmt.Errorf("failed to get holdings for target ETF %s: %w", targetCode, err)
 		}
-		if len(holdings) > 0 {
+		if hasEffectiveHoldings(holdings) {
 			return holdings, targetCode, nil
 		}
 		log.Printf("⚠️ Cached target ETF %s has no holdings, will fallback to direct quote", targetCode)
@@ -161,7 +161,7 @@ func (r *FundResolver) GetHoldingsWithFallback(ctx context.Context, fundID strin
 		if err != nil {
 			return nil, fundID, fmt.Errorf("failed to get holdings for target ETF %s: %w", targetCode, err)
 		}
-		if len(holdings) > 0 {
+		if hasEffectiveHoldings(holdings) {
 			return holdings, targetCode, nil
 		}
 
@@ -420,9 +420,9 @@ func (r *FundResolver) fetchResolutionHints(ctx context.Context, fundCode string
 
 func (r *FundResolver) loadTargetHoldingsWithFallback(ctx context.Context, targetCode string) ([]domain.StockHolding, error) {
 	holdings, err := r.fundRepo.GetFundHoldings(ctx, targetCode)
-	if (err != nil || len(holdings) == 0) && r.dataLoader != nil {
+	if (err != nil || !hasEffectiveHoldings(holdings)) && r.dataLoader != nil {
 		_, cachedHoldings, cached := r.dataLoader.PeekCachedFundData(targetCode)
-		if cached && len(cachedHoldings) > 0 {
+		if cached && hasEffectiveHoldings(cachedHoldings) {
 			return cachedHoldings, nil
 		}
 		r.dataLoader.ScheduleEnsureFundData(targetCode)

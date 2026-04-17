@@ -48,6 +48,9 @@ func buildSinaSymbol(stockCode string) string {
 	if len(stockCode) < 1 {
 		return "sz" + stockCode
 	}
+	if isUSQuoteCode(stockCode) {
+		return "gb_" + strings.ToLower(stockCode)
+	}
 	if len(stockCode) == 5 {
 		return "hk" + stockCode
 	}
@@ -123,7 +126,7 @@ func (s *SinaFinanceProvider) parseResponse(body string, stockCodes []string) (m
 
 	// Regex to extract: var hq_str_<symbol>="<data>";
 	// Support sh, sz, bj prefixes
-	re := regexp.MustCompile(`var hq_str_([a-z]{2}\d+)="([^"]*)";`)
+	re := regexp.MustCompile(`var hq_str_([a-z]{2}(?:_[A-Za-z0-9\.\-]+|\d+))="([^"]*)";`)
 	matches := re.FindAllStringSubmatch(body, -1)
 
 	for _, match := range matches {
@@ -151,6 +154,9 @@ func (s *SinaFinanceProvider) parseResponse(body string, stockCodes []string) (m
 			minFields = 6 // At least: name, open, prev_close, current, high, low
 		} else if exchange == "hk" {
 			minFields = 12 // HK quotes have a shorter layout than SH/SZ
+		} else if symbol[:3] == "gb_" {
+			exchange = "us"
+			minFields = 8
 		}
 
 		if len(fields) < minFields {
@@ -159,6 +165,9 @@ func (s *SinaFinanceProvider) parseResponse(body string, stockCodes []string) (m
 
 		// Extract stock code (remove exchange prefix)
 		stockCode := symbol[2:]
+		if exchange == "us" {
+			stockCode = strings.ToUpper(symbol[3:])
+		}
 
 		quote, err := s.parseQuoteByExchange(stockCode, fields, exchange)
 		if err != nil {
@@ -181,8 +190,61 @@ func (s *SinaFinanceProvider) parseQuoteByExchange(stockCode string, fields []st
 	if exchange == "hk" {
 		return s.parseHKQuote(stockCode, fields)
 	}
+	if exchange == "us" {
+		return s.parseUSQuote(stockCode, fields)
+	}
 	// Default: sh, sz stocks
 	return s.parseQuote(stockCode, fields)
+}
+
+// parseUSQuote parses Sina US market quote data (gb_<ticker>).
+func (s *SinaFinanceProvider) parseUSQuote(stockCode string, fields []string) (domain.StockQuote, error) {
+	quote := domain.StockQuote{
+		StockCode: stockCode,
+		StockName: strings.TrimSpace(fields[0]),
+		UpdatedAt: time.Now(),
+	}
+
+	var err error
+	quote.CurrentPrice, err = parseDecimal(fields[1])
+	if err != nil {
+		return quote, err
+	}
+	quote.ChangePercent, _ = parseDecimal(fields[2])
+	quote.ChangeAmount, _ = parseDecimal(fields[4])
+	quote.OpenPrice, _ = parseDecimal(fields[5])
+	quote.HighPrice, _ = parseDecimal(fields[6])
+	quote.LowPrice, _ = parseDecimal(fields[7])
+
+	if len(fields) > 26 {
+		quote.PrevClose, _ = parseDecimal(fields[26])
+	}
+	if quote.PrevClose.IsZero() && !quote.CurrentPrice.IsZero() {
+		quote.PrevClose = quote.CurrentPrice.Sub(quote.ChangeAmount)
+	}
+	if len(fields) > 10 {
+		quote.Volume, _ = parseDecimal(fields[10])
+	}
+	if len(fields) > 30 {
+		quote.Turnover, _ = parseDecimal(fields[30])
+	}
+
+	quote.CurrentPrice = firstNonZeroDecimal(quote.CurrentPrice, quote.OpenPrice, quote.PrevClose)
+	if quote.HighPrice.IsZero() {
+		quote.HighPrice = quote.CurrentPrice
+	}
+	if quote.LowPrice.IsZero() {
+		quote.LowPrice = quote.CurrentPrice
+	}
+	if quote.ChangePercent.IsZero() && !quote.PrevClose.IsZero() {
+		quote.ChangeAmount = quote.CurrentPrice.Sub(quote.PrevClose)
+		quote.ChangePercent = quote.ChangeAmount.Div(quote.PrevClose).Mul(decimal.NewFromInt(100)).Round(4)
+	}
+	if quote.ChangeAmount.IsZero() && !quote.PrevClose.IsZero() {
+		quote.ChangeAmount = quote.CurrentPrice.Sub(quote.PrevClose)
+	}
+
+	return quote, nil
 }
 
 // parseHKQuote parses Hong Kong market quote data.
@@ -394,4 +456,13 @@ func firstNonEmptyString(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func isUSQuoteCode(stockCode string) bool {
+	stockCode = strings.TrimSpace(stockCode)
+	if stockCode == "" {
+		return false
+	}
+	matched, _ := regexp.MatchString(`^[A-Za-z][A-Za-z0-9\.\-]{0,9}$`, stockCode)
+	return matched
 }

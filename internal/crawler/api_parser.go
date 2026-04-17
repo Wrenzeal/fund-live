@@ -165,6 +165,8 @@ func (p *EastmoneyAPIParser) inferFundType(name string) string {
 	nameLower := strings.ToLower(name)
 
 	switch {
+	case strings.Contains(nameLower, "qdii"):
+		return "qdii"
 	case strings.Contains(nameLower, "股票"):
 		return "stock"
 	case strings.Contains(nameLower, "债券") || strings.Contains(nameLower, "债"):
@@ -175,8 +177,6 @@ func (p *EastmoneyAPIParser) inferFundType(name string) string {
 		return "money"
 	case strings.Contains(nameLower, "指数") || strings.Contains(nameLower, "etf"):
 		return "index"
-	case strings.Contains(nameLower, "qdii"):
-		return "qdii"
 	default:
 		return "hybrid"
 	}

@@ -222,8 +222,8 @@ func (s *ValuationServiceImpl) CalculateEstimate(ctx context.Context, fundID str
 
 	fund, holdings, warmupScheduled := useCachedFundDataOrScheduleWarmup(s.dataLoader, fundID, fund, holdings)
 
-	// If no holdings and we have a fund resolver, try feeder fund resolution
-	if len(holdings) == 0 && s.fundResolver != nil {
+	// If no effective holdings and we have a fund resolver, try feeder fund resolution
+	if !hasEffectiveHoldings(holdings) && s.fundResolver != nil {
 		holdings, holdingsSource, err = s.fundResolver.GetHoldingsWithFallback(ctx, fundID, fund.Name)
 		if err != nil {
 			log.Printf("⚠️ Feeder fund resolution failed for %s: %v", fundID, err)
@@ -231,7 +231,7 @@ func (s *ValuationServiceImpl) CalculateEstimate(ctx context.Context, fundID str
 		}
 	}
 
-	if len(holdings) == 0 {
+	if !hasEffectiveHoldings(holdings) {
 		// 特殊情况：如果是联接基金，且已解析出目标 ETF，但该 ETF 无持仓（如黄金ETF、QDII ETF）
 		// 此时直接使用目标 ETF 的实时行情作为预估值
 		quoteSource, _ := s.resolveQuoteProvider(ctx)
@@ -283,6 +283,11 @@ func (s *ValuationServiceImpl) CalculateEstimate(ctx context.Context, fundID str
 	// Step 4: Fetch real-time quotes (with caching)
 	quotes, err := s.fetchQuotesWithCache(ctx, stockCodes)
 	if err != nil {
+		if shouldUseQDIIHoldingDetailsFallback(fund, holdings) {
+			estimate := s.buildQDIIHoldingDetailsEstimate(fund, holdings)
+			s.recordTimeSeriesPoint(fundID, domain.QuoteSourceFromContext(ctx), estimate)
+			return estimate, nil
+		}
 		return nil, fmt.Errorf("failed to fetch quotes: %w", err)
 	}
 
@@ -293,6 +298,12 @@ func (s *ValuationServiceImpl) CalculateEstimate(ctx context.Context, fundID str
 
 	// Step 6: Store time series point for intraday chart
 	s.recordTimeSeriesPoint(fundID, quoteSource, estimate)
+
+	if estimate.TotalHoldRatio.IsZero() && shouldUseQDIIHoldingDetailsFallback(fund, holdings) {
+		fallback := s.buildQDIIHoldingDetailsEstimate(fund, holdings)
+		s.recordTimeSeriesPoint(fundID, domain.QuoteSourceFromContext(ctx), fallback)
+		return fallback, nil
+	}
 
 	return estimate, nil
 }
@@ -402,6 +413,76 @@ func (s *ValuationServiceImpl) calculateWeightedEstimate(
 	source domain.QuoteSource,
 ) *domain.FundEstimate {
 	return buildEstimateSnapshotFromQuotes(fund, holdings, quotes, source, time.Now())
+}
+
+func hasEffectiveHoldings(holdings []domain.StockHolding) bool {
+	if len(holdings) == 0 {
+		return false
+	}
+
+	totalRatio := decimal.Zero
+	for _, holding := range holdings {
+		if holding.HoldingRatio.GreaterThan(decimal.Zero) {
+			totalRatio = totalRatio.Add(holding.HoldingRatio)
+		}
+	}
+	return totalRatio.GreaterThan(decimal.Zero)
+}
+
+func shouldUseQDIIHoldingDetailsFallback(fund *domain.Fund, holdings []domain.StockHolding) bool {
+	if fund == nil || !hasEffectiveHoldings(holdings) {
+		return false
+	}
+	if !isQDIIFundType(fund) {
+		return false
+	}
+
+	for _, holding := range holdings {
+		if holding.Exchange == domain.ExchangeUS {
+			return true
+		}
+	}
+	return false
+}
+
+func isQDIIFundType(fund *domain.Fund) bool {
+	if fund == nil {
+		return false
+	}
+
+	fundType := strings.ToLower(strings.TrimSpace(fund.Type))
+	name := strings.ToLower(strings.TrimSpace(fund.Name))
+	return strings.Contains(fundType, "qdii") || strings.Contains(name, "qdii")
+}
+
+func (s *ValuationServiceImpl) buildQDIIHoldingDetailsEstimate(fund *domain.Fund, holdings []domain.StockHolding) *domain.FundEstimate {
+	details := make([]domain.HoldingDetail, 0, len(holdings))
+	totalHoldRatio := decimal.Zero
+	for _, holding := range holdings {
+		totalHoldRatio = totalHoldRatio.Add(holding.HoldingRatio)
+		details = append(details, domain.HoldingDetail{
+			StockCode:    holding.StockCode,
+			StockName:    holding.StockName,
+			HoldingRatio: holding.HoldingRatio,
+			StockChange:  decimal.Zero,
+			Contribution: decimal.Zero,
+			CurrentPrice: decimal.Zero,
+			PrevClose:    decimal.Zero,
+		})
+	}
+
+	return &domain.FundEstimate{
+		FundID:         fund.ID,
+		FundName:       fund.Name,
+		EstimateNav:    fund.NetAssetVal,
+		PrevNav:        fund.NetAssetVal,
+		ChangePercent:  decimal.Zero,
+		ChangeAmount:   decimal.Zero,
+		TotalHoldRatio: totalHoldRatio,
+		HoldingDetails: details,
+		CalculatedAt:   time.Now(),
+		DataSource:     "QDII持仓详情（盘中估值暂不支持）",
+	}
 }
 
 // makeTimeSeriesKey creates a composite key for time series storage.

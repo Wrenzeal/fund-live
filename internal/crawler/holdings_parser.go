@@ -30,6 +30,8 @@ type HoldingRawData struct {
 	ReportPeriod  string // 报告期
 }
 
+var eastmoneyUnifiedQuoteCodeRe = regexp.MustCompile(`/unify/r/\d+\.([A-Za-z0-9\.\-]+)`)
+
 // ParseHoldingsHTML parses the holdings table from Eastmoney FundArchivesDatas HTML.
 // The response format: var apidata={ content:"<div class='box'>...</div>", aression:"2024-12-31", ... };
 func (p *EastmoneyHoldingsParser) ParseHoldingsHTML(htmlContent string) ([]HoldingRawData, string, error) {
@@ -82,6 +84,11 @@ func (p *EastmoneyHoldingsParser) ParseHoldingsHTML(htmlContent string) ([]Holdi
 				if matches := codeRe.FindStringSubmatch(href); len(matches) > 2 {
 					holding.StockCode = matches[2]
 				}
+				if holding.StockCode == "" {
+					if matches := eastmoneyUnifiedQuoteCodeRe.FindStringSubmatch(href); len(matches) > 1 {
+						holding.StockCode = strings.ToUpper(matches[1])
+					}
+				}
 				// Also check for code pattern in text
 				if holding.StockCode == "" {
 					codeTextRe := regexp.MustCompile(`(\d{6})`)
@@ -89,9 +96,15 @@ func (p *EastmoneyHoldingsParser) ParseHoldingsHTML(htmlContent string) ([]Holdi
 						holding.StockCode = matches[1]
 					}
 				}
+				if holding.StockCode == "" {
+					tickerText := strings.TrimSpace(a.Text())
+					if p.isOverseasTicker(tickerText) {
+						holding.StockCode = strings.ToUpper(tickerText)
+					}
+				}
 				// Get stock name from link text (second link usually has the name)
 				nameText := strings.TrimSpace(a.Text())
-				if holding.StockName == "" && nameText != "" && !p.isStockCode(nameText) {
+				if holding.StockName == "" && nameText != "" && !p.isStockCode(nameText) && !p.isOverseasTicker(nameText) {
 					holding.StockName = nameText
 				}
 			})
@@ -99,6 +112,8 @@ func (p *EastmoneyHoldingsParser) ParseHoldingsHTML(htmlContent string) ([]Holdi
 			// Detect column by content pattern
 			if p.isStockCode(text) && holding.StockCode == "" {
 				holding.StockCode = text
+			} else if p.isOverseasTicker(text) && holding.StockCode == "" {
+				holding.StockCode = strings.ToUpper(text)
 			} else if strings.Contains(text, "%") {
 				// This is a ratio column
 				if holding.HoldingRatio == "" {
@@ -122,6 +137,8 @@ func (p *EastmoneyHoldingsParser) ParseHoldingsHTML(htmlContent string) ([]Holdi
 				code := strings.TrimSpace(cells.Eq(1).Text())
 				if p.isStockCode(code) {
 					holding.StockCode = code
+				} else if p.isOverseasTicker(code) {
+					holding.StockCode = strings.ToUpper(code)
 				}
 			}
 			// Column 2: Stock Name
@@ -188,7 +205,7 @@ func (p *EastmoneyHoldingsParser) parseRowSimple(cells *goquery.Selection, rank 
 		}
 
 		// Get name from link text
-		if holding.StockName == "" && text != "" && !p.isStockCode(text) && len(text) < 20 {
+		if holding.StockName == "" && text != "" && !p.isStockCode(text) && !p.isOverseasTicker(text) && len(text) < 20 {
 			holding.StockName = text
 		}
 	})
@@ -243,6 +260,12 @@ func (p *EastmoneyHoldingsParser) extractReportPeriod(content string) string {
 // isStockCode checks if a string looks like a stock code.
 func (p *EastmoneyHoldingsParser) isStockCode(s string) bool {
 	matched, _ := regexp.MatchString(`^\d{5,6}$`, s)
+	return matched
+}
+
+func (p *EastmoneyHoldingsParser) isOverseasTicker(s string) bool {
+	s = strings.TrimSpace(s)
+	matched, _ := regexp.MatchString(`^[A-Za-z][A-Za-z0-9\.\-]{0,9}$`, s)
 	return matched
 }
 
@@ -302,6 +325,10 @@ func (p *EastmoneyHoldingsParser) ToStockHoldings(rawHoldings []HoldingRawData) 
 			holding.MarketValue = value.Mul(decimal.NewFromInt(10000))
 		}
 
+		if !holding.HoldingRatio.GreaterThan(decimal.Zero) {
+			continue
+		}
+
 		result = append(result, holding)
 	}
 
@@ -312,6 +339,9 @@ func (p *EastmoneyHoldingsParser) ToStockHoldings(rawHoldings []HoldingRawData) 
 func (p *EastmoneyHoldingsParser) inferExchange(code string) domain.Exchange {
 	if len(code) == 5 {
 		return domain.ExchangeHK
+	}
+	if p.isOverseasTicker(code) && !p.isStockCode(code) {
+		return domain.ExchangeUS
 	}
 
 	if len(code) != 6 {

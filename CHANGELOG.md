@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.4.17] - 2026-04-17
+
+### Fixed
+- **自选页删除分组 500 错误**
+  - 修复 PostgreSQL 仓储在删除自选分组时使用 `DELETE ... JOIN` 导致的 500 Internal Server Error
+  - 删除分组链路现改为先按用户拥有的分组子查询删除 `tb_user_watchlist_fund` 记录，再删除 `tb_user_watchlist_group`
+  - 删除单只自选基金的仓储过滤方式也同步调整为子查询，避免同类 PostgreSQL 兼容性问题
+
+- **联接基金被无效自有持仓阻断 fallback**
+  - 当基金自身持仓记录存在、但 `holding_ratio` 全为 `0` 时，系统现在会将其判定为“无有效持仓”
+  - 估值、持仓详情、分时回填与只读预热链路已统一切到“有效持仓”判断，不再因为脏数据阻断目标 ETF fallback
+  - 像 `020465 招商中证半导体产业ETF发起式联接C` 这类基金，现在会正确回退到目标 ETF `561980` 的持仓与估值链路
+
+- **QDII 海外基金详情缺失**
+  - 持仓解析器现已支持从东财 `unify/r/105.NVDA` 这类链接或代码列文本中提取海外 ticker，如 `NVDA`、`AAPL`、`GOOG`
+  - 新增海外交易所标识 `US`，并优先识别 `QDII` 基金类型，避免将 QDII 基金误判成普通股票基金
+  - 零占比持仓现在会在解析阶段直接过滤，减少脏数据污染详情和估值链路
+  - 已补上 QDII 海外实时行情估值链路，`017437` 这类基金现可返回真实持仓涨跌幅与贡献值；仅在海外 quote 全缺失时才回退到降级结果
+
 ## [2026.4.16] - 2026-04-16
 
 ### Changed

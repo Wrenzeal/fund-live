@@ -72,6 +72,9 @@ func buildTencentSymbol(stockCode string) string {
 	if len(stockCode) < 1 {
 		return "sz" + stockCode
 	}
+	if isUSQuoteCode(stockCode) {
+		return "us" + strings.ToUpper(stockCode)
+	}
 	if len(stockCode) == 5 {
 		return "hk" + stockCode
 	}
@@ -90,7 +93,7 @@ func buildTencentSymbol(stockCode string) string {
 func (t *TencentQuoteProvider) parseResponse(body string) (map[string]domain.StockQuote, error) {
 	result := make(map[string]domain.StockQuote)
 
-	re := regexp.MustCompile(`v_([a-z]{2}\d+)="([^"]*)";`)
+	re := regexp.MustCompile(`v_([a-z]{2}[A-Za-z0-9\._]+)="([^"]*)";`)
 	matches := re.FindAllStringSubmatch(body, -1)
 
 	for _, match := range matches {
@@ -103,7 +106,8 @@ func (t *TencentQuoteProvider) parseResponse(body string) (map[string]domain.Sto
 			continue
 		}
 
-		quote, err := t.parseQuote(fields)
+		symbol := match[1]
+		quote, err := t.parseQuote(symbol, fields)
 		if err != nil {
 			continue
 		}
@@ -113,7 +117,11 @@ func (t *TencentQuoteProvider) parseResponse(body string) (map[string]domain.Sto
 	return result, nil
 }
 
-func (t *TencentQuoteProvider) parseQuote(fields []string) (domain.StockQuote, error) {
+func (t *TencentQuoteProvider) parseQuote(symbol string, fields []string) (domain.StockQuote, error) {
+	if strings.HasPrefix(symbol, "us") {
+		return t.parseUSQuote(fields)
+	}
+
 	quote := domain.StockQuote{
 		StockName: strings.TrimSpace(fields[1]),
 		StockCode: strings.TrimSpace(fields[2]),
@@ -157,6 +165,68 @@ func (t *TencentQuoteProvider) parseQuote(fields []string) (domain.StockQuote, e
 
 	if !quote.PrevClose.IsZero() && !quote.CurrentPrice.IsZero() {
 		quote.ChangeAmount = quote.CurrentPrice.Sub(quote.PrevClose)
+		quote.ChangePercent = quote.ChangeAmount.Div(quote.PrevClose).Mul(decimal.NewFromInt(100)).Round(4)
+	}
+
+	return quote, nil
+}
+
+func (t *TencentQuoteProvider) parseUSQuote(fields []string) (domain.StockQuote, error) {
+	stockCode := strings.TrimSpace(fields[2])
+	if idx := strings.Index(stockCode, "."); idx > 0 {
+		stockCode = stockCode[:idx]
+	}
+
+	quote := domain.StockQuote{
+		StockName: strings.TrimSpace(fields[1]),
+		StockCode: strings.ToUpper(stockCode),
+		UpdatedAt: time.Now(),
+	}
+
+	var err error
+	quote.CurrentPrice, err = parseDecimal(fields[3])
+	if err != nil {
+		return quote, err
+	}
+	quote.PrevClose, err = parseDecimal(fields[4])
+	if err != nil {
+		return quote, err
+	}
+	quote.OpenPrice, err = parseDecimal(fields[5])
+	if err != nil {
+		return quote, err
+	}
+
+	if len(fields) > 33 {
+		quote.HighPrice, _ = parseDecimal(fields[33])
+	}
+	if len(fields) > 34 {
+		quote.LowPrice, _ = parseDecimal(fields[34])
+	}
+	if len(fields) > 36 {
+		quote.Volume, _ = parseDecimal(fields[36])
+	}
+	if len(fields) > 37 {
+		quote.Turnover, _ = parseDecimal(fields[37])
+	}
+	if len(fields) > 31 {
+		quote.ChangeAmount, _ = parseDecimal(fields[31])
+	}
+	if len(fields) > 32 {
+		quote.ChangePercent, _ = parseDecimal(fields[32])
+	}
+
+	quote.CurrentPrice = firstNonZeroDecimal(quote.CurrentPrice, quote.OpenPrice, quote.PrevClose)
+	if quote.HighPrice.IsZero() {
+		quote.HighPrice = quote.CurrentPrice
+	}
+	if quote.LowPrice.IsZero() {
+		quote.LowPrice = quote.CurrentPrice
+	}
+	if quote.ChangeAmount.IsZero() && !quote.PrevClose.IsZero() {
+		quote.ChangeAmount = quote.CurrentPrice.Sub(quote.PrevClose)
+	}
+	if quote.ChangePercent.IsZero() && !quote.PrevClose.IsZero() {
 		quote.ChangePercent = quote.ChangeAmount.Div(quote.PrevClose).Mul(decimal.NewFromInt(100)).Round(4)
 	}
 
