@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 新增海外交易所标识 `US`，并优先识别 `QDII` 基金类型，避免将 QDII 基金误判成普通股票基金
   - 零占比持仓现在会在解析阶段直接过滤，减少脏数据污染详情和估值链路
   - 已补上 QDII 海外实时行情估值链路，`017437` 这类基金现可返回真实持仓涨跌幅与贡献值；仅在海外 quote 全缺失时才回退到降级结果
+  - 海外股票现已改为固定独立数据源 `overseas_fixed`，不再受用户 `sina / tencent` 行情源切换影响
 
 ## [2026.4.16] - 2026-04-16
 

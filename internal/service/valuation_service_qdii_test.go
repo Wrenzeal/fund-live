@@ -56,7 +56,10 @@ func TestCalculateEstimateUsesLiveUSQuotesForQDIIFund(t *testing.T) {
 		t.Fatalf("SaveHoldings() error = %v", err)
 	}
 
-	quoteProvider := qdiiQuoteProvider{
+	primaryProvider := qdiiQuoteProvider{
+		quotes: map[string]domain.StockQuote{},
+	}
+	overseasProvider := qdiiQuoteProvider{
 		quotes: map[string]domain.StockQuote{
 			"NVDA": {
 				StockCode:     "NVDA",
@@ -77,14 +80,17 @@ func TestCalculateEstimateUsesLiveUSQuotesForQDIIFund(t *testing.T) {
 		},
 	}
 
-	service := NewValuationService(fundRepo, quoteProvider, noopCacheRepository{})
-	estimate, err := service.CalculateEstimate(context.Background(), "017437")
+	service := NewValuationService(fundRepo, primaryProvider, noopCacheRepository{})
+	service.SetQuoteProvider(domain.QuoteSourceTencent, primaryProvider)
+	service.SetOverseasQuoteProvider(overseasProvider)
+
+	estimate, err := service.CalculateEstimate(domain.WithQuoteSource(context.Background(), domain.QuoteSourceSina), "017437")
 	if err != nil {
 		t.Fatalf("CalculateEstimate() error = %v", err)
 	}
 
-	if estimate.DataSource != "sina" {
-		t.Fatalf("data source = %q, want sina", estimate.DataSource)
+	if estimate.DataSource != "overseas_fixed" {
+		t.Fatalf("data source = %q, want overseas_fixed", estimate.DataSource)
 	}
 	if estimate.TotalHoldRatio.String() != "18.97" {
 		t.Fatalf("total hold ratio = %s, want 18.97", estimate.TotalHoldRatio.String())

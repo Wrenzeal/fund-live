@@ -21,6 +21,7 @@ type ValuationServiceImpl struct {
 	fundRepo           domain.FundRepository
 	quoteProvider      domain.QuoteProvider
 	quoteProviders     map[domain.QuoteSource]domain.QuoteProvider
+	overseasProvider   domain.QuoteProvider
 	defaultQuoteSource domain.QuoteSource
 	cache              domain.CacheRepository
 	dataLoader         *FundDataLoader
@@ -100,6 +101,14 @@ func (s *ValuationServiceImpl) SetQuoteProvider(source domain.QuoteSource, provi
 	if source == s.defaultQuoteSource || s.quoteProvider == nil {
 		s.quoteProvider = provider
 	}
+}
+
+// SetOverseasQuoteProvider overrides the fixed quote provider used for overseas holdings.
+func (s *ValuationServiceImpl) SetOverseasQuoteProvider(provider domain.QuoteProvider) {
+	if s == nil || provider == nil {
+		return
+	}
+	s.overseasProvider = provider
 }
 
 // SetDefaultQuoteSource overrides the fallback source used when the request has no user-specific preference.
@@ -281,7 +290,7 @@ func (s *ValuationServiceImpl) CalculateEstimate(ctx context.Context, fundID str
 	}
 
 	// Step 4: Fetch real-time quotes (with caching)
-	quotes, err := s.fetchQuotesWithCache(ctx, stockCodes)
+	quotes, dataSourceLabel, err := s.fetchQuotesForFund(ctx, fund, holdings, stockCodes)
 	if err != nil {
 		if shouldUseQDIIHoldingDetailsFallback(fund, holdings) {
 			estimate := s.buildQDIIHoldingDetailsEstimate(fund, holdings)
@@ -295,9 +304,14 @@ func (s *ValuationServiceImpl) CalculateEstimate(ctx context.Context, fundID str
 
 	// Step 5: Calculate the estimate using precise decimal arithmetic
 	estimate := s.calculateWeightedEstimate(fund, holdings, quotes, quoteSource)
+	if dataSourceLabel != "" {
+		estimate.DataSource = dataSourceLabel
+	}
 
 	// Step 6: Store time series point for intraday chart
-	s.recordTimeSeriesPoint(fundID, quoteSource, estimate)
+	if !shouldUseFixedOverseasQuoteSource(fund, holdings) {
+		s.recordTimeSeriesPoint(fundID, quoteSource, estimate)
+	}
 
 	if estimate.TotalHoldRatio.IsZero() && shouldUseQDIIHoldingDetailsFallback(fund, holdings) {
 		fallback := s.buildQDIIHoldingDetailsEstimate(fund, holdings)
@@ -349,6 +363,84 @@ func (s *ValuationServiceImpl) fetchQuotesWithCache(ctx context.Context, stockCo
 	}
 
 	return result, nil
+}
+
+func (s *ValuationServiceImpl) fetchOverseasQuotesWithCache(ctx context.Context, stockCodes []string) (map[string]domain.StockQuote, error) {
+	const cacheTTL = 60
+	if s.overseasProvider == nil {
+		return nil, fmt.Errorf("fixed overseas quote provider not configured")
+	}
+	cacheKeyPrefix := "quote:overseas_fixed:"
+
+	result := make(map[string]domain.StockQuote)
+	var uncachedCodes []string
+	for _, code := range stockCodes {
+		normalizedCode := strings.ToUpper(strings.TrimSpace(code))
+		if cached, found := s.cache.Get(ctx, cacheKeyPrefix+normalizedCode); found {
+			if quote, ok := cached.(domain.StockQuote); ok {
+				result[normalizedCode] = quote
+				continue
+			}
+		}
+		uncachedCodes = append(uncachedCodes, normalizedCode)
+	}
+
+	if len(uncachedCodes) == 0 {
+		return result, nil
+	}
+
+	freshQuotes, err := s.overseasProvider.GetRealTimeQuotes(ctx, uncachedCodes)
+	if err != nil {
+		return nil, err
+	}
+
+	for code, quote := range freshQuotes {
+		normalizedCode := strings.ToUpper(strings.TrimSpace(code))
+		result[normalizedCode] = quote
+		_ = s.cache.Set(ctx, cacheKeyPrefix+normalizedCode, quote, cacheTTL)
+	}
+
+	return result, nil
+}
+
+func (s *ValuationServiceImpl) fetchQuotesForFund(
+	ctx context.Context,
+	fund *domain.Fund,
+	holdings []domain.StockHolding,
+	stockCodes []string,
+) (map[string]domain.StockQuote, string, error) {
+	if shouldUseFixedOverseasQuoteSource(fund, holdings) {
+		overseasCodes, domesticCodes := splitHoldingCodesByExchange(holdings)
+		quotes := make(map[string]domain.StockQuote)
+
+		if len(overseasCodes) > 0 {
+			fixedQuotes, err := s.fetchOverseasQuotesWithCache(ctx, overseasCodes)
+			if err != nil {
+				return nil, "", err
+			}
+			for code, quote := range fixedQuotes {
+				quotes[code] = quote
+			}
+		}
+
+		if len(domesticCodes) > 0 {
+			domesticQuotes, err := s.fetchQuotesWithCache(ctx, domesticCodes)
+			if err != nil {
+				return nil, "", err
+			}
+			for code, quote := range domesticQuotes {
+				quotes[code] = quote
+			}
+		}
+
+		return quotes, "overseas_fixed", nil
+	}
+
+	quotes, err := s.fetchQuotesWithCache(ctx, stockCodes)
+	if err != nil {
+		return nil, "", err
+	}
+	return quotes, "", nil
 }
 
 // calculateEstimateFromTargetETF estimates fund value using the target ETF's direct quote.
@@ -445,6 +537,18 @@ func shouldUseQDIIHoldingDetailsFallback(fund *domain.Fund, holdings []domain.St
 	return false
 }
 
+func shouldUseFixedOverseasQuoteSource(fund *domain.Fund, holdings []domain.StockHolding) bool {
+	if fund == nil || !isQDIIFundType(fund) {
+		return false
+	}
+	for _, holding := range holdings {
+		if holding.Exchange == domain.ExchangeUS {
+			return true
+		}
+	}
+	return false
+}
+
 func isQDIIFundType(fund *domain.Fund) bool {
 	if fund == nil {
 		return false
@@ -483,6 +587,23 @@ func (s *ValuationServiceImpl) buildQDIIHoldingDetailsEstimate(fund *domain.Fund
 		CalculatedAt:   time.Now(),
 		DataSource:     "QDII持仓详情（盘中估值暂不支持）",
 	}
+}
+
+func splitHoldingCodesByExchange(holdings []domain.StockHolding) ([]string, []string) {
+	overseasCodes := make([]string, 0, len(holdings))
+	domesticCodes := make([]string, 0, len(holdings))
+	for _, holding := range holdings {
+		code := strings.TrimSpace(holding.StockCode)
+		if code == "" {
+			continue
+		}
+		if holding.Exchange == domain.ExchangeUS {
+			overseasCodes = append(overseasCodes, strings.ToUpper(code))
+			continue
+		}
+		domesticCodes = append(domesticCodes, code)
+	}
+	return overseasCodes, domesticCodes
 }
 
 // makeTimeSeriesKey creates a composite key for time series storage.

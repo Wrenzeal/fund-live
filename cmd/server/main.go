@@ -108,6 +108,7 @@ func main() {
 	valuationService := service.NewValuationService(fundRepo, quoteProvider, cacheRepo)
 	valuationService.SetQuoteProvider(domain.QuoteSourceSina, quoteProvider)
 	valuationService.SetQuoteProvider(domain.QuoteSourceTencent, adapter.NewTencentQuoteProvider())
+	valuationService.SetOverseasQuoteProvider(adapter.NewTencentQuoteProvider())
 	valuationService.SetDefaultQuoteSource(defaultQuoteSource)
 	valuationService.SetFundDataLoader(fundDataLoader)
 	authConfig := loadAuthConfig(fileCfg)
