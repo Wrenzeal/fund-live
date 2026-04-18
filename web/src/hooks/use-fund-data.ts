@@ -163,7 +163,7 @@ export interface OfficialCloseInfo {
 }
 
 // 默认 SWR 配置
-const DEFAULT_TRADING_INTERVAL = 10000  // 交易时段 10秒刷新
+const DEFAULT_TRADING_INTERVAL = 30000  // 交易时段 30秒刷新
 const DEFAULT_CLOSED_INTERVAL = 0       // 休市时不刷新 (0 = disabled)
 
 /**
@@ -346,6 +346,17 @@ export interface TimeSeriesResponse {
     official_close?: OfficialCloseInfo
 }
 
+export interface FundDashboardPayload {
+    fund?: Fund
+    estimate?: FundEstimate
+    time_series: TimeSeriesPoint[]
+    display_date: string
+    is_trading: boolean
+    is_historical: boolean
+    session: 'pre_market' | 'morning' | 'lunch_break' | 'afternoon' | 'after_hours' | 'weekend' | 'holiday'
+    last_trading_day: string
+}
+
 /**
  * useTimeSeries - 获取分时数据
  * 
@@ -411,6 +422,83 @@ export function useTimeSeries(fundId: string | null) {
         isTrading,
         isWarming,
         warmingMessage: isWarming ? error.message : '',
+    }
+}
+
+export function useFundDashboard(fundId: string | null, options?: SWRConfiguration) {
+    const { isTrading } = useMarketTradingState()
+    const refreshInterval = isTrading ? DEFAULT_TRADING_INTERVAL : DEFAULT_CLOSED_INTERVAL
+    const {
+        onSuccess,
+        onError,
+        ...restOptions
+    } = options ?? {}
+
+    const swrKey = fundId ? `${API_BASE_URL}/api/v1/fund/${fundId}/dashboard` : null
+
+    const { data, error, isLoading, isValidating, mutate } = useSWR<{ data: FundDashboardPayload; meta?: ResponseMeta }>(
+        swrKey,
+        fetchEnvelope,
+        {
+            refreshInterval,
+            keepPreviousData: true,
+            revalidateOnFocus: false,
+            shouldRetryOnError: false,
+            onErrorRetry: (retryError, _key, _config, revalidate, { retryCount }) => {
+                if (isFundDataWarmingError(retryError)) {
+                    scheduleRetry(retryError, retryCount, revalidate, 12, 5000)
+                    return
+                }
+                scheduleRetry(retryError, retryCount, revalidate, 3, 5000)
+            },
+            onSuccess: (payload, key, config) => {
+                if (typeof onSuccess === 'function') {
+                    ;(onSuccess as (data: FundDashboardPayload, key: string, config: unknown) => void)(payload.data, key, config)
+                }
+            },
+            onError: (requestError, key, config) => {
+                if (typeof onError === 'function') {
+                    ;(onError as (error: unknown, key: string, config: unknown) => void)(requestError, key, config)
+                }
+            },
+            ...restOptions,
+        }
+    )
+
+    const triggerRetry = useEffectEvent(() => {
+        void mutate()
+    })
+
+    useEffect(() => {
+        if (data?.meta?.cache_status !== 'warming') {
+            return
+        }
+
+        const timer = window.setTimeout(() => {
+            triggerRetry()
+        }, 5000)
+
+        return () => window.clearTimeout(timer)
+    }, [data?.meta?.cache_status])
+
+    return {
+        fund: data?.data?.fund,
+        estimate: data?.data?.estimate,
+        timeSeries: data?.data?.time_series || [],
+        displayDate: data?.data?.display_date || '',
+        isHistorical: data?.data?.is_historical || false,
+        session: data?.data?.session || 'after_hours',
+        lastTradingDay: data?.data?.last_trading_day || '',
+        officialClose: data?.data?.estimate?.official_close,
+        cacheStatus: data?.meta?.cache_status || '',
+        isLoading,
+        isValidating,
+        isError: !!error,
+        error,
+        mutate,
+        isTrading,
+        refreshInterval,
+        isWarming: data?.meta?.cache_status === 'warming',
     }
 }
 

@@ -179,7 +179,7 @@ func main() {
 			"status":       "ok",
 			"timestamp":    time.Now().Unix(),
 			"service":      "FundLive API",
-			"version":      "2026.4.17",
+			"version":      "2026.4.18",
 			"storage_mode": storageMode,
 		})
 	})
@@ -223,6 +223,7 @@ func main() {
 		{
 			fund.GET("/search", fundHandler.Search)
 			fund.GET("/:id", fundHandler.GetFund)
+			fund.GET("/:id/dashboard", fundHandler.GetDashboard)
 			fund.GET("/:id/estimate", fundHandler.GetEstimate)
 			fund.GET("/:id/holdings", fundHandler.GetHoldings)
 			fund.GET("/:id/timeseries", fundHandler.GetTimeSeries)

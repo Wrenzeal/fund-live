@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { Suspense, useEffect, useRef, useState, useTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { isFundDataWarmingError, useFundEstimate, useFund, useTimeSeries } from '@/hooks/use-fund-data'
+import { useFundDashboard } from '@/hooks/use-fund-data'
 import { useMarketStatus, getSessionLabel, formatTimeUntil } from '@/hooks/use-market-status'
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
 import { FundSearch } from '@/components/fund-search'
@@ -67,23 +67,20 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
   }
 
-  const handleEstimateSuccess = (data: { fund_id?: string }) => {
-    if (!data?.fund_id) return
+  const handleDashboardSuccess = (data: { estimate?: { fund_id?: string } }) => {
+    const resolvedFundId = data?.estimate?.fund_id
+    if (!resolvedFundId) return
 
     setSelectionError(null)
-    lastStableFundIdRef.current = data.fund_id
-    if (switchingFundIdRef.current === data.fund_id) {
+    lastStableFundIdRef.current = resolvedFundId
+    if (switchingFundIdRef.current === resolvedFundId) {
       setSwitchingFundId(null)
     }
   }
 
-  const handleEstimateError = (err: unknown) => {
+  const handleDashboardError = (err: unknown) => {
     const failedFundId = switchingFundIdRef.current
     if (!failedFundId) return
-
-    if (isFundDataWarmingError(err)) {
-      return
-    }
 
     const message = err instanceof Error ? err.message : '加载失败'
     setSelectionError(`基金 ${failedFundId} 加载失败：${message}`)
@@ -95,30 +92,25 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     })
   }
 
-  // SWR 数据获取 hooks - 根据市场状态智能轮询
+  // SWR 数据获取 hooks - 首页统一用 dashboard 快照，避免卡片与图表分叉
   const {
+    fund,
     estimate,
-    isLoading: isEstimateLoading,
-    isValidating,
-    mutate: refreshEstimate,
-    isTrading,
-    refreshInterval,
-    isWarming: isEstimateWarming,
-    retryAfterSeconds,
-  } = useFundEstimate(isCallAuction ? null : currentFundId, {
-    onSuccess: handleEstimateSuccess,
-    onError: handleEstimateError,
-  })
-
-  const { fund, cacheStatus: fundCacheStatus } = useFund(isCallAuction ? null : currentFundId)
-  const {
     timeSeries,
     displayDate,
     isHistorical,
     officialClose,
-    isLoading: isTimeSeriesLoading,
-    isWarming: isTimeSeriesWarming,
-  } = useTimeSeries(isCallAuction ? null : currentFundId)
+    cacheStatus,
+    isLoading: isDashboardLoading,
+    isValidating,
+    mutate: refreshDashboard,
+    isTrading,
+    refreshInterval,
+    isWarming: isDashboardWarming,
+  } = useFundDashboard(isCallAuction ? null : currentFundId, {
+    onSuccess: handleDashboardSuccess,
+    onError: handleDashboardError,
+  })
 
   // 切换基金时使用 transition 避免阻塞
   const handleFundSelect = (fundId: string) => {
@@ -136,7 +128,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   const isFundSwitching = Boolean(
     !isCallAuction &&
     switchingFundId &&
-    (isEstimateLoading || isEstimateWarming || estimate?.fund_id !== switchingFundId)
+    (isDashboardLoading || isDashboardWarming || estimate?.fund_id !== switchingFundId)
   )
 
   // 超时自动关闭加载指示器（防止无限加载）
@@ -145,35 +137,33 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   }, [switchingFundId])
 
   useEffect(() => {
-    if (isFundSwitching && !isEstimateWarming) {
+    if (isFundSwitching && !isDashboardWarming) {
       const timeout = window.setTimeout(() => {
         setSwitchingFundId(null)
       }, 15000)
       return () => window.clearTimeout(timeout)
     }
-  }, [isEstimateWarming, isFundSwitching, switchingFundId])
+  }, [isDashboardWarming, isFundSwitching, switchingFundId])
 
   // 手动刷新
   const handleRefresh = () => {
     setSelectionError(null)
-    refreshEstimate()
+    refreshDashboard()
   }
 
   const lastUpdated = estimate?.calculated_at ? new Date(estimate.calculated_at) : null
 
-  const warmupNotice = isEstimateWarming
+  const warmupNotice = isDashboardWarming
     ? `基金 ${currentFundId} 数据预热中，正在自动重试。`
-    : isTimeSeriesWarming
-      ? `基金 ${currentFundId} 的分时数据预热中，正在自动重试。`
-      : fundCacheStatus === 'warming'
-        ? `基金 ${currentFundId} 的基础资料正在后台补全，页面会自动刷新。`
-        : ''
+    : cacheStatus === 'warming'
+      ? `基金 ${currentFundId} 的基础资料正在后台补全，页面会自动刷新。`
+      : ''
   const activeEstimate = isCallAuction ? undefined : estimate
   const activeFund = isCallAuction ? undefined : fund
   const activeTimeSeries = isCallAuction ? [] : timeSeries
   const activeLastUpdated = isCallAuction ? null : lastUpdated
-  const warmupDetailText = isEstimateWarming
-    ? `数据预热中，约 ${Math.max(retryAfterSeconds || 5, 1)} 秒后自动重试`
+  const warmupDetailText = isDashboardWarming
+    ? '数据预热中，约 5 秒后自动重试'
     : isCallAuction
       ? '集合竞价中，等待 09:30 开盘后更新基金数据'
       : warmupNotice
@@ -307,7 +297,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
         {warmupNotice && !isCallAuction && (
           <div className="mb-6 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-50">
             <div className="flex items-start gap-3">
-              <RefreshCw className={cn('mt-0.5 h-4 w-4 shrink-0', isEstimateWarming || isTimeSeriesWarming ? 'animate-spin' : '')} />
+              <RefreshCw className={cn('mt-0.5 h-4 w-4 shrink-0', isDashboardWarming ? 'animate-spin' : '')} />
               <span>{warmupNotice}</span>
             </div>
           </div>
@@ -334,7 +324,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
             <EstimateCard
               estimate={activeEstimate}
               fund={activeFund}
-              isLoading={isEstimateLoading}
+              isLoading={isDashboardLoading}
               isCallAuction={isCallAuction}
               isValidating={isValidating}
               lastUpdated={activeLastUpdated}
@@ -349,7 +339,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
               <EstimateCard
                 estimate={activeEstimate}
                 fund={activeFund}
-                isLoading={isEstimateLoading}
+                isLoading={isDashboardLoading}
                 isCallAuction={isCallAuction}
                 isValidating={isValidating}
                 lastUpdated={activeLastUpdated}
@@ -446,7 +436,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
             <IntradayChart
               timeSeries={activeTimeSeries}
               estimate={activeEstimate}
-              isLoading={isTimeSeriesLoading}
+              isLoading={isDashboardLoading}
               isCallAuction={isCallAuction}
               displayDate={displayDate}
               isHistorical={isHistorical}

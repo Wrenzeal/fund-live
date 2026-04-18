@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -90,6 +91,22 @@ type OfficialCloseInfo struct {
 	Message       string                     `json:"message,omitempty"`
 }
 
+type EstimateResponse struct {
+	*domain.FundEstimate
+	OfficialClose *OfficialCloseInfo `json:"official_close,omitempty"`
+}
+
+type FundDashboardResponse struct {
+	Fund           *domain.Fund             `json:"fund,omitempty"`
+	Estimate       *EstimateResponse        `json:"estimate,omitempty"`
+	TimeSeries     []domain.TimeSeriesPoint `json:"time_series"`
+	DisplayDate    string                   `json:"display_date"`
+	IsTrading      bool                     `json:"is_trading"`
+	IsHistorical   bool                     `json:"is_historical"`
+	Session        trading.SessionType      `json:"session"`
+	LastTradingDay string                   `json:"last_trading_day"`
+}
+
 // Search handles fund search requests.
 // GET /api/v1/fund/search?q=000001
 func (h *FundHandler) Search(c *gin.Context) {
@@ -171,11 +188,6 @@ func (h *FundHandler) GetEstimate(c *gin.Context) {
 
 	officialClose := h.resolveOfficialCloseInfo(c.Request.Context(), fundID, trading.GetMarketStatus(time.Now()))
 
-	type EstimateResponse struct {
-		*domain.FundEstimate
-		OfficialClose *OfficialCloseInfo `json:"official_close,omitempty"`
-	}
-
 	c.JSON(http.StatusOK, APIResponse{
 		Success: true,
 		Data: EstimateResponse{
@@ -185,6 +197,102 @@ func (h *FundHandler) GetEstimate(c *gin.Context) {
 		Meta: &APIMeta{
 			DataSource: estimate.DataSource,
 		},
+	})
+}
+
+// GetDashboard returns a unified homepage snapshot so the estimate card and intraday chart share one snapshot source.
+// GET /api/v1/fund/:id/dashboard
+func (h *FundHandler) GetDashboard(c *gin.Context) {
+	fundID := c.Param("id")
+	if fundID == "" {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error: &APIError{
+				Code:    "INVALID_FUND_ID",
+				Message: "Fund ID is required",
+			},
+		})
+		return
+	}
+
+	now := time.Now()
+	marketStatus := trading.GetMarketStatus(now)
+
+	fund, err := h.fundRepo.GetFundByID(c.Request.Context(), fundID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error: &APIError{
+				Code:    "FETCH_FAILED",
+				Message: err.Error(),
+			},
+		})
+		return
+	}
+	if fund == nil {
+		c.JSON(http.StatusNotFound, APIResponse{
+			Success: false,
+			Error: &APIError{
+				Code:    "FUND_NOT_FOUND",
+				Message: "Fund not found: " + fundID,
+			},
+		})
+		return
+	}
+
+	cacheStatus := ""
+	fund, cacheStatus = h.hydrateFundProfile(fundID, fund)
+	officialClose := h.resolveOfficialCloseInfo(c.Request.Context(), fundID, marketStatus)
+
+	var estimateResponse *EstimateResponse
+	estimate, estimateErr := h.valuationService.CalculateEstimate(c.Request.Context(), fundID)
+	if estimateErr != nil && !errors.Is(estimateErr, service.ErrFundDataWarmupInProgress) {
+		statusCode, apiErr := mapEstimateErrorToResponse(estimateErr)
+		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+	if estimateErr == nil && estimate != nil {
+		estimateResponse = &EstimateResponse{
+			FundEstimate:  estimate,
+			OfficialClose: officialClose,
+		}
+	} else if errors.Is(estimateErr, service.ErrFundDataWarmupInProgress) {
+		cacheStatus = "warming"
+	}
+
+	timeSeries, timeSeriesErr := h.valuationService.GetIntradayTimeSeries(c.Request.Context(), fundID)
+	if timeSeriesErr != nil && !errors.Is(timeSeriesErr, service.ErrFundDataWarmupInProgress) {
+		statusCode, apiErr := mapEstimateErrorToResponse(timeSeriesErr)
+		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+	if errors.Is(timeSeriesErr, service.ErrFundDataWarmupInProgress) {
+		cacheStatus = "warming"
+		timeSeries = []domain.TimeSeriesPoint{}
+	}
+
+	displayDate, isHistorical := deriveTimeSeriesDisplayContext(timeSeries, marketStatus)
+	if estimate != nil {
+		timeSeries = alignTimeSeriesWithEstimateSnapshot(timeSeries, estimate, displayDate, marketStatus)
+		if alignedDate := displayDateFromTimeSeries(timeSeries); !alignedDate.IsZero() {
+			displayDate = alignedDate.In(trading.TradingLocation()).Format("2006-01-02")
+			isHistorical = displayDate != marketStatus.CurrentDate
+		}
+	}
+
+	c.JSON(http.StatusOK, APIResponse{
+		Success: true,
+		Data: FundDashboardResponse{
+			Fund:           fund,
+			Estimate:       estimateResponse,
+			TimeSeries:     timeSeries,
+			DisplayDate:    displayDate,
+			IsTrading:      marketStatus.IsTrading,
+			IsHistorical:   isHistorical,
+			Session:        marketStatus.Session,
+			LastTradingDay: marketStatus.LastTradingDay,
+		},
+		Meta: buildResponseMeta("", cacheStatus),
 	})
 }
 
@@ -318,17 +426,7 @@ func (h *FundHandler) GetTimeSeries(c *gin.Context) {
 	}
 
 	// Determine if we're showing historical data (not from today)
-	isHistorical := false
-	dataDate := marketStatus.DisplayDate
-	if len(timeSeries) > 0 {
-		// Check if the first point's date differs from today
-		firstPointDate := timeSeries[0].Timestamp.In(trading.TradingLocation()).Format("2006-01-02")
-		todayDate := marketStatus.CurrentDate
-		if firstPointDate != todayDate {
-			isHistorical = true
-			dataDate = firstPointDate
-		}
-	}
+	dataDate, isHistorical := deriveTimeSeriesDisplayContext(timeSeries, marketStatus)
 
 	// Enhanced response with market context
 	type TimeSeriesResponse struct {
@@ -355,6 +453,100 @@ func (h *FundHandler) GetTimeSeries(c *gin.Context) {
 			OfficialClose:  officialClose,
 		},
 	})
+}
+
+func mapEstimateErrorToResponse(err error) (int, *APIError) {
+	statusCode := http.StatusInternalServerError
+	errorCode := "ESTIMATE_FAILED"
+
+	switch {
+	case errors.Is(err, service.ErrFundDataWarmupInProgress):
+		statusCode = http.StatusServiceUnavailable
+		errorCode = "FUND_DATA_WARMING"
+	case strings.Contains(err.Error(), "qdii details available without live estimate support"):
+		statusCode = http.StatusUnprocessableEntity
+		errorCode = "UNSUPPORTED_PRICING_MODEL"
+	case strings.Contains(err.Error(), "pricing profile not configured") || strings.Contains(err.Error(), "unsupported pricing method"):
+		statusCode = http.StatusUnprocessableEntity
+		errorCode = "UNSUPPORTED_PRICING_MODEL"
+	case strings.Contains(err.Error(), "not found"):
+		statusCode = http.StatusNotFound
+		errorCode = "FUND_NOT_FOUND"
+	}
+
+	return statusCode, &APIError{
+		Code:    errorCode,
+		Message: err.Error(),
+	}
+}
+
+func deriveTimeSeriesDisplayContext(points []domain.TimeSeriesPoint, marketStatus trading.MarketStatus) (string, bool) {
+	if len(points) == 0 {
+		return marketStatus.DisplayDate, false
+	}
+
+	firstPointDate := points[0].Timestamp.In(trading.TradingLocation()).Format("2006-01-02")
+	isHistorical := firstPointDate != marketStatus.CurrentDate
+	if isHistorical {
+		return firstPointDate, true
+	}
+	return marketStatus.DisplayDate, false
+}
+
+func alignTimeSeriesWithEstimateSnapshot(points []domain.TimeSeriesPoint, estimate *domain.FundEstimate, displayDate string, marketStatus trading.MarketStatus) []domain.TimeSeriesPoint {
+	if estimate == nil || displayDate == "" {
+		return points
+	}
+
+	loc := trading.TradingLocation()
+	calculatedAt := estimate.CalculatedAt.In(loc)
+	displayDay, err := time.ParseInLocation("2006-01-02", displayDate, loc)
+	if err != nil {
+		return points
+	}
+
+	targetTimestamp := time.Date(displayDay.Year(), displayDay.Month(), displayDay.Day(), 15, 0, 0, 0, loc)
+	if displayDate == marketStatus.CurrentDate && marketStatus.IsTradingDay {
+		targetTimestamp = time.Date(calculatedAt.Year(), calculatedAt.Month(), calculatedAt.Day(), calculatedAt.Hour(), (calculatedAt.Minute()/5)*5, 0, 0, loc)
+	}
+
+	alignedPoint := domain.TimeSeriesPoint{
+		Timestamp:     targetTimestamp,
+		ChangePercent: estimate.ChangePercent,
+		EstimateNav:   estimate.EstimateNav,
+	}
+
+	if len(points) == 0 {
+		return []domain.TimeSeriesPoint{alignedPoint}
+	}
+
+	updated := false
+	aligned := make([]domain.TimeSeriesPoint, len(points))
+	copy(aligned, points)
+	for i := range aligned {
+		localTs := aligned[i].Timestamp.In(loc)
+		if localTs.Equal(targetTimestamp) {
+			aligned[i].ChangePercent = alignedPoint.ChangePercent
+			aligned[i].EstimateNav = alignedPoint.EstimateNav
+			updated = true
+			break
+		}
+	}
+
+	if !updated {
+		aligned = append(aligned, alignedPoint)
+		sort.Slice(aligned, func(i, j int) bool {
+			return aligned[i].Timestamp.Before(aligned[j].Timestamp)
+		})
+	}
+	return aligned
+}
+
+func displayDateFromTimeSeries(points []domain.TimeSeriesPoint) time.Time {
+	if len(points) == 0 {
+		return time.Time{}
+	}
+	return points[0].Timestamp
 }
 
 // GetMarketStatus returns the current A-Share market status.

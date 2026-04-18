@@ -321,15 +321,21 @@ func TestGetFundSchedulesWarmupWhenCacheMissing(t *testing.T) {
 }
 
 type stubValuationService struct {
-	estimateErr error
+	estimateErr   error
+	estimate      *domain.FundEstimate
+	timeSeries    []domain.TimeSeriesPoint
+	timeSeriesErr error
 }
 
 func (s stubValuationService) CalculateEstimate(ctx context.Context, fundID string) (*domain.FundEstimate, error) {
+	if s.estimate != nil || s.estimateErr != nil {
+		return s.estimate, s.estimateErr
+	}
 	return nil, s.estimateErr
 }
 
 func (s stubValuationService) GetIntradayTimeSeries(ctx context.Context, fundID string) ([]domain.TimeSeriesPoint, error) {
-	return nil, nil
+	return s.timeSeries, s.timeSeriesErr
 }
 
 func TestGetEstimateReturnsWarmupStatusForColdFunds(t *testing.T) {
@@ -431,6 +437,95 @@ func TestResolveOfficialCloseInfoReturnsReadyBeforeNineWithLatestTradingDayHisto
 	}
 	if info.Date != "2026-04-08" || info.DailyReturn != "2.0027" {
 		t.Fatalf("ready info = %+v", info)
+	}
+}
+
+func TestGetDashboardAlignsTimeSeriesLastPointWithEstimateSnapshot(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	fundRepo := repository.NewMemoryFundRepository()
+	if err := fundRepo.SaveFund(context.Background(), &domain.Fund{
+		ID:          "005827",
+		Name:        "易方达蓝筹精选混合",
+		Type:        "hybrid",
+		NetAssetVal: decimal.RequireFromString("1.7643"),
+		UpdatedAt:   time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFund() error = %v", err)
+	}
+
+	estimate := &domain.FundEstimate{
+		FundID:        "005827",
+		FundName:      "易方达蓝筹精选混合",
+		EstimateNav:   decimal.RequireFromString("1.7346"),
+		PrevNav:       decimal.RequireFromString("1.7643"),
+		ChangePercent: decimal.RequireFromString("-1.6819"),
+		CalculatedAt:  time.Date(2026, time.April, 18, 9, 17, 51, 0, trading.TradingLocation()),
+		DataSource:    "sina",
+	}
+	points := []domain.TimeSeriesPoint{
+		{
+			Timestamp:     time.Date(2026, time.April, 17, 14, 55, 0, 0, trading.TradingLocation()),
+			ChangePercent: decimal.RequireFromString("-1.8508"),
+			EstimateNav:   decimal.RequireFromString("1.7573"),
+		},
+		{
+			Timestamp:     time.Date(2026, time.April, 17, 15, 0, 0, 0, trading.TradingLocation()),
+			ChangePercent: decimal.RequireFromString("-1.8119"),
+			EstimateNav:   decimal.RequireFromString("1.7580"),
+		},
+	}
+
+	handler := &FundHandler{
+		valuationService: stubValuationService{
+			estimate:   estimate,
+			timeSeries: points,
+		},
+		fundRepo:   fundRepo,
+		dataLoader: &stubTransientFundDataLoader{},
+	}
+
+	router := gin.New()
+	router.GET("/api/v1/fund/:id/dashboard", handler.GetDashboard)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fund/005827/dashboard", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var response struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Estimate *struct {
+				ChangePercent string `json:"change_percent"`
+			} `json:"estimate"`
+			TimeSeries []struct {
+				Timestamp     string `json:"timestamp"`
+				ChangePercent string `json:"change_percent"`
+			} `json:"time_series"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !response.Success {
+		t.Fatalf("response success = false")
+	}
+	if response.Data.Estimate == nil {
+		t.Fatalf("estimate should not be nil")
+	}
+	if got := response.Data.Estimate.ChangePercent; got != "-1.6819" {
+		t.Fatalf("estimate change percent = %s, want -1.6819", got)
+	}
+	if len(response.Data.TimeSeries) == 0 {
+		t.Fatalf("time series should not be empty")
+	}
+	lastPoint := response.Data.TimeSeries[len(response.Data.TimeSeries)-1]
+	if got := lastPoint.ChangePercent; got != "-1.6819" {
+		t.Fatalf("last point change percent = %s, want -1.6819", got)
 	}
 }
 
