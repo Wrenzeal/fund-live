@@ -12,6 +12,8 @@ type Fund struct {
 	ID          string          `json:"id"`         // Fund code, e.g., "000001"
 	Name        string          `json:"name"`       // Fund name
 	Type        string          `json:"type"`       // Fund type: "stock", "bond", "hybrid", etc.
+	CategoryCode string         `json:"category_code,omitempty"`
+	CategoryName string         `json:"category_name,omitempty"`
 	Manager     string          `json:"manager"`    // Fund manager name
 	Company     string          `json:"company"`    // Fund company
 	NetAssetVal decimal.Decimal `json:"nav"`        // Latest net asset value (NAV)
@@ -103,4 +105,40 @@ type FundHistory struct {
 type FundHistoryLookupKey struct {
 	FundID string
 	Date   string
+}
+
+// FundSector describes a stable sector dictionary entry.
+type FundSector struct {
+	Code       string `json:"code"`
+	Name       string `json:"name"`
+	ParentCode string `json:"parent_code,omitempty"`
+	Level      int    `json:"level"`
+	SortOrder  int    `json:"sort_order"`
+}
+
+// FundSectorBreakdown represents an aggregated sector weight for a fund snapshot.
+type FundSectorBreakdown struct {
+	SectorCode    string          `json:"sector_code"`
+	SectorName    string          `json:"sector_name"`
+	WeightPercent decimal.Decimal `json:"weight_percent"`
+	Rank          int             `json:"rank"`
+}
+
+// FundSectorSnapshot stores the current sector classification snapshot for a fund.
+type FundSectorSnapshot struct {
+	FundID            string                `json:"fund_id"`
+	AsOfDate          string                `json:"as_of_date"`
+	PrimarySectorCode string                `json:"primary_sector_code"`
+	PrimarySectorName string                `json:"primary_sector_name"`
+	Source            string                `json:"source"`
+	Confidence        string                `json:"confidence"`
+	Breakdown         []FundSectorBreakdown `json:"breakdown"`
+}
+
+// FundCategory describes the stable main classification for a fund.
+type FundCategory struct {
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	SortOrder   int    `json:"sort_order"`
 }

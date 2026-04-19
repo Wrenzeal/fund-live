@@ -53,6 +53,7 @@ func main() {
 	var vipRepo domain.VIPRepository
 	var dbInstance = database.GetDB() // Will be nil if not initialized
 	var fundResolver *service.FundResolver
+	var fundSectorStore *service.FundSectorStore
 
 	if storageMode == "postgres" {
 		// Initialize PostgreSQL database
@@ -79,6 +80,10 @@ func main() {
 		if err := service.SeedDefaultValuationProfiles(context.Background(), db); err != nil {
 			log.Fatalf("❌ Failed to seed valuation profiles: %v", err)
 		}
+		if err := service.SeedDefaultFundSectorData(context.Background(), db); err != nil {
+			log.Fatalf("❌ Failed to seed fund sector data: %v", err)
+		}
+		fundSectorStore = service.NewFundSectorStore(db)
 		log.Println("✅ Using PostgreSQL storage")
 	} else {
 		// Use in-memory repository (for development without Docker)
@@ -103,6 +108,9 @@ func main() {
 	// Initialize quote provider (Sina Finance)
 	quoteProvider := adapter.NewSinaFinanceProvider()
 	fundDataLoader := service.NewFundDataLoader(fundRepo)
+	if fundSectorStore != nil {
+		fundDataLoader.SetFundSectorStore(fundSectorStore)
+	}
 
 	// Initialize services
 	valuationService := service.NewValuationService(fundRepo, quoteProvider, cacheRepo)
@@ -144,6 +152,7 @@ func main() {
 		log.Println("🕚 Official NAV sync scheduled for 23:00 Asia/Shanghai")
 
 		holdingsRefresh := service.NewFundHoldingsRefreshService(fundRepo)
+		holdingsRefresh.SetFundSectorStore(fundSectorStore)
 		holdingsRefresh.Start(context.Background())
 		log.Println("🗓️ Monthly holdings refresh scheduled for day 1 at 01:00 Asia/Shanghai")
 	}
@@ -156,6 +165,7 @@ func main() {
 	// Initialize handlers
 	fundHandler := handler.NewFundHandler(valuationService, fundRepo, fundResolver)
 	fundHandler.SetTransientFundDataLoader(fundDataLoader)
+	fundHandler.SetFundSectorStore(fundSectorStore)
 	authHandler := handler.NewAuthHandler(authService, authConfig.CookieName, authConfig.CookieSecure)
 	userHandler := handler.NewUserHandler(userPreferenceService, userRepo, defaultQuoteSource)
 	issueHandler := handler.NewIssueHandler(issueService)
@@ -179,7 +189,7 @@ func main() {
 			"status":       "ok",
 			"timestamp":    time.Now().Unix(),
 			"service":      "FundLive API",
-			"version":      "2026.4.18",
+			"version":      "2026.4.19",
 			"storage_mode": storageMode,
 		})
 	})

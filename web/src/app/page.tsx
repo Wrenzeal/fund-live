@@ -8,6 +8,7 @@ import { useMarketStatus, getSessionLabel, formatTimeUntil } from '@/hooks/use-m
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
 import { FundSearch } from '@/components/fund-search'
 import { EstimateCard } from '@/components/estimate-card'
+import { FundSectorCard } from '@/components/fund-sector-card'
 import { IntradayChart } from '@/components/intraday-chart'
 import { HoldingsTable } from '@/components/holdings-table'
 import { ThemeSwitcher } from '@/components/theme-switcher'
@@ -96,6 +97,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   const {
     fund,
     estimate,
+    sectorSnapshot,
     timeSeries,
     displayDate,
     isHistorical,
@@ -442,6 +444,8 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
               isHistorical={isHistorical}
               officialClose={officialClose}
             />
+
+            <FundSectorCard fund={activeFund} sectorSnapshot={isCallAuction ? undefined : sectorSnapshot} />
 
             {/* Holdings Table */}
             <HoldingsTable estimate={activeEstimate} isCallAuction={isCallAuction} />

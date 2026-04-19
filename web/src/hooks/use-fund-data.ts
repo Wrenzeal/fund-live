@@ -117,6 +117,8 @@ export interface Fund {
     id: string
     name: string
     type: string
+    category_code?: string
+    category_name?: string
     manager: string
     company: string
     nav: string
@@ -160,6 +162,23 @@ export interface OfficialCloseInfo {
     daily_return?: string
     net_asset_val?: string
     message?: string
+}
+
+export interface FundSectorBreakdown {
+    sector_code: string
+    sector_name: string
+    weight_percent: string
+    rank: number
+}
+
+export interface FundSectorSnapshot {
+    fund_id: string
+    as_of_date: string
+    primary_sector_code: string
+    primary_sector_name: string
+    source: string
+    confidence: string
+    breakdown: FundSectorBreakdown[]
 }
 
 // 默认 SWR 配置
@@ -349,6 +368,7 @@ export interface TimeSeriesResponse {
 export interface FundDashboardPayload {
     fund?: Fund
     estimate?: FundEstimate
+    sector_snapshot?: FundSectorSnapshot
     time_series: TimeSeriesPoint[]
     display_date: string
     is_trading: boolean
@@ -484,6 +504,7 @@ export function useFundDashboard(fundId: string | null, options?: SWRConfigurati
     return {
         fund: data?.data?.fund,
         estimate: data?.data?.estimate,
+        sectorSnapshot: data?.data?.sector_snapshot,
         timeSeries: data?.data?.time_series || [],
         displayDate: data?.data?.display_date || '',
         isHistorical: data?.data?.is_historical || false,

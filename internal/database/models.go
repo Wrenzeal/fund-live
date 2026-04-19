@@ -39,6 +39,9 @@ type Fund struct {
 	// Company 基金公司名称，如 "易方达基金"
 	Company string `gorm:"type:varchar(100)" json:"company"`
 
+	// CategoryCode 站内稳定主分类
+	CategoryCode string `gorm:"type:varchar(50);index" json:"category_code"`
+
 	// NetAssetVal 最新单位净值 (NAV)
 	NetAssetVal decimal.Decimal `gorm:"type:decimal(10,4)" json:"nav"`
 
@@ -225,6 +228,12 @@ func AllModels() []interface{} {
 		&FundHistory{},
 		&FundValuationProfile{},
 		&FundMapping{},
+		&FundCategory{},
+		&FundSector{},
+		&InstrumentSectorMap{},
+		&FundSectorSnapshot{},
+		&FundSectorBreakdown{},
+		&FundClassificationOverride{},
 	}
 	return append(models, UserModels()...)
 }

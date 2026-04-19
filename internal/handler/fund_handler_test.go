@@ -50,6 +50,54 @@ func (s *stubHoldingsFallbackResolver) GetHoldingsWithFallback(ctx context.Conte
 	return s.holdings, s.source, s.err
 }
 
+type stubFundSectorStore struct {
+	snapshot        *domain.FundSectorSnapshot
+	snapshotsByFund map[string]*domain.FundSectorSnapshot
+}
+
+func (s *stubFundSectorStore) UpsertFromHoldings(ctx context.Context, fundID string, holdings []domain.StockHolding, source string) (*domain.FundSectorSnapshot, error) {
+	if s.snapshotsByFund != nil {
+		if snapshot, ok := s.snapshotsByFund[fundID]; ok && snapshot != nil {
+			copySnapshot := *snapshot
+			return &copySnapshot, nil
+		}
+		return nil, nil
+	}
+	if s.snapshot == nil {
+		return nil, nil
+	}
+	copySnapshot := *s.snapshot
+	return &copySnapshot, nil
+}
+
+func (s *stubFundSectorStore) GetLatestSnapshot(ctx context.Context, fundID string) (*domain.FundSectorSnapshot, error) {
+	if s.snapshotsByFund != nil {
+		if snapshot, ok := s.snapshotsByFund[fundID]; ok && snapshot != nil {
+			copySnapshot := *snapshot
+			return &copySnapshot, nil
+		}
+		return nil, nil
+	}
+	if s.snapshot == nil {
+		return nil, nil
+	}
+	copySnapshot := *s.snapshot
+	return &copySnapshot, nil
+}
+
+func (s *stubFundSectorStore) ResolveFundCategory(ctx context.Context, fund *domain.Fund, snapshot *domain.FundSectorSnapshot) (*domain.FundCategory, error) {
+	if fund == nil {
+		return nil, nil
+	}
+	if fund.CategoryCode == "" {
+		return nil, nil
+	}
+	return &domain.FundCategory{
+		Code: fund.CategoryCode,
+		Name: fund.CategoryName,
+	}, nil
+}
+
 type fundResponseEnvelope struct {
 	Success bool        `json:"success"`
 	Data    domain.Fund `json:"data"`
@@ -63,6 +111,20 @@ type holdingsResponseEnvelope struct {
 		Holdings []domain.StockHolding `json:"holdings"`
 	} `json:"data"`
 	Meta *APIMeta `json:"meta,omitempty"`
+}
+
+type dashboardResponseEnvelope struct {
+	Success bool `json:"success"`
+	Data    struct {
+		Estimate *struct {
+			ChangePercent string `json:"change_percent"`
+		} `json:"estimate"`
+		SectorSnapshot *domain.FundSectorSnapshot `json:"sector_snapshot"`
+		TimeSeries     []struct {
+			Timestamp     string `json:"timestamp"`
+			ChangePercent string `json:"change_percent"`
+		} `json:"time_series"`
+	} `json:"data"`
 }
 
 func TestGetFundHydratesMissingProfileFields(t *testing.T) {
@@ -270,6 +332,75 @@ func TestGetHoldingsUsesResolverFallbackForFeederFund(t *testing.T) {
 	}
 	if resolver.calls != 1 {
 		t.Fatalf("resolver calls = %d, want 1", resolver.calls)
+	}
+}
+
+func TestSearchFiltersByCategoryAndSector(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	fundRepo := repository.NewMemoryFundRepository()
+	if err := fundRepo.SaveFund(context.Background(), &domain.Fund{
+		ID:           "005827",
+		Name:         "易方达蓝筹精选混合",
+		Type:         "hybrid",
+		CategoryCode: "hybrid",
+		CategoryName: "混合型",
+	}); err != nil {
+		t.Fatalf("SaveFund() error = %v", err)
+	}
+	if err := fundRepo.SaveFund(context.Background(), &domain.Fund{
+		ID:           "320007",
+		Name:         "诺安成长混合",
+		Type:         "hybrid",
+		CategoryCode: "hybrid",
+		CategoryName: "混合型",
+	}); err != nil {
+		t.Fatalf("SaveFund() error = %v", err)
+	}
+
+	handler := &FundHandler{
+		fundRepo: fundRepo,
+		sectorStore: &stubFundSectorStore{
+			snapshotsByFund: map[string]*domain.FundSectorSnapshot{
+				"005827": {
+					FundID:            "005827",
+					AsOfDate:          "2025-12-31",
+					PrimarySectorCode: "liquor",
+					PrimarySectorName: "白酒",
+				},
+				"320007": {
+					FundID:            "320007",
+					AsOfDate:          "2025-12-31",
+					PrimarySectorCode: "semiconductor",
+					PrimarySectorName: "半导体",
+				},
+			},
+		},
+	}
+
+	router := gin.New()
+	router.GET("/api/v1/fund/search", handler.Search)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fund/search?q=混合&category=hybrid&sector=liquor", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var response struct {
+		Success bool          `json:"success"`
+		Data    []domain.Fund `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Data) != 1 {
+		t.Fatalf("len(data) = %d, want 1", len(response.Data))
+	}
+	if response.Data[0].ID != "005827" {
+		t.Fatalf("fund id = %s, want 005827", response.Data[0].ID)
 	}
 }
 
@@ -483,6 +614,14 @@ func TestGetDashboardAlignsTimeSeriesLastPointWithEstimateSnapshot(t *testing.T)
 		},
 		fundRepo:   fundRepo,
 		dataLoader: &stubTransientFundDataLoader{},
+		sectorStore: &stubFundSectorStore{
+			snapshot: &domain.FundSectorSnapshot{
+				FundID:            "005827",
+				AsOfDate:          "2025-12-31",
+				PrimarySectorCode: "liquor",
+				PrimarySectorName: "白酒",
+			},
+		},
 	}
 
 	router := gin.New()
@@ -496,18 +635,7 @@ func TestGetDashboardAlignsTimeSeriesLastPointWithEstimateSnapshot(t *testing.T)
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 
-	var response struct {
-		Success bool `json:"success"`
-		Data    struct {
-			Estimate *struct {
-				ChangePercent string `json:"change_percent"`
-			} `json:"estimate"`
-			TimeSeries []struct {
-				Timestamp     string `json:"timestamp"`
-				ChangePercent string `json:"change_percent"`
-			} `json:"time_series"`
-		} `json:"data"`
-	}
+	var response dashboardResponseEnvelope
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
@@ -522,6 +650,9 @@ func TestGetDashboardAlignsTimeSeriesLastPointWithEstimateSnapshot(t *testing.T)
 	}
 	if len(response.Data.TimeSeries) == 0 {
 		t.Fatalf("time series should not be empty")
+	}
+	if response.Data.SectorSnapshot == nil || response.Data.SectorSnapshot.PrimarySectorCode != "liquor" {
+		t.Fatalf("sector snapshot = %+v, want liquor", response.Data.SectorSnapshot)
 	}
 	lastPoint := response.Data.TimeSeries[len(response.Data.TimeSeries)-1]
 	if got := lastPoint.ChangePercent; got != "-1.6819" {

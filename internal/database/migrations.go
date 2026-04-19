@@ -27,6 +27,16 @@ var managedMigrations = []sqlMigration{
 		Statements:     coreUserTableMigrationStatements,
 	},
 	{
+		ID:             "20260418_fund_sector_tables",
+		RequiredTables: []string{},
+		Statements:     fundSectorMigrationStatements,
+	},
+	{
+		ID:             "20260419_fund_category_tables",
+		RequiredTables: []string{"funds"},
+		Statements:     fundCategoryMigrationStatements,
+	},
+	{
 		ID:             "20260416_user_holding_confirmation",
 		RequiredTables: []string{"tb_user_fund_holding"},
 		Statements:     userHoldingConfirmationMigrationStatements,

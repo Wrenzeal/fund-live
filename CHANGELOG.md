@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2026.4.19] - 2026-04-19
+
+### Changed
+- **基金分类模块推进到第二阶段**
+  - 新增稳定主分类层：`fund_categories`、`funds.category_code`、`fund_classification_overrides`
+  - 基金分类现已同时支持主分类与板块快照两层语义，普通基金、联接基金、QDII 都可生成主板块与 Top 3 板块
+  - 基金主页 `dashboard` 已返回 `sector_snapshot` 与主分类信息，基金主页可展示主分类、主板块与 Top 3 板块
+  - `fund/search` 现支持按 `category` / `sector` 过滤，搜索结果也会回传主分类信息
+  - 板块快照更新已接入主要持仓写入路径，包括基金预热和月度持仓刷新链路
+
 ## [2026.4.18] - 2026-04-18
 
 ### Changed

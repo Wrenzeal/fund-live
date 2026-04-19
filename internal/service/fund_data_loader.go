@@ -29,11 +29,12 @@ type cachedFundData struct {
 // FundDataLoader fetches missing fund data on demand.
 // Read paths use the transient cache only; explicit hydration persists via FundRepository.
 type FundDataLoader struct {
-	fundRepo  domain.FundRepository
-	fetcher   fundDataFetcher
-	cacheTTL  time.Duration
-	fetchTTL  time.Duration
-	ensureTTL time.Duration
+	fundRepo    domain.FundRepository
+	fetcher     fundDataFetcher
+	sectorStore *FundSectorStore
+	cacheTTL    time.Duration
+	fetchTTL    time.Duration
+	ensureTTL   time.Duration
 
 	cacheMu sync.RWMutex
 	cache   map[string]cachedFundData
@@ -71,6 +72,13 @@ func NewFundDataLoaderWithFetcher(fundRepo domain.FundRepository, fetcher fundDa
 		ensureTTL: ensureTTL,
 		cache:     make(map[string]cachedFundData),
 		warming:   make(map[string]struct{}),
+	}
+}
+
+// SetFundSectorStore enables fund sector snapshot generation after holdings persistence.
+func (l *FundDataLoader) SetFundSectorStore(store *FundSectorStore) {
+	if l != nil {
+		l.sectorStore = store
 	}
 }
 
@@ -139,6 +147,11 @@ func (l *FundDataLoader) EnsureFundData(ctx context.Context, fundID string) (*do
 	if len(holdings) > 0 {
 		if err := l.fundRepo.SaveHoldings(ctx, fundID, holdings); err != nil {
 			return nil, nil, fmt.Errorf("failed to save hydrated holdings for %s: %w", fundID, err)
+		}
+		if l.sectorStore != nil {
+			if _, err := l.sectorStore.UpsertFromHoldings(ctx, fundID, holdings, SectorSourceDirectHoldings); err != nil {
+				log.Printf("⚠️ Failed to update fund sector snapshot for %s: %v", fundID, err)
+			}
 		}
 	}
 

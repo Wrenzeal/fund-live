@@ -16,6 +16,7 @@ import (
 // It is intended for low-frequency maintenance refreshes (for example, monthly).
 type FundHoldingsRefreshService struct {
 	fundRepo        domain.FundRepository
+	sectorStore     *FundSectorStore
 	crawler         *crawler.CrawlService
 	location        *time.Location
 	now             func() time.Time
@@ -35,6 +36,12 @@ func NewFundHoldingsRefreshService(fundRepo domain.FundRepository) *FundHoldings
 		maxConcurrency: 3,
 		refreshDay:     1,
 		refreshHour:    1,
+	}
+}
+
+func (s *FundHoldingsRefreshService) SetFundSectorStore(store *FundSectorStore) {
+	if s != nil {
+		s.sectorStore = store
 	}
 }
 
@@ -159,6 +166,11 @@ func (s *FundHoldingsRefreshService) RefreshExistingFunds(ctx context.Context) e
 				failureCount.Add(1)
 				log.Printf("⚠️ Monthly holdings refresh: save holdings %s failed: %v", fundID, saveErr)
 				return nil
+			}
+			if s.sectorStore != nil {
+				if _, sectorErr := s.sectorStore.UpsertFromHoldings(groupCtx, fundID, holdings, SectorSourceDirectHoldings); sectorErr != nil {
+					log.Printf("⚠️ Monthly holdings refresh: update sector snapshot %s failed: %v", fundID, sectorErr)
+				}
 			}
 			refreshedHoldingCount.Add(1)
 			return nil

@@ -26,12 +26,19 @@ type holdingsFallbackResolver interface {
 	GetHoldingsWithFallback(ctx context.Context, fundID string, fundName string) ([]domain.StockHolding, string, error)
 }
 
+type fundSectorSnapshotStore interface {
+	UpsertFromHoldings(ctx context.Context, fundID string, holdings []domain.StockHolding, source string) (*domain.FundSectorSnapshot, error)
+	GetLatestSnapshot(ctx context.Context, fundID string) (*domain.FundSectorSnapshot, error)
+	ResolveFundCategory(ctx context.Context, fund *domain.Fund, snapshot *domain.FundSectorSnapshot) (*domain.FundCategory, error)
+}
+
 // FundHandler handles fund-related HTTP requests.
 type FundHandler struct {
 	valuationService domain.ValuationService
 	fundRepo         domain.FundRepository
 	dataLoader       transientFundDataLoader
 	holdingsResolver holdingsFallbackResolver
+	sectorStore      fundSectorSnapshotStore
 }
 
 // NewFundHandler creates a new FundHandler instance.
@@ -52,6 +59,12 @@ func NewFundHandler(
 func (h *FundHandler) SetTransientFundDataLoader(loader *service.FundDataLoader) {
 	if h != nil && loader != nil {
 		h.dataLoader = loader
+	}
+}
+
+func (h *FundHandler) SetFundSectorStore(store *service.FundSectorStore) {
+	if h != nil && store != nil {
+		h.sectorStore = store
 	}
 }
 
@@ -97,21 +110,34 @@ type EstimateResponse struct {
 }
 
 type FundDashboardResponse struct {
-	Fund           *domain.Fund             `json:"fund,omitempty"`
-	Estimate       *EstimateResponse        `json:"estimate,omitempty"`
-	TimeSeries     []domain.TimeSeriesPoint `json:"time_series"`
-	DisplayDate    string                   `json:"display_date"`
-	IsTrading      bool                     `json:"is_trading"`
-	IsHistorical   bool                     `json:"is_historical"`
-	Session        trading.SessionType      `json:"session"`
-	LastTradingDay string                   `json:"last_trading_day"`
+	Fund           *domain.Fund               `json:"fund,omitempty"`
+	Estimate       *EstimateResponse          `json:"estimate,omitempty"`
+	SectorSnapshot *domain.FundSectorSnapshot `json:"sector_snapshot,omitempty"`
+	TimeSeries     []domain.TimeSeriesPoint   `json:"time_series"`
+	DisplayDate    string                     `json:"display_date"`
+	IsTrading      bool                       `json:"is_trading"`
+	IsHistorical   bool                       `json:"is_historical"`
+	Session        trading.SessionType        `json:"session"`
+	LastTradingDay string                     `json:"last_trading_day"`
 }
 
 // Search handles fund search requests.
 // GET /api/v1/fund/search?q=000001
 func (h *FundHandler) Search(c *gin.Context) {
 	query := strings.TrimSpace(c.Query("q"))
+	categoryFilter := strings.TrimSpace(c.Query("category"))
+	sectorFilter := strings.TrimSpace(c.Query("sector"))
 	if query == "" {
+		if categoryFilter != "" || sectorFilter != "" {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Error: &APIError{
+					Code:    "INVALID_QUERY",
+					Message: "Search query 'q' is required when using filters",
+				},
+			})
+			return
+		}
 		c.JSON(http.StatusBadRequest, APIResponse{
 			Success: false,
 			Error: &APIError{
@@ -135,9 +161,52 @@ func (h *FundHandler) Search(c *gin.Context) {
 		return
 	}
 
+	filteredFunds := make([]*domain.Fund, 0, len(funds))
+	for _, fund := range funds {
+		if fund == nil {
+			continue
+		}
+		snapshot, sectorErr := h.buildFundSectorSnapshot(c.Request.Context(), fund.ID, fund)
+		if sectorErr != nil {
+			log.Printf("⚠️ Search sector snapshot failed for %s: %v", fund.ID, sectorErr)
+		}
+		if h.sectorStore != nil {
+			category, categoryErr := h.resolveFundCategory(c.Request.Context(), fund, snapshot)
+			if categoryErr != nil {
+				log.Printf("⚠️ Search fund category resolve failed for %s: %v", fund.ID, categoryErr)
+			} else if category != nil {
+				fund.CategoryCode = category.Code
+				fund.CategoryName = category.Name
+			}
+		}
+
+		if categoryFilter != "" && !strings.EqualFold(strings.TrimSpace(fund.CategoryCode), categoryFilter) {
+			continue
+		}
+		if sectorFilter != "" {
+			if snapshot == nil {
+				continue
+			}
+			matchedSector := strings.EqualFold(strings.TrimSpace(snapshot.PrimarySectorCode), sectorFilter)
+			if !matchedSector {
+				for _, item := range snapshot.Breakdown {
+					if strings.EqualFold(strings.TrimSpace(item.SectorCode), sectorFilter) {
+						matchedSector = true
+						break
+					}
+				}
+			}
+			if !matchedSector {
+				continue
+			}
+		}
+
+		filteredFunds = append(filteredFunds, fund)
+	}
+
 	c.JSON(http.StatusOK, APIResponse{
 		Success: true,
-		Data:    funds,
+		Data:    filteredFunds,
 	})
 }
 
@@ -280,11 +349,24 @@ func (h *FundHandler) GetDashboard(c *gin.Context) {
 		}
 	}
 
+	sectorSnapshot, sectorErr := h.buildFundSectorSnapshot(c.Request.Context(), fundID, fund)
+	if sectorErr != nil {
+		log.Printf("⚠️ Failed to build fund sector snapshot for %s: %v", fundID, sectorErr)
+	}
+	category, categoryErr := h.resolveFundCategory(c.Request.Context(), fund, sectorSnapshot)
+	if categoryErr != nil {
+		log.Printf("⚠️ Failed to resolve fund category for %s: %v", fundID, categoryErr)
+	} else if category != nil {
+		fund.CategoryCode = category.Code
+		fund.CategoryName = category.Name
+	}
+
 	c.JSON(http.StatusOK, APIResponse{
 		Success: true,
 		Data: FundDashboardResponse{
 			Fund:           fund,
 			Estimate:       estimateResponse,
+			SectorSnapshot: sectorSnapshot,
 			TimeSeries:     timeSeries,
 			DisplayDate:    displayDate,
 			IsTrading:      marketStatus.IsTrading,
@@ -294,6 +376,58 @@ func (h *FundHandler) GetDashboard(c *gin.Context) {
 		},
 		Meta: buildResponseMeta("", cacheStatus),
 	})
+}
+
+func (h *FundHandler) buildFundSectorSnapshot(ctx context.Context, fundID string, fund *domain.Fund) (*domain.FundSectorSnapshot, error) {
+	if h == nil || h.sectorStore == nil || fund == nil {
+		return nil, nil
+	}
+
+	holdings, err := h.fundRepo.GetFundHoldings(ctx, fundID)
+	if err != nil {
+		return nil, err
+	}
+
+	source := service.SectorSourceDirectHoldings
+	if shouldHydrateFundHoldings(fund, holdings) {
+		hydratedFund, hydratedHoldings, _ := h.cachedFundDataOrScheduleWarmup(fundID)
+		if hydratedFund != nil {
+			fund = hydratedFund
+		}
+		if len(hydratedHoldings) > 0 {
+			holdings = hydratedHoldings
+		}
+	}
+
+	if !hasEffectiveFundHoldings(holdings) && h.holdingsResolver != nil {
+		resolvedHoldings, holdingsSource, resolveErr := h.holdingsResolver.GetHoldingsWithFallback(ctx, fundID, fund.Name)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		if len(resolvedHoldings) > 0 {
+			holdings = resolvedHoldings
+			if holdingsSource != "" && holdingsSource != fundID {
+				source = service.SectorSourceTargetETFFallback
+			}
+		}
+	}
+
+	if !hasEffectiveFundHoldings(holdings) {
+		return nil, nil
+	}
+
+	if strings.Contains(strings.ToLower(fund.Type), "qdii") || strings.Contains(strings.ToLower(fund.Name), "qdii") {
+		source = service.SectorSourceQDIIHoldings
+	}
+
+	return h.sectorStore.UpsertFromHoldings(ctx, fundID, holdings, source)
+}
+
+func (h *FundHandler) resolveFundCategory(ctx context.Context, fund *domain.Fund, snapshot *domain.FundSectorSnapshot) (*domain.FundCategory, error) {
+	if h == nil || h.sectorStore == nil || fund == nil {
+		return nil, nil
+	}
+	return h.sectorStore.ResolveFundCategory(ctx, fund, snapshot)
 }
 
 // GetHoldings handles fund holdings requests.

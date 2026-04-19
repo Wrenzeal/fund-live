@@ -18,9 +18,13 @@ description: 用于对 Go 后端、Next.js 前端及容器化环境进行深度�
 
 ## 3. 执行工作流 (Execution Workflow)
 
+0.  **阶段零前：本地记忆恢复 (Local Context Restore)**
+    * **动作：** 优先读取 `AGENTS.md`、`.omx/context/current-state.md`、`.omx/context/architecture.md`、`.omx/context/features.md`、`.omx/context/conventions.md`、`.omx/context/known-issues.md`，再结合 `todo_list.md`。
+    * **目标：** 在开始扫描前先恢复当前项目的本地持久上下文，避免重复误判、遗漏既有约束或忽视最近完成的改动。
+
 1.  **阶段零：目录指纹 (Footprint Inventory)**
     * **动作：** 执行 `ls -R` 或通过工具读取根目录结构（深度限制为 2-3 层）。
-    * **目标：** 识别项目是单体库（Monorepo）还是前后端分离结构，确定 `web`、`cmd`、`internal`、`api` 等核心目录位置。
+    * **目标：** 识别项目是单体库（Monorepo）还是前后端分离结构，确定 `web`、`cmd`、`internal`、`api` 等核心目录位置，并与本地记忆库中的架构摘要互相校验。
 
 2.  **阶段一：基础设施与环境嗅探 (Environment Sniffing)**
     * **动作：** 检索 `docker-compose.yml`, `Dockerfile`, `Makefile`, `k8s/` 或 `helm/` 目录。
@@ -35,7 +39,7 @@ description: 用于对 Go 后端、Next.js 前端及容器化环境进行深度�
     * **目标：** 明确渲染模式（SSR/ISR/CSR）、UI 组件库（Tailwind/Shadcn）、鉴权逻辑及与后端的交互范式。
 
 5.  **阶段四：生成白皮书 (Final Output)**
-    * **动作：** 汇总信息，按照规定模板输出，并声明进入就绪状态。
+    * **动作：** 汇总信息，按照规定模板输出，并在必要时将新的稳定结论回写到本地记忆库对应文件（高频结论写 `current-state.md`，长期结论写架构/功能/约定文件），然后声明进入就绪状态。
 
 ## 4. 输出模板 (Output Template)
 

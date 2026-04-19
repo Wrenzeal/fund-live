@@ -105,8 +105,15 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
                                                     {fund.id} · {fund.manager} · {fund.company}
                                                 </div>
                                             </div>
-                                            <div className="text-xs text-cyan-400 font-mono">
-                                                {fund.type}
+                                            <div className="text-right">
+                                                <div className="text-xs text-cyan-400 font-mono">
+                                                    {fund.type}
+                                                </div>
+                                                {fund.category_name && (
+                                                    <div className="mt-1 text-[11px] text-theme-muted">
+                                                        {fund.category_name}
+                                                    </div>
+                                                )}
                                             </div>
                                         </button>
                                     </li>

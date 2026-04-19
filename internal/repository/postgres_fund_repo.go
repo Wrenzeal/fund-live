@@ -427,14 +427,15 @@ func (r *PostgresFundRepository) GetFundHistoriesByLookupKeys(ctx context.Contex
 
 func (r *PostgresFundRepository) toDomainFund(dbFund *database.Fund) *domain.Fund {
 	return &domain.Fund{
-		ID:          dbFund.ID,
-		Name:        dbFund.Name,
-		Type:        dbFund.Type,
-		Manager:     dbFund.Manager,
-		Company:     dbFund.Company,
-		NetAssetVal: dbFund.NetAssetVal,
-		TotalScale:  dbFund.TotalScale,
-		UpdatedAt:   dbFund.UpdatedAt,
+		ID:           dbFund.ID,
+		Name:         dbFund.Name,
+		Type:         dbFund.Type,
+		CategoryCode: dbFund.CategoryCode,
+		Manager:      dbFund.Manager,
+		Company:      dbFund.Company,
+		NetAssetVal:  dbFund.NetAssetVal,
+		TotalScale:   dbFund.TotalScale,
+		UpdatedAt:    dbFund.UpdatedAt,
 	}
 }
 
@@ -454,13 +455,14 @@ func uniqueTimes(values []time.Time) []time.Time {
 
 func (r *PostgresFundRepository) toDBFund(fund *domain.Fund) *database.Fund {
 	return &database.Fund{
-		ID:          fund.ID,
-		Name:        fund.Name,
-		Type:        fund.Type,
-		Manager:     fund.Manager,
-		Company:     fund.Company,
-		NetAssetVal: fund.NetAssetVal,
-		TotalScale:  fund.TotalScale,
+		ID:           fund.ID,
+		Name:         fund.Name,
+		Type:         fund.Type,
+		CategoryCode: fund.CategoryCode,
+		Manager:      fund.Manager,
+		Company:      fund.Company,
+		NetAssetVal:  fund.NetAssetVal,
+		TotalScale:   fund.TotalScale,
 	}
 }
 
