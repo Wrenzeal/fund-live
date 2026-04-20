@@ -285,9 +285,12 @@ func (s *UserPreferenceService) ListFundHoldings(ctx context.Context, userID str
 	}
 
 	items := make([]domain.UserFundHoldingDetail, 0, len(holdings))
+	aggregateAccumulators := make(map[string]*holdingAggregateAccumulator, len(holdings))
+	aggregateOrder := make([]string, 0, len(holdings))
 	totalCurrentMarketValue := decimal.Zero
 	totalTodayProfit := decimal.Zero
 	totalPreviousMarketValue := decimal.Zero
+	readyPrincipal := decimal.Zero
 	readyCount := 0
 
 	for _, holding := range holdings {
@@ -306,19 +309,32 @@ func (s *UserPreferenceService) ListFundHoldings(ctx context.Context, userID str
 		)
 		if metrics != nil {
 			readyCount++
+			readyPrincipal = readyPrincipal.Add(resolvedHolding.Amount)
 			totalCurrentMarketValue = totalCurrentMarketValue.Add(metrics.currentMarketValue)
 			totalTodayProfit = totalTodayProfit.Add(metrics.todayProfit)
 			totalPreviousMarketValue = totalPreviousMarketValue.Add(metrics.currentMarketValue.Sub(metrics.todayProfit))
 		}
+		accumulator, exists := aggregateAccumulators[holding.FundID]
+		if !exists {
+			accumulator = &holdingAggregateAccumulator{
+				fundID: holding.FundID,
+				fund:   fundsByID[holding.FundID],
+			}
+			aggregateAccumulators[holding.FundID] = accumulator
+			aggregateOrder = append(aggregateOrder, holding.FundID)
+		}
+		accumulator.add(resolvedHolding, metrics)
 
 		items = append(items, detail)
 	}
 
 	return &domain.UserFundHoldingList{
-		Items: items,
+		Items:      items,
+		Aggregates: buildUserFundHoldingAggregates(aggregateAccumulators, aggregateOrder),
 		Summary: buildUserFundHoldingSummary(
 			holdings,
 			readyCount,
+			readyPrincipal,
 			totalCurrentMarketValue,
 			totalTodayProfit,
 			totalPreviousMarketValue,
@@ -586,6 +602,46 @@ type holdingRealMetrics struct {
 	todayChangePercent decimal.Decimal
 }
 
+type holdingAggregateAccumulator struct {
+	fundID                string
+	fund                  *domain.Fund
+	holdingCount          int
+	confirmedHoldingCount int
+	realMetricsReadyCount int
+	totalPrincipal        decimal.Decimal
+	confirmedPrincipal    decimal.Decimal
+	readyPrincipal        decimal.Decimal
+	confirmedShares       decimal.Decimal
+	officialCurrentValue  decimal.Decimal
+	officialTodayProfit   decimal.Decimal
+	officialPreviousValue decimal.Decimal
+}
+
+func (a *holdingAggregateAccumulator) add(holding domain.UserFundHolding, metrics *holdingRealMetrics) {
+	if a == nil {
+		return
+	}
+
+	a.holdingCount++
+	a.totalPrincipal = a.totalPrincipal.Add(holding.Amount)
+
+	if holding.Shares.GreaterThan(decimal.Zero) {
+		a.confirmedHoldingCount++
+		a.confirmedPrincipal = a.confirmedPrincipal.Add(holding.Amount)
+		a.confirmedShares = a.confirmedShares.Add(holding.Shares)
+	}
+
+	if metrics == nil {
+		return
+	}
+
+	a.realMetricsReadyCount++
+	a.readyPrincipal = a.readyPrincipal.Add(holding.Amount)
+	a.officialCurrentValue = a.officialCurrentValue.Add(metrics.currentMarketValue)
+	a.officialTodayProfit = a.officialTodayProfit.Add(metrics.todayProfit)
+	a.officialPreviousValue = a.officialPreviousValue.Add(metrics.currentMarketValue.Sub(metrics.todayProfit))
+}
+
 func buildUserFundHoldingDetail(
 	holding domain.UserFundHolding,
 	fund *domain.Fund,
@@ -629,15 +685,17 @@ func buildUserFundHoldingDetail(
 func buildUserFundHoldingSummary(
 	holdings []domain.UserFundHolding,
 	readyCount int,
+	readyPrincipal decimal.Decimal,
 	totalCurrentMarketValue decimal.Decimal,
 	totalTodayProfit decimal.Decimal,
 	totalPreviousMarketValue decimal.Decimal,
 ) domain.UserFundHoldingSummary {
 	summary := domain.UserFundHoldingSummary{
-		TotalPrincipal:        decimal.Zero,
-		RealMetricsReady:      false,
-		RealMetricsReadyCount: readyCount,
-		TotalHoldings:         len(holdings),
+		TotalPrincipal:          decimal.Zero,
+		RealMetricsReady:        false,
+		RealMetricsReadyCount:   readyCount,
+		TotalHoldings:           len(holdings),
+		IncompleteHoldingsCount: max(len(holdings)-readyCount, 0),
 	}
 
 	for _, holding := range holdings {
@@ -646,16 +704,15 @@ func buildUserFundHoldingSummary(
 
 	switch {
 	case len(holdings) == 0:
+		summary.MetricsScope = "none"
 		return summary
 	case readyCount == 0:
+		summary.MetricsScope = "none"
 		summary.Message = "待官方净值与确认份额齐备后展示真实市值与盈亏。"
-		return summary
-	case readyCount < len(holdings):
-		summary.Message = "部分持仓仍缺少确认净值，暂不展示总仓真实市值与盈亏。"
 		return summary
 	}
 
-	summary.RealMetricsReady = true
+	summary.ReadyPrincipal = readyPrincipal.StringFixedBank(2)
 	summary.TotalCurrentMarketValue = totalCurrentMarketValue.StringFixedBank(2)
 	summary.TotalTodayProfit = totalTodayProfit.StringFixedBank(2)
 	if totalPreviousMarketValue.GreaterThan(decimal.Zero) {
@@ -664,7 +721,96 @@ func buildUserFundHoldingSummary(
 			Mul(decimal.NewFromInt(100)).
 			String()
 	}
+
+	if readyCount < len(holdings) {
+		summary.MetricsScope = "partial"
+		summary.Message = fmt.Sprintf(
+			"已按最新官方净值汇总 %d/%d 条持仓，剩余持仓待确认净值或今日官方净值同步。",
+			readyCount,
+			len(holdings),
+		)
+		return summary
+	}
+
+	summary.MetricsScope = "full"
+	summary.RealMetricsReady = true
 	return summary
+}
+
+func buildUserFundHoldingAggregates(
+	accumulators map[string]*holdingAggregateAccumulator,
+	order []string,
+) []domain.UserFundHoldingAggregate {
+	if len(order) == 0 {
+		return []domain.UserFundHoldingAggregate{}
+	}
+
+	aggregates := make([]domain.UserFundHoldingAggregate, 0, len(order))
+	for _, fundID := range order {
+		accumulator := accumulators[fundID]
+		if accumulator == nil {
+			continue
+		}
+
+		aggregate := domain.UserFundHoldingAggregate{
+			FundID:                  accumulator.fundID,
+			HoldingCount:            accumulator.holdingCount,
+			ConfirmedHoldingCount:   accumulator.confirmedHoldingCount,
+			RealMetricsReadyCount:   accumulator.realMetricsReadyCount,
+			IncompleteHoldingsCount: max(accumulator.holdingCount-accumulator.realMetricsReadyCount, 0),
+			TotalPrincipal:          accumulator.totalPrincipal,
+			MetricsScope:            "none",
+			RealMetricsReady:        false,
+			Fund:                    accumulator.fund,
+		}
+
+		if accumulator.confirmedPrincipal.GreaterThan(decimal.Zero) {
+			aggregate.ConfirmedPrincipal = accumulator.confirmedPrincipal.StringFixedBank(2)
+		}
+		if accumulator.readyPrincipal.GreaterThan(decimal.Zero) {
+			aggregate.ReadyPrincipal = accumulator.readyPrincipal.StringFixedBank(2)
+		}
+		if accumulator.confirmedShares.GreaterThan(decimal.Zero) {
+			aggregate.ConfirmedShares = accumulator.confirmedShares.StringFixedBank(6)
+		}
+
+		switch {
+		case accumulator.holdingCount == 0:
+			aggregate.MetricsScope = "none"
+		case accumulator.realMetricsReadyCount == 0:
+			aggregate.MetricsScope = "none"
+			if accumulator.confirmedHoldingCount > 0 {
+				aggregate.Message = "已确认部分份额，待最近官方净值同步后展示官方汇总。"
+			} else {
+				aggregate.Message = "待确认净值补齐后展示官方汇总。"
+			}
+		default:
+			aggregate.OfficialCurrentMarketValue = accumulator.officialCurrentValue.StringFixedBank(2)
+			aggregate.OfficialTodayProfit = accumulator.officialTodayProfit.StringFixedBank(2)
+			if accumulator.officialPreviousValue.GreaterThan(decimal.Zero) {
+				aggregate.OfficialTodayChangePercent = accumulator.officialTodayProfit.
+					DivRound(accumulator.officialPreviousValue, 8).
+					Mul(decimal.NewFromInt(100)).
+					String()
+			}
+
+			if accumulator.realMetricsReadyCount < accumulator.holdingCount {
+				aggregate.MetricsScope = "partial"
+				aggregate.Message = fmt.Sprintf(
+					"已按最新官方净值汇总 %d/%d 笔，剩余分笔待补齐。",
+					accumulator.realMetricsReadyCount,
+					accumulator.holdingCount,
+				)
+			} else {
+				aggregate.MetricsScope = "full"
+				aggregate.RealMetricsReady = true
+			}
+		}
+
+		aggregates = append(aggregates, aggregate)
+	}
+
+	return aggregates
 }
 
 func calculateHoldingRealMetrics(

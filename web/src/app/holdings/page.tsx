@@ -3,20 +3,23 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, BarChart4, CalendarDays, CheckCircle2, Clock3, FileStack, LoaderCircle, Plus, Wallet } from 'lucide-react'
+import { AlertTriangle, BarChart4, CalendarDays, CheckCircle2, Clock3, FileStack, Layers3, ListTree, LoaderCircle, Plus, Wallet } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
+import { HoldingAggregateRow } from '@/components/holding-aggregate-row'
 import { HoldingFundRow } from '@/components/holding-fund-row'
 import { VIPAnalysisEntry } from '@/components/vip-analysis-entry'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { useFundSearch } from '@/hooks/use-fund-data'
 import { useMarketStatus, usePricingDatePreview } from '@/hooks/use-market-status'
-import { useUserPortfolio } from '@/hooks/use-user-portfolio'
+import { useHoldingEstimateMetrics, useUserPortfolio } from '@/hooks/use-user-portfolio'
 import { useVIPPreview } from '@/hooks/use-vip-preview'
 import { VIP_SAMPLE_REPORT_IDS } from '@/mocks/vip'
 import { cn } from '@/lib/utils'
 
 const BEIJING_OFFSET = '+08:00'
 type TradeTiming = 'before_close' | 'after_close'
+type HoldingViewMode = 'aggregate' | 'detail'
+type HoldingMetricScope = 'official' | 'estimate'
 
 function buildTradeAtValue(date: string, tradeTiming: TradeTiming) {
   if (!date) {
@@ -98,13 +101,15 @@ export default function HoldingsPage() {
   const router = useRouter()
   const { user, isLoading } = useCurrentUser()
   const marketStatus = useMarketStatus()
-  const { holdings, holdingSummary, seedDemoData, addHolding, removeHolding } = useUserPortfolio(user?.id ?? null)
+  const { holdings, holdingAggregates, holdingSummary, seedDemoData, addHolding, removeHolding } = useUserPortfolio(user?.id ?? null)
   const [query, setQuery] = useState('')
   const [selectedFundID, setSelectedFundID] = useState('')
   const [selectedFundName, setSelectedFundName] = useState('')
   const [amount, setAmount] = useState('')
   const [tradeDate, setTradeDate] = useState('')
   const [tradeTiming, setTradeTiming] = useState<TradeTiming>('before_close')
+  const [viewMode, setViewMode] = useState<HoldingViewMode>('aggregate')
+  const [metricScope, setMetricScope] = useState<HoldingMetricScope>('official')
   const [note, setNote] = useState('')
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [vipFeedback, setVipFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -163,6 +168,25 @@ export default function HoldingsPage() {
     : isPricingPreviewLoading
       ? '正在按后端交易日历校验确认净值日...'
       : preview?.message || '正在按后端交易日历校验确认净值日...'
+  const hasOfficialSummaryMetrics = holdingSummary.real_metrics_ready_count > 0
+  const officialSummaryCoverage = hasOfficialSummaryMetrics
+    ? `${holdingSummary.real_metrics_ready_count}/${holdingSummary.total_holdings} 条`
+    : ''
+  const officialReadyPrincipalText = hasOfficialSummaryMetrics ? formatSummaryMoney(holdingSummary.ready_principal) : '--'
+  const totalPrincipalText = formatSummaryMoney(holdingSummary.total_principal)
+  const { estimatesByFundID, aggregateMetrics, summary: previewSummary } = useHoldingEstimateMetrics(holdingAggregates)
+  const hasPreviewSummaryMetrics = previewSummary.ready_count > 0
+  const previewSummaryCoverage = hasPreviewSummaryMetrics ? `${previewSummary.ready_count}/${previewSummary.total_count} 只基金` : ''
+  const previewReadyPrincipalText = hasPreviewSummaryMetrics ? formatSummaryMoney(previewSummary.ready_principal) : '--'
+  const holdingsByFundID = useMemo(() => {
+    return holdings.reduce<Record<string, typeof holdings>>((groups, holding) => {
+      if (!groups[holding.fund_id]) {
+        groups[holding.fund_id] = []
+      }
+      groups[holding.fund_id].push(holding)
+      return groups
+    }, {})
+  }, [holdings])
 
   const handleSeedDemo = async () => {
     setFeedback(null)
@@ -363,9 +387,15 @@ export default function HoldingsPage() {
                 <div className="text-sm text-theme-muted">持仓总览</div>
                 <div className="mt-1 text-3xl font-black text-theme-primary">{holdings.length} 条持仓记录</div>
                 <div className="mt-2 text-xs text-theme-muted">
-                  {holdingSummary.real_metrics_ready
-                    ? '总仓真实市值与今日盈亏已按最新官方净值计算。'
-                    : holdingSummary.message || '总仓真实口径会在官方净值和确认份额齐备后展示。'}
+                  {metricScope === 'official'
+                    ? holdingSummary.real_metrics_ready
+                      ? '总仓官方市值与今日盈亏已按最新官方净值完整计算。'
+                      : hasOfficialSummaryMetrics
+                        ? holdingSummary.message || `已按最新官方净值汇总 ${officialSummaryCoverage} 条持仓。`
+                        : holdingSummary.message || '总仓真实口径会在官方净值和确认份额齐备后展示。'
+                    : hasPreviewSummaryMetrics
+                      ? previewSummary.message || `盘中预估已按确认份额汇总 ${previewSummaryCoverage}。`
+                      : previewSummary.message || '盘中预估总览会在确认份额补齐后展示。'}
                 </div>
               </div>
 
@@ -392,39 +422,114 @@ export default function HoldingsPage() {
               )}
             </div>
 
+            {holdings.length > 0 && (
+              <div className="mb-6 flex flex-col gap-3 rounded-[24px] border border-[var(--card-border)] bg-[var(--card-bg)]/66 p-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    { id: 'aggregate', label: '按基金', icon: Layers3 },
+                    { id: 'detail', label: '分笔明细', icon: ListTree },
+                  ] as const).map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setViewMode(option.id)}
+                      className={cn(
+                        'inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs transition-all duration-200',
+                        viewMode === option.id
+                          ? 'border-cyan-400/50 bg-cyan-400/14 text-cyan-100 shadow-[0_10px_22px_rgba(34,211,238,0.12)]'
+                          : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-400/35 hover:text-theme-primary'
+                      )}
+                    >
+                      <option.icon className="h-3.5 w-3.5" />
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    { id: 'official', label: '官方口径' },
+                    { id: 'estimate', label: '盘中预估' },
+                  ] as const).map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setMetricScope(option.id)}
+                      className={cn(
+                        'rounded-full border px-3 py-2 text-xs transition-all duration-200',
+                        metricScope === option.id
+                          ? 'border-amber-400/45 bg-amber-400/14 text-amber-100 shadow-[0_10px_22px_rgba(251,191,36,0.12)]'
+                          : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-amber-300/35 hover:text-theme-primary'
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="mb-6 grid gap-4 lg:grid-cols-4">
               {[
                 {
                   label: '总本金',
-                  value: formatSummaryMoney(holdingSummary.total_principal),
+                  value: totalPrincipalText,
                   tone: 'text-theme-primary',
                   note: '按录入持仓本金汇总',
                 },
                 {
-                  label: '总当前市值',
-                  value: holdingSummary.real_metrics_ready ? formatSummaryMoney(holdingSummary.total_current_market_value) : '--',
+                  label: metricScope === 'official' ? '总最新官方市值' : '总盘中预估市值',
+                  value: metricScope === 'official'
+                    ? (hasOfficialSummaryMetrics ? formatSummaryMoney(holdingSummary.total_current_market_value) : '--')
+                    : (hasPreviewSummaryMetrics ? formatSummaryMoney(previewSummary.total_current_market_value) : '--'),
                   tone: 'text-theme-primary',
-                  note: holdingSummary.real_metrics_ready ? '基于最新官方净值' : '待真实净值与份额齐备',
+                  note: metricScope === 'official'
+                    ? (hasOfficialSummaryMetrics
+                      ? `已就绪本金 ${officialReadyPrincipalText} / ${totalPrincipalText}`
+                      : '待真实净值与份额齐备')
+                    : (hasPreviewSummaryMetrics
+                      ? `已确认本金 ${previewReadyPrincipalText} / ${totalPrincipalText}`
+                      : '待确认份额齐备'),
                 },
                 {
-                  label: '总今日盈亏',
-                  value: holdingSummary.real_metrics_ready ? formatSummaryMoney(holdingSummary.total_today_profit) : '--',
-                  tone: !holdingSummary.real_metrics_ready
+                  label: metricScope === 'official' ? '总官方盈亏' : '总预估盈亏',
+                  value: metricScope === 'official'
+                    ? (hasOfficialSummaryMetrics ? formatSummaryMoney(holdingSummary.total_today_profit) : '--')
+                    : (hasPreviewSummaryMetrics ? formatSummaryMoney(previewSummary.total_today_profit) : '--'),
+                  tone: !(metricScope === 'official' ? hasOfficialSummaryMetrics : hasPreviewSummaryMetrics)
                     ? 'text-theme-primary'
-                    : Number.parseFloat(holdingSummary.total_today_profit || '0') >= 0
+                    : Number.parseFloat((metricScope === 'official' ? holdingSummary.total_today_profit : previewSummary.total_today_profit) || '0') >= 0
                       ? 'text-up'
                       : 'text-down',
-                  note: holdingSummary.real_metrics_ready ? '仅按真实口径统计' : '暂不混入盘中预估',
+                  note: metricScope === 'official'
+                    ? (hasOfficialSummaryMetrics
+                      ? `官方口径：已就绪 ${officialSummaryCoverage}`
+                      : '暂不混入盘中预估')
+                    : (hasPreviewSummaryMetrics
+                      ? `预估口径：已就绪 ${previewSummaryCoverage}`
+                      : '仅在确认份额后纳入预估'),
                 },
                 {
-                  label: '总今日涨跌幅',
-                  value: holdingSummary.real_metrics_ready ? formatSummaryPercent(holdingSummary.total_today_change_percent) : '--',
-                  tone: !holdingSummary.real_metrics_ready
+                  label: metricScope === 'official' ? '总官方涨跌幅' : '总预估涨跌幅',
+                  value: metricScope === 'official'
+                    ? (hasOfficialSummaryMetrics ? formatSummaryPercent(holdingSummary.total_today_change_percent) : '--')
+                    : (hasPreviewSummaryMetrics ? formatSummaryPercent(previewSummary.total_today_change_percent) : '--'),
+                  tone: !(metricScope === 'official' ? hasOfficialSummaryMetrics : hasPreviewSummaryMetrics)
                     ? 'text-theme-primary'
-                    : Number.parseFloat(holdingSummary.total_today_change_percent || '0') >= 0
+                    : Number.parseFloat((metricScope === 'official' ? holdingSummary.total_today_change_percent : previewSummary.total_today_change_percent) || '0') >= 0
                       ? 'text-up'
                       : 'text-down',
-                  note: holdingSummary.real_metrics_ready ? '按总仓位加权计算' : `已就绪 ${holdingSummary.real_metrics_ready_count}/${holdingSummary.total_holdings} 条`,
+                  note: metricScope === 'official'
+                    ? (hasOfficialSummaryMetrics
+                      ? (holdingSummary.metrics_scope === 'partial'
+                        ? `按已就绪部分加权（剩余 ${holdingSummary.incomplete_holdings_count ?? 0} 条待补齐）`
+                        : '按总仓位加权计算')
+                      : `已就绪 ${holdingSummary.real_metrics_ready_count}/${holdingSummary.total_holdings} 条`)
+                    : (hasPreviewSummaryMetrics
+                      ? (previewSummary.metrics_scope === 'partial'
+                        ? `按确认份额部分加权（剩余 ${previewSummary.total_count - previewSummary.ready_count} 只基金待补齐）`
+                        : '按全部确认份额加权计算')
+                      : `已就绪 ${previewSummary.ready_count}/${previewSummary.total_count} 只基金`),
                 },
               ].map((metric) => (
                 <div key={metric.label} className="rounded-[24px] border border-[var(--card-border)] bg-[var(--card-bg)]/76 p-4">
@@ -690,13 +795,34 @@ export default function HoldingsPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {holdings.map((holding) => (
-              <HoldingFundRow
-                key={holding.id}
-                holding={holding}
-                onRemove={() => removeHolding(holding.id)}
-              />
-            ))}
+            {viewMode === 'aggregate'
+              ? holdingAggregates.map((aggregate) => (
+                  <HoldingAggregateRow
+                    key={aggregate.fund_id}
+                    aggregate={aggregate}
+                    metricScope={metricScope}
+                    estimateMetrics={aggregateMetrics[aggregate.fund_id]}
+                  >
+                    {(holdingsByFundID[aggregate.fund_id] ?? []).map((holding) => (
+                      <HoldingFundRow
+                        key={holding.id}
+                        holding={holding}
+                        metricScope={metricScope}
+                        estimate={estimatesByFundID[holding.fund_id]}
+                        onRemove={() => removeHolding(holding.id)}
+                      />
+                    ))}
+                  </HoldingAggregateRow>
+                ))
+              : holdings.map((holding) => (
+                  <HoldingFundRow
+                    key={holding.id}
+                    holding={holding}
+                    metricScope={metricScope}
+                    estimate={estimatesByFundID[holding.fund_id]}
+                    onRemove={() => removeHolding(holding.id)}
+                  />
+                ))}
           </div>
         )}
 

@@ -157,17 +157,41 @@ type UserFundHoldingDetail struct {
 // UserFundHoldingSummary aggregates the user's holdings page totals.
 type UserFundHoldingSummary struct {
 	TotalPrincipal          decimal.Decimal `json:"total_principal"`
+	ReadyPrincipal          string          `json:"ready_principal,omitempty"`
 	TotalCurrentMarketValue string          `json:"total_current_market_value,omitempty"`
 	TotalTodayProfit        string          `json:"total_today_profit,omitempty"`
 	TotalTodayChangePercent string          `json:"total_today_change_percent,omitempty"`
+	MetricsScope            string          `json:"metrics_scope,omitempty"`
 	RealMetricsReady        bool            `json:"real_metrics_ready"`
 	RealMetricsReadyCount   int             `json:"real_metrics_ready_count"`
 	TotalHoldings           int             `json:"total_holdings"`
+	IncompleteHoldingsCount int             `json:"incomplete_holdings_count"`
 	Message                 string          `json:"message,omitempty"`
+}
+
+// UserFundHoldingAggregate groups multiple holding records for the same fund.
+type UserFundHoldingAggregate struct {
+	FundID                     string          `json:"fund_id"`
+	HoldingCount               int             `json:"holding_count"`
+	ConfirmedHoldingCount      int             `json:"confirmed_holding_count"`
+	RealMetricsReadyCount      int             `json:"real_metrics_ready_count"`
+	IncompleteHoldingsCount    int             `json:"incomplete_holdings_count"`
+	TotalPrincipal             decimal.Decimal `json:"total_principal"`
+	ConfirmedPrincipal         string          `json:"confirmed_principal,omitempty"`
+	ReadyPrincipal             string          `json:"ready_principal,omitempty"`
+	ConfirmedShares            string          `json:"confirmed_shares,omitempty"`
+	OfficialCurrentMarketValue string          `json:"official_current_market_value,omitempty"`
+	OfficialTodayProfit        string          `json:"official_today_profit,omitempty"`
+	OfficialTodayChangePercent string          `json:"official_today_change_percent,omitempty"`
+	MetricsScope               string          `json:"metrics_scope,omitempty"`
+	RealMetricsReady           bool            `json:"real_metrics_ready"`
+	Message                    string          `json:"message,omitempty"`
+	Fund                       *Fund           `json:"fund,omitempty"`
 }
 
 // UserFundHoldingList groups holding items and summary totals.
 type UserFundHoldingList struct {
-	Items   []UserFundHoldingDetail `json:"items"`
-	Summary UserFundHoldingSummary  `json:"summary"`
+	Items      []UserFundHoldingDetail    `json:"items"`
+	Aggregates []UserFundHoldingAggregate `json:"aggregates,omitempty"`
+	Summary    UserFundHoldingSummary     `json:"summary"`
 }

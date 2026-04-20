@@ -3,12 +3,14 @@
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { useMarketTradingState } from '@/hooks/use-market-status'
-import { useFund, useFundEstimate } from '@/hooks/use-fund-data'
+import { useFund, type FundEstimate } from '@/hooks/use-fund-data'
 import { cn } from '@/lib/utils'
 import type { HoldingEntry } from '@/hooks/use-user-portfolio'
 
 interface HoldingFundRowProps {
   holding: HoldingEntry
+  metricScope?: 'official' | 'estimate'
+  estimate?: FundEstimate | null
   onRemove: () => Promise<void> | void
 }
 
@@ -41,6 +43,18 @@ function formatMetricCurrency(amount?: string) {
   }).format(value)
 }
 
+function formatNumberCurrency(value?: number) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return '--'
+  }
+
+  return new Intl.NumberFormat('zh-CN', {
+    style: 'currency',
+    currency: 'CNY',
+    maximumFractionDigits: 2,
+  }).format(value)
+}
+
 function formatPercentValue(value?: string) {
   if (!value) {
     return '--'
@@ -52,6 +66,23 @@ function formatPercentValue(value?: string) {
   }
 
   return `${parsed >= 0 ? '+' : ''}${parsed.toFixed(2)}%`
+}
+
+function formatNumberPercent(value?: number) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return '--'
+  }
+
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
+}
+
+function parseMetricNumber(value?: string) {
+  if (!value) {
+    return null
+  }
+
+  const parsed = Number.parseFloat(value)
+  return Number.isNaN(parsed) ? null : parsed
 }
 
 function formatEstimatedDelta(amount: string, changePercent?: string) {
@@ -108,31 +139,89 @@ function formatTradeAt(tradeAt?: string) {
   return formatter.format(parsed)
 }
 
-export function HoldingFundRow({ holding, onRemove }: HoldingFundRowProps) {
+export function HoldingFundRow({ holding, metricScope = 'official', estimate: providedEstimate, onRemove }: HoldingFundRowProps) {
   const [isRemoving, setIsRemoving] = useState(false)
   const { session } = useMarketTradingState()
   const isCallAuction = session === 'call_auction'
-  const { estimate } = useFundEstimate(isCallAuction || holding.real_metrics_ready ? null : holding.fund_id)
   const { fund } = useFund(holding.fund_id)
+  const estimate = providedEstimate ?? null
   const fundName = holding.fund?.name || fund?.name || estimate?.fund_name || holding.fund_id
   const tradeAtLabel = formatTradeAt(holding.trade_at)
   const estimateDelta = isCallAuction ? { text: '-', isPositive: false } : formatEstimatedDelta(holding.amount, estimate?.change_percent)
-  const todayProfitText = holding.real_metrics_ready ? formatMetricCurrency(holding.today_profit) : '--'
-  const todayChangePercentText = holding.real_metrics_ready ? formatPercentValue(holding.today_change_percent) : '--'
-  const currentMarketValueText = holding.real_metrics_ready ? formatMetricCurrency(holding.current_market_value) : '--'
   const confirmedDateLabel = holding.confirmed_nav_date || holding.as_of_date
-  const realMetricTone = holding.real_metrics_ready
-    ? (() => {
-        const profit = Number.parseFloat(holding.today_profit || '0')
-        return profit >= 0 ? 'text-up' : 'text-down'
-      })()
-    : 'text-theme-primary'
-  const changeTone = holding.real_metrics_ready
-    ? (() => {
-        const change = Number.parseFloat(holding.today_change_percent || '0')
-        return change >= 0 ? 'text-up' : 'text-down'
-      })()
-    : 'text-theme-primary'
+  const sharesNumber = parseMetricNumber(holding.shares)
+  const estimateNavNumber = parseMetricNumber(estimate?.estimate_nav)
+  const prevNavNumber = parseMetricNumber(estimate?.prev_nav)
+  const estimateChangePercentNumber = parseMetricNumber(estimate?.change_percent)
+  const hasEstimatedHoldingMetrics = !isCallAuction &&
+    typeof sharesNumber === 'number' &&
+    sharesNumber > 0 &&
+    typeof estimateNavNumber === 'number' &&
+    typeof prevNavNumber === 'number' &&
+    prevNavNumber > 0
+  const estimatedCurrentMarketValue = hasEstimatedHoldingMetrics ? sharesNumber * estimateNavNumber : null
+  const estimatedTodayProfit = hasEstimatedHoldingMetrics ? sharesNumber * (estimateNavNumber - prevNavNumber) : null
+  const isOfficialScope = metricScope === 'official'
+  const currentMarketValueLabel = isOfficialScope ? '最新官方市值' : '盘中预估市值'
+  const profitLabel = isOfficialScope ? '今日官方盈亏' : '盘中预估盈亏'
+  const changeLabel = isOfficialScope ? '今日官方涨跌幅' : '盘中预估涨跌幅'
+  const currentMarketValueText = isOfficialScope
+    ? (holding.real_metrics_ready ? formatMetricCurrency(holding.current_market_value) : '--')
+    : formatNumberCurrency(estimatedCurrentMarketValue ?? undefined)
+  const todayProfitText = isOfficialScope
+    ? (holding.real_metrics_ready ? formatMetricCurrency(holding.today_profit) : '--')
+    : hasEstimatedHoldingMetrics
+      ? formatNumberCurrency(estimatedTodayProfit ?? undefined)
+      : (!isCallAuction && estimate?.change_percent ? estimateDelta.text : '--')
+  const todayChangePercentText = isOfficialScope
+    ? (holding.real_metrics_ready ? formatPercentValue(holding.today_change_percent) : '--')
+    : formatNumberPercent(estimateChangePercentNumber ?? undefined)
+  const realMetricTone = (() => {
+    if (isOfficialScope && holding.real_metrics_ready) {
+      const profit = Number.parseFloat(holding.today_profit || '0')
+      return profit >= 0 ? 'text-up' : 'text-down'
+    }
+    if (hasEstimatedHoldingMetrics && typeof estimatedTodayProfit === 'number') {
+      return estimatedTodayProfit >= 0 ? 'text-up' : 'text-down'
+    }
+    if (!isCallAuction && estimate?.change_percent) {
+      return estimateDelta.isPositive ? 'text-up' : 'text-down'
+    }
+    return 'text-theme-primary'
+  })()
+  const changeTone = (() => {
+    if (isOfficialScope && holding.real_metrics_ready) {
+      const change = Number.parseFloat(holding.today_change_percent || '0')
+      return change >= 0 ? 'text-up' : 'text-down'
+    }
+    if (typeof estimateChangePercentNumber === 'number') {
+      return estimateChangePercentNumber >= 0 ? 'text-up' : 'text-down'
+    }
+    return 'text-theme-primary'
+  })()
+  const marketValueNote = isOfficialScope
+    ? holding.real_metrics_ready
+      ? `${holding.actual_date || '最新'} 官方净值口径`
+      : holding.real_metrics_message || '待今日官方净值同步后展示'
+    : hasEstimatedHoldingMetrics
+      ? `按 ${holding.shares || '--'} 份与盘中预估净值估算`
+      : '待确认净值补齐后展示'
+  const profitNote = isOfficialScope
+    ? `${holding.actual_date || '最新'} 官方净值口径`
+    : hasEstimatedHoldingMetrics
+      ? '盘中预估，按确认份额与预估净值计算'
+      : !isCallAuction && estimate?.change_percent
+        ? `按本金口径估算 ${estimateDelta.text}`
+        : '待确认份额补齐后展示'
+  const officialProfitNote = holding.real_metrics_ready
+    ? `已按 ${holding.actual_date || '最新'} 官方净值结算`
+    : holding.real_metrics_message || '待官方净值同步后展示'
+  const displayedProfitNote = isOfficialScope ? officialProfitNote : profitNote
+  const changeNote = isOfficialScope
+    ? (holding.real_metrics_ready ? '按最新官方涨跌幅展示' : '真实涨跌幅待同步')
+    : estimate?.change_percent
+      ? '盘中预估涨跌幅'
+      : '待确认份额补齐后展示'
 
   const handleRemove = async () => {
     if (isRemoving) {
@@ -169,45 +258,29 @@ export function HoldingFundRow({ holding, onRemove }: HoldingFundRowProps) {
       </div>
 
       <div>
-        <div className="text-xs text-theme-muted">当前市值</div>
+        <div className="text-xs text-theme-muted">{currentMarketValueLabel}</div>
         <div className="mt-1 text-lg font-semibold text-theme-primary">
           {currentMarketValueText}
         </div>
-        {holding.real_metrics_ready ? (
-          <div className="mt-1 text-xs text-theme-muted">
-            {holding.shares ? `按 ${holding.shares} 份估算` : '按确认份额估算'}
-          </div>
-        ) : (
-          <div className="mt-1 text-xs text-theme-muted">待确认净值补齐后展示</div>
-        )}
+        <div className="mt-1 text-xs text-theme-muted">{marketValueNote}</div>
       </div>
 
       <div>
-        <div className="text-xs text-theme-muted">今日盈亏</div>
+        <div className="text-xs text-theme-muted">{profitLabel}</div>
         <div className={cn('mt-1 text-lg font-semibold', realMetricTone)}>
           {todayProfitText}
         </div>
-        {holding.real_metrics_ready ? (
-          <div className="mt-1 text-xs text-theme-muted">
-            已按 {holding.actual_date || '最新'} 官方净值结算
-          </div>
-        ) : (
-          !isCallAuction && estimate?.change_percent && (
-            <div className={cn('mt-1 text-xs', estimateDelta.isPositive ? 'text-up' : 'text-down')}>
-              盘中预估 {estimateDelta.text}
-            </div>
-          )
-        )}
+        <div className={cn('mt-1 text-xs', isOfficialScope || !estimate?.change_percent ? 'text-theme-muted' : estimateDelta.isPositive ? 'text-up' : 'text-down')}>
+          {displayedProfitNote}
+        </div>
       </div>
 
       <div>
-        <div className="text-xs text-theme-muted">今日涨跌幅</div>
+        <div className="text-xs text-theme-muted">{changeLabel}</div>
         <div className={cn('mt-1 text-lg font-semibold', changeTone)}>
           {todayChangePercentText}
         </div>
-        {!holding.real_metrics_ready && (
-          <div className="mt-1 text-xs text-theme-muted">真实涨跌幅待同步</div>
-        )}
+        <div className="mt-1 text-xs text-theme-muted">{changeNote}</div>
       </div>
 
       <div>

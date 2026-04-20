@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -289,6 +290,9 @@ func TestUserPreferenceServiceListFundHoldingsComputesRealMetricsAndSummary(t *t
 	if len(holdings.Items) != 1 {
 		t.Fatalf("holdings len = %d, want 1", len(holdings.Items))
 	}
+	if len(holdings.Aggregates) != 1 {
+		t.Fatalf("aggregates len = %d, want 1", len(holdings.Aggregates))
+	}
 
 	item := holdings.Items[0]
 	if !item.RealMetricsReady {
@@ -318,6 +322,228 @@ func TestUserPreferenceServiceListFundHoldingsComputesRealMetricsAndSummary(t *t
 	}
 	if holdings.Summary.TotalTodayChangePercent != "2" {
 		t.Fatalf("total today change percent = %s, want 2", holdings.Summary.TotalTodayChangePercent)
+	}
+	if holdings.Summary.MetricsScope != "full" {
+		t.Fatalf("metrics scope = %s, want full", holdings.Summary.MetricsScope)
+	}
+	if holdings.Summary.IncompleteHoldingsCount != 0 {
+		t.Fatalf("incomplete holdings count = %d, want 0", holdings.Summary.IncompleteHoldingsCount)
+	}
+	if holdings.Summary.ReadyPrincipal != "50000.00" {
+		t.Fatalf("ready principal = %s, want 50000.00", holdings.Summary.ReadyPrincipal)
+	}
+
+	aggregate := holdings.Aggregates[0]
+	if aggregate.FundID != "005827" {
+		t.Fatalf("aggregate fund id = %s, want 005827", aggregate.FundID)
+	}
+	if aggregate.HoldingCount != 1 {
+		t.Fatalf("aggregate holding count = %d, want 1", aggregate.HoldingCount)
+	}
+	if aggregate.ConfirmedHoldingCount != 1 {
+		t.Fatalf("aggregate confirmed holding count = %d, want 1", aggregate.ConfirmedHoldingCount)
+	}
+	if aggregate.MetricsScope != "full" {
+		t.Fatalf("aggregate metrics scope = %s, want full", aggregate.MetricsScope)
+	}
+	if !aggregate.RealMetricsReady {
+		t.Fatalf("expected aggregate real metrics ready, got %+v", aggregate)
+	}
+	if aggregate.OfficialCurrentMarketValue != "60000.00" {
+		t.Fatalf("aggregate current market value = %s, want 60000.00", aggregate.OfficialCurrentMarketValue)
+	}
+	if aggregate.OfficialTodayProfit != "1176.47" {
+		t.Fatalf("aggregate today profit = %s, want 1176.47", aggregate.OfficialTodayProfit)
+	}
+	if aggregate.OfficialTodayChangePercent != "2" {
+		t.Fatalf("aggregate today change percent = %s, want 2", aggregate.OfficialTodayChangePercent)
+	}
+	if aggregate.ConfirmedShares != "40000.000000" {
+		t.Fatalf("aggregate confirmed shares = %s, want 40000.000000", aggregate.ConfirmedShares)
+	}
+}
+
+func TestUserPreferenceServiceListFundHoldingsComputesPartialOfficialSummary(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+	expectedDate := expectedOfficialHistoryDate(time.Now())
+
+	if err := fundRepo.SaveFundHistory(context.Background(), &domain.FundHistory{
+		FundID:      "005827",
+		Date:        "2026-03-30",
+		NetAssetVal: decimal.RequireFromString("1.2500"),
+		AccumVal:    decimal.RequireFromString("1.2500"),
+		DailyReturn: decimal.RequireFromString("0.1000"),
+		CreatedAt:   time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFundHistory() error = %v", err)
+	}
+	if err := fundRepo.SaveFundHistory(context.Background(), &domain.FundHistory{
+		FundID:      "005827",
+		Date:        expectedDate,
+		NetAssetVal: decimal.RequireFromString("1.5000"),
+		AccumVal:    decimal.RequireFromString("1.7000"),
+		DailyReturn: decimal.RequireFromString("2.0000"),
+		CreatedAt:   time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFundHistory() error = %v", err)
+	}
+
+	if _, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓"); err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+	if _, err := service.CreateFundHolding(context.Background(), "user-1", "003095", "28000", "2026-03-30T14:30:00+08:00", "主题仓位"); err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+
+	holdings, err := service.ListFundHoldings(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("ListFundHoldings() error = %v", err)
+	}
+	if len(holdings.Items) != 2 {
+		t.Fatalf("holdings len = %d, want 2", len(holdings.Items))
+	}
+	if len(holdings.Aggregates) != 2 {
+		t.Fatalf("aggregates len = %d, want 2", len(holdings.Aggregates))
+	}
+
+	if holdings.Summary.RealMetricsReady {
+		t.Fatalf("expected summary to remain partial, got %+v", holdings.Summary)
+	}
+	if holdings.Summary.MetricsScope != "partial" {
+		t.Fatalf("metrics scope = %s, want partial", holdings.Summary.MetricsScope)
+	}
+	if holdings.Summary.RealMetricsReadyCount != 1 {
+		t.Fatalf("ready count = %d, want 1", holdings.Summary.RealMetricsReadyCount)
+	}
+	if holdings.Summary.IncompleteHoldingsCount != 1 {
+		t.Fatalf("incomplete holdings count = %d, want 1", holdings.Summary.IncompleteHoldingsCount)
+	}
+	if holdings.Summary.TotalCurrentMarketValue != "60000.00" {
+		t.Fatalf("total current market value = %s, want 60000.00", holdings.Summary.TotalCurrentMarketValue)
+	}
+	if holdings.Summary.TotalTodayProfit != "1176.47" {
+		t.Fatalf("total today profit = %s, want 1176.47", holdings.Summary.TotalTodayProfit)
+	}
+	if holdings.Summary.TotalTodayChangePercent != "2" {
+		t.Fatalf("total today change percent = %s, want 2", holdings.Summary.TotalTodayChangePercent)
+	}
+	if holdings.Summary.ReadyPrincipal != "50000.00" {
+		t.Fatalf("ready principal = %s, want 50000.00", holdings.Summary.ReadyPrincipal)
+	}
+	if !strings.Contains(holdings.Summary.Message, "1/2") {
+		t.Fatalf("message = %q, want partial coverage hint", holdings.Summary.Message)
+	}
+
+	aggregate := holdings.Aggregates[0]
+	if aggregate.FundID != "005827" {
+		t.Fatalf("aggregate fund id = %s, want 005827", aggregate.FundID)
+	}
+	if aggregate.MetricsScope != "full" {
+		t.Fatalf("aggregate metrics scope = %s, want full", aggregate.MetricsScope)
+	}
+	if !aggregate.RealMetricsReady {
+		t.Fatalf("expected aggregate 005827 full ready, got %+v", aggregate)
+	}
+
+	partialAggregate := holdings.Aggregates[1]
+	if partialAggregate.FundID != "003095" {
+		t.Fatalf("aggregate fund id = %s, want 003095", partialAggregate.FundID)
+	}
+	if partialAggregate.MetricsScope != "none" {
+		t.Fatalf("aggregate metrics scope = %s, want none", partialAggregate.MetricsScope)
+	}
+	if partialAggregate.RealMetricsReady {
+		t.Fatalf("expected aggregate 003095 not ready, got %+v", partialAggregate)
+	}
+	if partialAggregate.Message == "" {
+		t.Fatalf("expected aggregate message for 003095")
+	}
+}
+
+func TestUserPreferenceServiceListFundHoldingsAggregatesMultipleLotsOfSameFund(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+	expectedDate := expectedOfficialHistoryDate(time.Now())
+
+	if err := fundRepo.SaveFundHistory(context.Background(), &domain.FundHistory{
+		FundID:      "005827",
+		Date:        "2026-03-30",
+		NetAssetVal: decimal.RequireFromString("1.2500"),
+		AccumVal:    decimal.RequireFromString("1.2500"),
+		DailyReturn: decimal.RequireFromString("0.1000"),
+		CreatedAt:   time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFundHistory() error = %v", err)
+	}
+	if err := fundRepo.SaveFundHistory(context.Background(), &domain.FundHistory{
+		FundID:      "005827",
+		Date:        expectedDate,
+		NetAssetVal: decimal.RequireFromString("1.5000"),
+		AccumVal:    decimal.RequireFromString("1.7000"),
+		DailyReturn: decimal.RequireFromString("2.0000"),
+		CreatedAt:   time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFundHistory() error = %v", err)
+	}
+
+	if _, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "第一笔"); err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+	if err := userRepo.SaveFundHolding(context.Background(), &domain.UserFundHolding{
+		ID:        "ufh_manual",
+		UserID:    "user-1",
+		FundID:    "005827",
+		Amount:    decimal.RequireFromString("20000"),
+		TradeAt:   "2026-04-02T15:01:00+08:00",
+		AsOfDate:  "2026-04-03",
+		Note:      "第二笔",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFundHolding() error = %v", err)
+	}
+
+	holdings, err := service.ListFundHoldings(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("ListFundHoldings() error = %v", err)
+	}
+	if len(holdings.Aggregates) != 1 {
+		t.Fatalf("aggregates len = %d, want 1", len(holdings.Aggregates))
+	}
+
+	aggregate := holdings.Aggregates[0]
+	if aggregate.HoldingCount != 2 {
+		t.Fatalf("aggregate holding count = %d, want 2", aggregate.HoldingCount)
+	}
+	if aggregate.ConfirmedHoldingCount != 1 {
+		t.Fatalf("aggregate confirmed holding count = %d, want 1", aggregate.ConfirmedHoldingCount)
+	}
+	if aggregate.RealMetricsReadyCount != 1 {
+		t.Fatalf("aggregate real metrics ready count = %d, want 1", aggregate.RealMetricsReadyCount)
+	}
+	if aggregate.IncompleteHoldingsCount != 1 {
+		t.Fatalf("aggregate incomplete holdings count = %d, want 1", aggregate.IncompleteHoldingsCount)
+	}
+	if aggregate.TotalPrincipal.String() != "70000" {
+		t.Fatalf("aggregate total principal = %s, want 70000", aggregate.TotalPrincipal.String())
+	}
+	if aggregate.ConfirmedPrincipal != "50000.00" {
+		t.Fatalf("aggregate confirmed principal = %s, want 50000.00", aggregate.ConfirmedPrincipal)
+	}
+	if aggregate.ReadyPrincipal != "50000.00" {
+		t.Fatalf("aggregate ready principal = %s, want 50000.00", aggregate.ReadyPrincipal)
+	}
+	if aggregate.MetricsScope != "partial" {
+		t.Fatalf("aggregate metrics scope = %s, want partial", aggregate.MetricsScope)
+	}
+	if aggregate.RealMetricsReady {
+		t.Fatalf("expected aggregate partial not full ready, got %+v", aggregate)
+	}
+	if !strings.Contains(aggregate.Message, "1/2") {
+		t.Fatalf("aggregate message = %q, want partial coverage hint", aggregate.Message)
 	}
 }
 
