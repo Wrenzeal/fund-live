@@ -79,6 +79,66 @@ func (FundSectorBreakdown) TableName() string {
 	return "fund_sector_breakdown"
 }
 
+type FundTheme struct {
+	Code       string    `gorm:"primaryKey;type:varchar(50)" json:"code"`
+	Name       string    `gorm:"type:varchar(100);not null" json:"name"`
+	ParentCode string    `gorm:"type:varchar(50);index" json:"parent_code"`
+	Level      int       `gorm:"not null;default:1" json:"level"`
+	SortOrder  int       `gorm:"not null;default:0" json:"sort_order"`
+	IsEnabled  bool      `gorm:"not null;default:true" json:"is_enabled"`
+	CreatedAt  time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt  time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+func (FundTheme) TableName() string {
+	return "fund_themes"
+}
+
+type InstrumentThemeMap struct {
+	ID             uint            `gorm:"primaryKey;autoIncrement" json:"id"`
+	InstrumentCode string          `gorm:"type:varchar(20);not null;uniqueIndex:idx_instrument_theme_map_code_exchange_theme,priority:1" json:"instrument_code"`
+	Exchange       string          `gorm:"type:varchar(8);not null;uniqueIndex:idx_instrument_theme_map_code_exchange_theme,priority:2" json:"exchange"`
+	ThemeCode      string          `gorm:"type:varchar(50);not null;uniqueIndex:idx_instrument_theme_map_code_exchange_theme,priority:3;index" json:"theme_code"`
+	Source         string          `gorm:"type:varchar(50);not null" json:"source"`
+	Weight         decimal.Decimal `gorm:"type:decimal(8,4);not null;default:1.0000" json:"weight"`
+	CreatedAt      time.Time       `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt      time.Time       `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+func (InstrumentThemeMap) TableName() string {
+	return "instrument_theme_map"
+}
+
+type FundThemeSnapshot struct {
+	ID               uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	FundID           string    `gorm:"type:varchar(10);not null;uniqueIndex:idx_fund_theme_snapshot_fund_date,priority:1;index" json:"fund_id"`
+	AsOfDate         time.Time `gorm:"type:date;not null;uniqueIndex:idx_fund_theme_snapshot_fund_date,priority:2" json:"as_of_date"`
+	PrimaryThemeCode string    `gorm:"type:varchar(50);not null;index" json:"primary_theme_code"`
+	Source           string    `gorm:"type:varchar(50);not null" json:"source"`
+	Confidence       string    `gorm:"type:varchar(20);not null" json:"confidence"`
+	CreatedAt        time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt        time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+func (FundThemeSnapshot) TableName() string {
+	return "fund_theme_snapshots"
+}
+
+type FundThemeBreakdown struct {
+	ID            uint            `gorm:"primaryKey;autoIncrement" json:"id"`
+	FundID        string          `gorm:"type:varchar(10);not null;uniqueIndex:idx_fund_theme_breakdown_fund_date_theme,priority:1;index" json:"fund_id"`
+	AsOfDate      time.Time       `gorm:"type:date;not null;uniqueIndex:idx_fund_theme_breakdown_fund_date_theme,priority:2" json:"as_of_date"`
+	ThemeCode     string          `gorm:"type:varchar(50);not null;uniqueIndex:idx_fund_theme_breakdown_fund_date_theme,priority:3;index" json:"theme_code"`
+	WeightPercent decimal.Decimal `gorm:"type:decimal(8,4);not null" json:"weight_percent"`
+	Rank          int             `gorm:"not null;default:0" json:"rank"`
+	CreatedAt     time.Time       `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt     time.Time       `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+func (FundThemeBreakdown) TableName() string {
+	return "fund_theme_breakdown"
+}
+
 type FundClassificationOverride struct {
 	ID                uint      `gorm:"primaryKey;autoIncrement" json:"id"`
 	FundID            string    `gorm:"type:varchar(10);not null;uniqueIndex" json:"fund_id"`

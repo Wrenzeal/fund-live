@@ -2,6 +2,9 @@
 
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
+import { FundAnalysisBadge } from '@/components/fund-analysis-badge'
+import { FundAnalysisEventHint } from '@/components/fund-analysis-event-hint'
+import type { FundAnalysis } from '@/hooks/use-fund-data'
 import { useMarketTradingState } from '@/hooks/use-market-status'
 import { useFund, type FundEstimate } from '@/hooks/use-fund-data'
 import { cn } from '@/lib/utils'
@@ -11,6 +14,7 @@ interface HoldingFundRowProps {
   holding: HoldingEntry
   metricScope?: 'official' | 'estimate'
   estimate?: FundEstimate | null
+  analysis?: FundAnalysis | null
   onRemove: () => Promise<void> | void
 }
 
@@ -139,7 +143,7 @@ function formatTradeAt(tradeAt?: string) {
   return formatter.format(parsed)
 }
 
-export function HoldingFundRow({ holding, metricScope = 'official', estimate: providedEstimate, onRemove }: HoldingFundRowProps) {
+export function HoldingFundRow({ holding, metricScope = 'official', estimate: providedEstimate, analysis, onRemove }: HoldingFundRowProps) {
   const [isRemoving, setIsRemoving] = useState(false)
   const { session } = useMarketTradingState()
   const isCallAuction = session === 'call_auction'
@@ -162,22 +166,25 @@ export function HoldingFundRow({ holding, metricScope = 'official', estimate: pr
   const estimatedCurrentMarketValue = hasEstimatedHoldingMetrics ? sharesNumber * estimateNavNumber : null
   const estimatedTodayProfit = hasEstimatedHoldingMetrics ? sharesNumber * (estimateNavNumber - prevNavNumber) : null
   const isOfficialScope = metricScope === 'official'
-  const currentMarketValueLabel = isOfficialScope ? '最新官方市值' : '盘中预估市值'
-  const profitLabel = isOfficialScope ? '今日官方盈亏' : '盘中预估盈亏'
-  const changeLabel = isOfficialScope ? '今日官方涨跌幅' : '盘中预估涨跌幅'
+  const shouldUseOfficialValues = isOfficialScope && holding.real_metrics_ready
+  const currentMarketValueLabel = shouldUseOfficialValues ? '最新官方市值' : '盘中预估市值'
+  const profitLabel = shouldUseOfficialValues ? '今日官方盈亏' : '实时盈亏预估'
+  const changeLabel = shouldUseOfficialValues ? '今日官方涨跌幅' : '实时涨跌预估'
   const currentMarketValueText = isOfficialScope
-    ? (holding.real_metrics_ready ? formatMetricCurrency(holding.current_market_value) : '--')
+    ? (holding.real_metrics_ready ? formatMetricCurrency(holding.current_market_value) : formatNumberCurrency(estimatedCurrentMarketValue ?? undefined))
     : formatNumberCurrency(estimatedCurrentMarketValue ?? undefined)
   const todayProfitText = isOfficialScope
-    ? (holding.real_metrics_ready ? formatMetricCurrency(holding.today_profit) : '--')
+    ? (holding.real_metrics_ready ? formatMetricCurrency(holding.today_profit) : hasEstimatedHoldingMetrics
+      ? formatNumberCurrency(estimatedTodayProfit ?? undefined)
+      : (!isCallAuction && estimate?.change_percent ? estimateDelta.text : '--'))
     : hasEstimatedHoldingMetrics
       ? formatNumberCurrency(estimatedTodayProfit ?? undefined)
       : (!isCallAuction && estimate?.change_percent ? estimateDelta.text : '--')
   const todayChangePercentText = isOfficialScope
-    ? (holding.real_metrics_ready ? formatPercentValue(holding.today_change_percent) : '--')
+    ? (holding.real_metrics_ready ? formatPercentValue(holding.today_change_percent) : formatNumberPercent(estimateChangePercentNumber ?? undefined))
     : formatNumberPercent(estimateChangePercentNumber ?? undefined)
   const realMetricTone = (() => {
-    if (isOfficialScope && holding.real_metrics_ready) {
+    if (shouldUseOfficialValues) {
       const profit = Number.parseFloat(holding.today_profit || '0')
       return profit >= 0 ? 'text-up' : 'text-down'
     }
@@ -190,7 +197,7 @@ export function HoldingFundRow({ holding, metricScope = 'official', estimate: pr
     return 'text-theme-primary'
   })()
   const changeTone = (() => {
-    if (isOfficialScope && holding.real_metrics_ready) {
+    if (shouldUseOfficialValues) {
       const change = Number.parseFloat(holding.today_change_percent || '0')
       return change >= 0 ? 'text-up' : 'text-down'
     }
@@ -199,28 +206,28 @@ export function HoldingFundRow({ holding, metricScope = 'official', estimate: pr
     }
     return 'text-theme-primary'
   })()
-  const marketValueNote = isOfficialScope
+  const marketValueNote = shouldUseOfficialValues
     ? holding.real_metrics_ready
       ? `${holding.actual_date || '最新'} 官方净值口径`
-      : holding.real_metrics_message || '待今日官方净值同步后展示'
+      : ''
     : hasEstimatedHoldingMetrics
       ? `按 ${holding.shares || '--'} 份与盘中预估净值估算`
       : '待确认净值补齐后展示'
-  const profitNote = isOfficialScope
+  const profitNote = shouldUseOfficialValues
     ? `${holding.actual_date || '最新'} 官方净值口径`
     : hasEstimatedHoldingMetrics
-      ? '盘中预估，按确认份额与预估净值计算'
+      ? '盘中预估，夜间官方净值同步后会自动覆盖'
       : !isCallAuction && estimate?.change_percent
-        ? `按本金口径估算 ${estimateDelta.text}`
+        ? `按预估涨跌幅折算，夜间官方净值同步后会自动覆盖`
         : '待确认份额补齐后展示'
   const officialProfitNote = holding.real_metrics_ready
     ? `已按 ${holding.actual_date || '最新'} 官方净值结算`
     : holding.real_metrics_message || '待官方净值同步后展示'
-  const displayedProfitNote = isOfficialScope ? officialProfitNote : profitNote
-  const changeNote = isOfficialScope
-    ? (holding.real_metrics_ready ? '按最新官方涨跌幅展示' : '真实涨跌幅待同步')
+  const displayedProfitNote = shouldUseOfficialValues ? officialProfitNote : profitNote
+  const changeNote = shouldUseOfficialValues
+    ? '按最新官方涨跌幅展示'
     : estimate?.change_percent
-      ? '盘中预估涨跌幅'
+      ? '根据基金预估涨跌幅计算，夜间真实涨跌幅会自动覆盖'
       : '待确认份额补齐后展示'
 
   const handleRemove = async () => {
@@ -244,6 +251,12 @@ export function HoldingFundRow({ holding, metricScope = 'official', estimate: pr
       <div className="min-w-0">
         <div className="truncate text-base font-semibold text-theme-primary">{fundName}</div>
         <div className="mt-1 text-xs text-theme-muted">{holding.fund_id}</div>
+        <div className="mt-2">
+          <FundAnalysisBadge analysis={analysis} compact />
+        </div>
+        <div className="mt-2">
+          <FundAnalysisEventHint analysis={analysis} compact />
+        </div>
         {holding.note && <div className="mt-2 text-xs text-theme-secondary">{holding.note}</div>}
         {!holding.real_metrics_ready && (
           <div className="mt-2 text-xs text-theme-muted">
@@ -270,7 +283,7 @@ export function HoldingFundRow({ holding, metricScope = 'official', estimate: pr
         <div className={cn('mt-1 text-lg font-semibold', realMetricTone)}>
           {todayProfitText}
         </div>
-        <div className={cn('mt-1 text-xs', isOfficialScope || !estimate?.change_percent ? 'text-theme-muted' : estimateDelta.isPositive ? 'text-up' : 'text-down')}>
+        <div className={cn('mt-1 text-xs', shouldUseOfficialValues || !estimate?.change_percent ? 'text-theme-muted' : estimateDelta.isPositive ? 'text-up' : 'text-down')}>
           {displayedProfitNote}
         </div>
       </div>

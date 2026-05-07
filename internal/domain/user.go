@@ -65,6 +65,7 @@ type UserWatchlistGroup struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	Accent      string    `json:"accent"`
+	SortOrder   int       `json:"sort_order"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -89,6 +90,7 @@ type UserWatchlistGroupDetail struct {
 	Name        string                    `json:"name"`
 	Description string                    `json:"description"`
 	Accent      string                    `json:"accent"`
+	SortOrder   int                       `json:"sort_order"`
 	CreatedAt   time.Time                 `json:"created_at"`
 	UpdatedAt   time.Time                 `json:"updated_at"`
 	Funds       []UserWatchlistFundDetail `json:"funds"`

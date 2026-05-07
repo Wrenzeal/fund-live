@@ -36,7 +36,7 @@ export default function VIPPage() {
   return (
     <AccountAreaShell
       title="VIP 智能投研"
-      description="围绕你的自选分组与持仓组合生成结构化研究报告，帮助你从板块、政策、财报和市场走势四个维度理解当下环境。"
+      description="围绕自选分组与持仓组合生成结构化研究报告，帮助你从板块、政策、财报和市场走势四个维度理解当下环境。"
     >
       <div className="space-y-8">
         <section className="vip-hero-panel overflow-hidden rounded-[40px] border p-8 lg:p-10">
@@ -99,7 +99,7 @@ export default function VIPPage() {
                     <div className="mt-2 text-sm leading-6 text-theme-secondary">{plan.subtitle}</div>
                   </div>
                   <div className="vip-limited-chip rounded-full px-3 py-1 text-[11px] tracking-[0.2em]">
-                    PAYMENT PREVIEW
+                    开通页
                   </div>
                 </div>
                 <div className="mt-5 grid gap-3">

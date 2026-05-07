@@ -1,0 +1,75 @@
+name: deploy-self-hosted
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: "Deploy backend, frontend, or both"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - backend
+          - frontend
+          - both
+      frontend_release_label:
+        description: "Optional frontend release label (defaults to timestamp)"
+        required: false
+        type: string
+      skip_checks:
+        description: "Skip go test / npm lint / npm build before deploy"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        if: ${{ !inputs.skip_checks }}
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Node
+        if: ${{ !inputs.skip_checks }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Verify backend
+        if: ${{ !inputs.skip_checks }}
+        run: go test ./...
+
+      - name: Verify frontend
+        if: ${{ !inputs.skip_checks }}
+        working-directory: web
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+
+      - name: Deploy backend
+        if: ${{ inputs.deploy_target == 'backend' || inputs.deploy_target == 'both' }}
+        env:
+          BACKEND_SERVICE_NAME: ${{ vars.BACKEND_SERVICE_NAME || 'fund-live-backend' }}
+          BACKEND_HEALTHCHECK_URL: ${{ vars.BACKEND_HEALTHCHECK_URL || 'http://127.0.0.1:8080/health' }}
+          BACKEND_BINARY_RELATIVE_PATH: ${{ vars.BACKEND_BINARY_RELATIVE_PATH || 'target/bin/fund-live-backend' }}
+        run: ./scripts/deploy-backend.sh
+
+      - name: Deploy frontend
+        if: ${{ inputs.deploy_target == 'frontend' || inputs.deploy_target == 'both' }}
+        env:
+          FRONTEND_ROOT: ${{ vars.FRONTEND_ROOT || '/var/www/fund-live' }}
+          FRONTEND_PM2_NAME: ${{ vars.FRONTEND_PM2_NAME || 'fund-live-frontend' }}
+          FRONTEND_PORT: ${{ vars.FRONTEND_PORT || '13069' }}
+          FRONTEND_HEALTHCHECK_URL: ${{ vars.FRONTEND_HEALTHCHECK_URL || 'http://127.0.0.1:13069' }}
+          FRONTEND_KEEP_RELEASES: ${{ vars.FRONTEND_KEEP_RELEASES || '5' }}
+          FRONTEND_RELEASE_LABEL: ${{ inputs.frontend_release_label }}
+        run: ./scripts/deploy-frontend.sh

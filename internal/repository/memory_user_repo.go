@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -241,6 +242,12 @@ func (r *MemoryUserRepository) ListWatchlistGroups(ctx context.Context, userID s
 	for _, group := range groupMap {
 		result = append(result, group)
 	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].SortOrder != result[j].SortOrder {
+			return result[i].SortOrder < result[j].SortOrder
+		}
+		return result[i].CreatedAt.After(result[j].CreatedAt)
+	})
 	return result, nil
 }
 

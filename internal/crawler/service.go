@@ -221,6 +221,41 @@ func (s *CrawlService) fetchHoldings(ctx context.Context, fundCode string) ([]do
 	return holdings, nil
 }
 
+// FetchHoldingsByYear fetches multi-period holdings for a single year keyed by reporting period.
+func (s *CrawlService) FetchHoldingsByYear(ctx context.Context, fundCode string, year int) (map[string][]domain.StockHolding, error) {
+	url := fmt.Sprintf("http://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code=%s&topline=10&year=%d", fundCode, year)
+
+	resp, err := s.client.R().
+		SetContext(ctx).
+		Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
+	}
+	if resp.StatusCode() != 200 {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode())
+	}
+
+	body := resp.Body()
+	utf8Body := body
+	if !utf8.Valid(body) {
+		convertedBody, convErr := GBKToUTF8(body)
+		if convErr == nil {
+			utf8Body = convertedBody
+		}
+	}
+
+	parsed, err := s.holdingsParser.ParseHoldingsHistoryHTML(string(utf8Body))
+	if err != nil {
+		return nil, fmt.Errorf("parse holdings history failed: %w", err)
+	}
+
+	result := make(map[string][]domain.StockHolding, len(parsed))
+	for period, raw := range parsed {
+		result[period] = s.holdingsParser.ToStockHoldings(raw)
+	}
+	return result, nil
+}
+
 // BatchFetchFundData fetches data for multiple funds with concurrency control.
 func (s *CrawlService) BatchFetchFundData(ctx context.Context, fundCodes []string) map[string]*CrawlResult {
 	results := make(map[string]*CrawlResult)

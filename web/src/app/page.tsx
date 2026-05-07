@@ -1,16 +1,18 @@
 'use client'
 
 import Link from 'next/link'
-import { Suspense, useEffect, useRef, useState, useTransition } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { useFundDashboard } from '@/hooks/use-fund-data'
+import { useFundAnalysis, useFundDashboard, useFundHoldings, useTimeSeries } from '@/hooks/use-fund-data'
 import { useMarketStatus, getSessionLabel, formatTimeUntil } from '@/hooks/use-market-status'
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
 import { FundSearch } from '@/components/fund-search'
 import { EstimateCard } from '@/components/estimate-card'
+import { FundAnalysisCard } from '@/components/fund-analysis-card'
 import { FundSectorCard } from '@/components/fund-sector-card'
 import { IntradayChart } from '@/components/intraday-chart'
 import { HoldingsTable } from '@/components/holdings-table'
+import { TargetETFHoldingsCard } from '@/components/target-etf-holdings-card'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { MarketStatusIndicator } from '@/components/market-status-indicator'
 import { FundLoadingIndicator } from '@/components/loading-indicator'
@@ -98,10 +100,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     fund,
     estimate,
     sectorSnapshot,
-    timeSeries,
-    displayDate,
-    isHistorical,
-    officialClose,
+    themeSnapshot,
     cacheStatus,
     isLoading: isDashboardLoading,
     isValidating,
@@ -113,6 +112,25 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     onSuccess: handleDashboardSuccess,
     onError: handleDashboardError,
   })
+  const {
+    analysis,
+    isLoading: isAnalysisLoading,
+    mutate: refreshAnalysis,
+  } = useFundAnalysis(isCallAuction ? null : currentFundId)
+  const {
+    timeSeries,
+    displayDate,
+    isHistorical,
+    officialClose,
+    isLoading: isTimeSeriesLoading,
+    mutate: refreshTimeSeries,
+  } = useTimeSeries(isCallAuction ? null : currentFundId)
+  const {
+    holdings: resolvedHoldings,
+    displayItems: holdingsDisplayItems,
+    displayLevel: holdingsDisplayLevel,
+    lookthroughAvailable,
+  } = useFundHoldings(currentFundId)
 
   // 切换基金时使用 transition 避免阻塞
   const handleFundSelect = (fundId: string) => {
@@ -151,6 +169,8 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   const handleRefresh = () => {
     setSelectionError(null)
     refreshDashboard()
+    refreshAnalysis()
+    refreshTimeSeries()
   }
 
   const lastUpdated = estimate?.calculated_at ? new Date(estimate.calculated_at) : null
@@ -164,17 +184,37 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   const activeFund = isCallAuction ? undefined : fund
   const activeTimeSeries = isCallAuction ? [] : timeSeries
   const activeLastUpdated = isCallAuction ? null : lastUpdated
+  const activeAnalysis = isCallAuction ? undefined : analysis
   const warmupDetailText = isDashboardWarming
     ? '数据预热中，约 5 秒后自动重试'
     : isCallAuction
       ? '集合竞价中，等待 09:30 开盘后更新基金数据'
       : warmupNotice
 
-  // 计算 Top 贡献者
+  const displayHoldingCoverageCount = holdingsDisplayItems.length
+  const displayHoldingRatio = useMemo(
+    () => holdingsDisplayItems.reduce((sum, holding) => {
+      const rawValue = holdingsDisplayLevel === 'target_layer' ? holding.weight_percent : holding.holding_ratio
+      return sum + parseFloat(rawValue || '0')
+    }, 0),
+    [holdingsDisplayItems, holdingsDisplayLevel]
+  )
+  // 计算 Top 贡献者 / 集合竞价下的重仓股 TOP3
   const topContributors = (activeEstimate?.holding_details ?? [])
     .slice()
     .sort((a, b) => parseFloat(b.contribution) - parseFloat(a.contribution))
     .slice(0, 3)
+  const topDisplayItems = useMemo(
+    () => holdingsDisplayItems
+      .slice()
+      .sort((a, b) => {
+        const left = holdingsDisplayLevel === 'target_layer' ? parseFloat(a.weight_percent || '0') : parseFloat(a.holding_ratio || '0')
+        const right = holdingsDisplayLevel === 'target_layer' ? parseFloat(b.weight_percent || '0') : parseFloat(b.holding_ratio || '0')
+        return right - left
+      })
+      .slice(0, 3),
+    [holdingsDisplayItems, holdingsDisplayLevel]
+  )
   const marketStatusLabel = !marketStatus.mounted
     ? '加载中...'
     : marketStatus.isTrading
@@ -216,6 +256,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
               {[
                 { href: '/issues', label: '我有想法！' },
                 { href: '/announcements', label: '更新公告' },
+                { href: '/analysis/rankings', label: '量化排行榜' },
               ].map((item) => (
                 <Link
                   key={item.href}
@@ -377,21 +418,37 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
                       </div>
                     )}
                     <div className="flex justify-between text-sm">
-                      <span className="text-theme-secondary">重仓股覆盖</span>
+                      <span className="text-theme-secondary">
+                        {holdingsDisplayLevel === 'target_layer' ? '追踪目标数' : '重仓股覆盖'}
+                      </span>
                       <span className="text-theme-primary font-medium">
-                        {isCallAuction ? '-' : `${estimate?.holding_details?.length || 0} / 10`}
+                        {holdingsDisplayLevel === 'target_layer'
+                          ? `${displayHoldingCoverageCount} 个`
+                          : isCallAuction
+                            ? `${displayHoldingCoverageCount} / 10`
+                            : `${estimate?.holding_details?.length || 0} / 10`}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-theme-secondary">持仓占比</span>
+                      <span className="text-theme-secondary">
+                        {holdingsDisplayLevel === 'target_layer' ? '目标层级' : '持仓占比'}
+                      </span>
                       <span className="text-theme-primary font-medium">
-                        {isCallAuction ? '-' : `${parseFloat(estimate?.total_hold_ratio || '0').toFixed(2)}%`}
+                        {holdingsDisplayLevel === 'target_layer'
+                          ? '下一层目标'
+                          : isCallAuction
+                            ? `${displayHoldingRatio.toFixed(2)}%`
+                            : `${parseFloat(estimate?.total_hold_ratio || '0').toFixed(2)}%`}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-theme-secondary">数据来源</span>
                       <span className="text-cyan-400 font-medium">
-                        {isCallAuction ? '-' : (estimate?.data_source || 'N/A')}
+                        {holdingsDisplayLevel === 'target_layer'
+                          ? (lookthroughAvailable ? '追踪目标' : '跟踪标的')
+                          : isCallAuction
+                            ? '静态持仓'
+                            : (estimate?.data_source || 'N/A')}
                       </span>
                     </div>
                   </div>
@@ -403,10 +460,16 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
                     <div className="p-2 rounded-lg bg-[var(--accent-up)]/20">
                       <TrendingUp className="w-5 h-5 text-up" />
                     </div>
-                    <h3 className="font-semibold text-theme-primary">涨幅贡献 TOP3</h3>
+                    <h3 className="font-semibold text-theme-primary">
+                      {holdingsDisplayLevel === 'target_layer'
+                        ? '追踪目标 TOP'
+                        : isCallAuction
+                          ? '重仓股 TOP3'
+                          : '涨幅贡献 TOP3'}
+                    </h3>
                   </div>
                   <div className="space-y-2">
-                    {!isCallAuction && topContributors.map((holding, index) => {
+                    {holdingsDisplayLevel !== 'target_layer' && !isCallAuction && topContributors.map((holding, index) => {
                       const contrib = parseFloat(holding.contribution)
                       const isPositive = contrib >= 0
                       return (
@@ -424,10 +487,56 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
                         </div>
                       )
                     })}
-                    {isCallAuction ? (
-                      <p className="text-sm text-theme-muted text-center py-4">集合竞价中</p>
+                    {holdingsDisplayLevel === 'target_layer' ? (
+                      topDisplayItems.length > 0 ? topDisplayItems.map((holding, index) => (
+                        <div
+                          key={`${holding.item_type}:${holding.code || holding.name}:${index}`}
+                          className="flex items-center justify-between py-2 border-b border-[var(--card-border)] last:border-0"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-theme-muted w-4">{index + 1}</span>
+                            <span className="text-sm text-theme-primary">{holding.name}</span>
+                          </div>
+                          <span className="text-sm font-medium text-theme-secondary">
+                            {holding.target_type === 'etf_fund'
+                              ? 'ETF'
+                              : holding.target_type === 'index'
+                                ? '指数'
+                                : '基金'}
+                          </span>
+                        </div>
+                      )) : (
+                        <p className="text-sm text-theme-muted text-center py-4">暂无追踪目标</p>
+                      )
+                    ) : isCallAuction ? (
+                      topDisplayItems.length > 0 ? topDisplayItems.map((holding, index) => (
+                        <div
+                          key={`${holding.item_type}:${holding.code || holding.name}:${index}`}
+                          className="flex items-center justify-between py-2 border-b border-[var(--card-border)] last:border-0"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-theme-muted w-4">{index + 1}</span>
+                            <span className="text-sm text-theme-primary">{holding.name}</span>
+                          </div>
+                          <span className="text-sm font-medium text-theme-secondary">
+                            {parseFloat(holding.holding_ratio || '0').toFixed(2)}%
+                          </span>
+                        </div>
+                      )) : (
+                        <p className="text-sm text-theme-muted text-center py-4">暂无持仓数据</p>
+                      )
                     ) : topContributors.length === 0 && (
                       <p className="text-sm text-theme-muted text-center py-4">暂无数据</p>
+                    )}
+                    {isCallAuction && (
+                      <p className="pt-2 text-xs text-theme-muted">
+                        集合竞价阶段保留固定持仓与占比信息，贡献值等待 09:30 开盘后恢复。
+                      </p>
+                    )}
+                    {holdingsDisplayLevel === 'target_layer' && (
+                      <p className="pt-2 text-xs text-theme-muted">
+                        默认只展示下一层追踪目标；底层股票仅用于估值计算，不在这里继续下钻。
+                      </p>
                     )}
                   </div>
                 </div>
@@ -438,17 +547,40 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
             <IntradayChart
               timeSeries={activeTimeSeries}
               estimate={activeEstimate}
-              isLoading={isDashboardLoading}
+              isLoading={isTimeSeriesLoading}
               isCallAuction={isCallAuction}
               displayDate={displayDate}
               isHistorical={isHistorical}
               officialClose={officialClose}
             />
 
-            <FundSectorCard fund={activeFund} sectorSnapshot={isCallAuction ? undefined : sectorSnapshot} />
+            <FundSectorCard
+              fund={activeFund}
+              sectorSnapshot={isCallAuction ? undefined : sectorSnapshot}
+              themeSnapshot={isCallAuction ? undefined : themeSnapshot}
+            />
 
             {/* Holdings Table */}
-            <HoldingsTable estimate={activeEstimate} isCallAuction={isCallAuction} />
+            <HoldingsTable
+              estimate={activeEstimate}
+              displayLevel={holdingsDisplayLevel}
+              items={holdingsDisplayItems}
+              lookthroughAvailable={lookthroughAvailable}
+              isCallAuction={isCallAuction}
+            />
+
+            {holdingsDisplayLevel === 'target_layer' && resolvedHoldings.length > 0 && (
+              <TargetETFHoldingsCard
+                targetName={holdingsDisplayItems[0]?.name}
+                holdings={resolvedHoldings}
+              />
+            )}
+
+            <FundAnalysisCard
+              analysis={activeAnalysis}
+              fundId={activeFund?.id || currentFundId}
+              isLoading={!isCallAuction && isAnalysisLoading}
+            />
           </div>
         )}
       </main>

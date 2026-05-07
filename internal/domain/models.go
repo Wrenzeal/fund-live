@@ -9,16 +9,16 @@ import (
 
 // Fund represents a mutual fund entity.
 type Fund struct {
-	ID          string          `json:"id"`         // Fund code, e.g., "000001"
-	Name        string          `json:"name"`       // Fund name
-	Type        string          `json:"type"`       // Fund type: "stock", "bond", "hybrid", etc.
-	CategoryCode string         `json:"category_code,omitempty"`
-	CategoryName string         `json:"category_name,omitempty"`
-	Manager     string          `json:"manager"`    // Fund manager name
-	Company     string          `json:"company"`    // Fund company
-	NetAssetVal decimal.Decimal `json:"nav"`        // Latest net asset value (NAV)
-	TotalScale  decimal.Decimal `json:"scale"`      // Total fund scale (亿元)
-	UpdatedAt   time.Time       `json:"updated_at"` // Last NAV update time
+	ID           string          `json:"id"`   // Fund code, e.g., "000001"
+	Name         string          `json:"name"` // Fund name
+	Type         string          `json:"type"` // Fund type: "stock", "bond", "hybrid", etc.
+	CategoryCode string          `json:"category_code,omitempty"`
+	CategoryName string          `json:"category_name,omitempty"`
+	Manager      string          `json:"manager"`    // Fund manager name
+	Company      string          `json:"company"`    // Fund company
+	NetAssetVal  decimal.Decimal `json:"nav"`        // Latest net asset value (NAV)
+	TotalScale   decimal.Decimal `json:"scale"`      // Total fund scale (亿元)
+	UpdatedAt    time.Time       `json:"updated_at"` // Last NAV update time
 }
 
 // StockHolding represents a stock holding within a fund's portfolio.
@@ -84,6 +84,56 @@ type HoldingDetail struct {
 	PrevClose    decimal.Decimal `json:"prev_close"`
 }
 
+const (
+	FundHoldingsDisplayLevelStock  = "stock_layer"
+	FundHoldingsDisplayLevelTarget = "target_layer"
+
+	FundHoldingsDisplayItemTypeStock      = "stock"
+	FundHoldingsDisplayItemTypeTargetFund = "target_fund"
+
+	FundHoldingsDisplayTargetTypeETFFund = "etf_fund"
+	FundHoldingsDisplayTargetTypeFund    = "fund"
+	FundHoldingsDisplayTargetTypeIndex   = "index"
+)
+
+// FundHoldingsDisplayItem represents a single user-facing holding display item.
+// It may describe either a stock-layer holding or a next-layer target (ETF / fund / index).
+type FundHoldingsDisplayItem struct {
+	ItemType        string          `json:"item_type"`
+	TargetType      string          `json:"target_type,omitempty"`
+	Code            string          `json:"code"`
+	Name            string          `json:"name"`
+	Exchange        Exchange        `json:"exchange,omitempty"`
+	HoldingRatio    decimal.Decimal `json:"holding_ratio,omitempty"`
+	WeightPercent   decimal.Decimal `json:"weight_percent,omitempty"`
+	ReportingPeriod string          `json:"reporting_period,omitempty"`
+	IsPrimary       bool            `json:"is_primary,omitempty"`
+	Source          string          `json:"source,omitempty"`
+}
+
+// FundHoldingsDisplay describes which layer the frontend should display by default.
+type FundHoldingsDisplay struct {
+	DisplayLevel         string                    `json:"display_level"`
+	DisplayItems         []FundHoldingsDisplayItem `json:"display_items"`
+	LookthroughAvailable bool                      `json:"lookthrough_available"`
+}
+
+func PrimaryTrackedETF(display *FundHoldingsDisplay) (FundHoldingsDisplayItem, bool) {
+	if display == nil || display.DisplayLevel != FundHoldingsDisplayLevelTarget || len(display.DisplayItems) == 0 {
+		return FundHoldingsDisplayItem{}, false
+	}
+
+	for _, item := range display.DisplayItems {
+		if item.ItemType == FundHoldingsDisplayItemTypeTargetFund &&
+			item.TargetType == FundHoldingsDisplayTargetTypeETFFund &&
+			item.Code != "" {
+			return item, true
+		}
+	}
+
+	return FundHoldingsDisplayItem{}, false
+}
+
 // TimeSeriesPoint represents a single point in the intraday time series.
 type TimeSeriesPoint struct {
 	Timestamp     time.Time       `json:"timestamp"`
@@ -135,10 +185,79 @@ type FundSectorSnapshot struct {
 	Breakdown         []FundSectorBreakdown `json:"breakdown"`
 }
 
+// FundTheme describes a stable theme dictionary entry.
+type FundTheme struct {
+	Code       string `json:"code"`
+	Name       string `json:"name"`
+	ParentCode string `json:"parent_code,omitempty"`
+	Level      int    `json:"level"`
+	SortOrder  int    `json:"sort_order"`
+}
+
+// FundThemeBreakdown represents an aggregated theme weight for a fund snapshot.
+type FundThemeBreakdown struct {
+	ThemeCode     string          `json:"theme_code"`
+	ThemeName     string          `json:"theme_name"`
+	WeightPercent decimal.Decimal `json:"weight_percent"`
+	Rank          int             `json:"rank"`
+}
+
+// FundThemeSnapshot stores the current theme classification snapshot for a fund.
+type FundThemeSnapshot struct {
+	FundID           string               `json:"fund_id"`
+	AsOfDate         string               `json:"as_of_date"`
+	PrimaryThemeCode string               `json:"primary_theme_code"`
+	PrimaryThemeName string               `json:"primary_theme_name"`
+	Source           string               `json:"source"`
+	Confidence       string               `json:"confidence"`
+	Breakdown        []FundThemeBreakdown `json:"breakdown"`
+}
+
 // FundCategory describes the stable main classification for a fund.
 type FundCategory struct {
 	Code        string `json:"code"`
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	SortOrder   int    `json:"sort_order"`
+}
+
+// FundAnalysisModuleScore represents a single quant-analysis module score.
+type FundAnalysisModuleScore struct {
+	Code    string          `json:"code"`
+	Name    string          `json:"name"`
+	Score   decimal.Decimal `json:"score"`
+	Summary string          `json:"summary,omitempty"`
+}
+
+// FundAnalysisEventImpact represents a structured disclosure / event signal.
+type FundAnalysisEventImpact struct {
+	Code           string           `json:"code"`
+	Title          string           `json:"title"`
+	Impact         string           `json:"impact"`
+	Summary        string           `json:"summary"`
+	TargetScope    string           `json:"target_scope,omitempty"`
+	Strength       string           `json:"strength,omitempty"`
+	Horizon        string           `json:"horizon,omitempty"`
+	RelatedSymbols []string         `json:"related_symbols,omitempty"`
+	WeightHint     *decimal.Decimal `json:"weight_hint,omitempty"`
+}
+
+// FundAnalysis summarizes the current rule-based quant analysis result for a fund.
+type FundAnalysis struct {
+	AnalysisVersion     string                    `json:"analysis_version"`
+	AnalysisType        string                    `json:"analysis_type"`
+	AnalysisBasis       string                    `json:"analysis_basis"`
+	AsOfTime            time.Time                 `json:"as_of_time"`
+	TotalScore          decimal.Decimal           `json:"total_score"`
+	Confidence          string                    `json:"confidence"`
+	RiskLevel           string                    `json:"risk_level"`
+	IncreasePercent     decimal.Decimal           `json:"increase_percent"`
+	HoldPercent         decimal.Decimal           `json:"hold_percent"`
+	DecreasePercent     decimal.Decimal           `json:"decrease_percent"`
+	LatestHoldingPeriod string                    `json:"latest_holding_period,omitempty"`
+	Summary             string                    `json:"summary"`
+	Reasons             []string                  `json:"reasons"`
+	Warnings            []string                  `json:"warnings"`
+	EventImpacts        []FundAnalysisEventImpact `json:"event_impacts"`
+	ModuleScores        []FundAnalysisModuleScore `json:"module_scores"`
 }

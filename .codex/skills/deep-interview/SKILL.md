@@ -1,6 +1,6 @@
 ---
 name: deep-interview
-description: Socratic deep interview with mathematical ambiguity gating before execution
+description: "[OMX] Socratic deep interview with mathematical ambiguity gating before execution"
 argument-hint: "[--quick|--standard|--deep] [--autoresearch] <idea or vague description>"
 ---
 
@@ -30,17 +30,17 @@ Execution quality is usually bottlenecked by intent clarity, not just missing im
 - **Quick (`--quick`)**: fast pre-PRD pass; target threshold `<= 0.30`; max rounds 5
 - **Standard (`--standard`, default)**: full requirement interview; target threshold `<= 0.20`; max rounds 12
 - **Deep (`--deep`)**: high-rigor exploration; target threshold `<= 0.15`; max rounds 20
-- **Autoresearch (`--autoresearch`)**: same interview rigor as Standard, but specialized for `omx autoresearch` launch readiness and `.omx/specs/` mission/sandbox artifact handoff
+- **Autoresearch (`--autoresearch`)**: same interview rigor as Standard, but specialized for `$autoresearch` mission readiness and `.omx/specs/` artifact handoff
 
 If no flag is provided, use **Standard**.
 
 <Mode_Flags>
-- **`--autoresearch`**: switch the interview into autoresearch-intake mode for `omx autoresearch` handoff. In this mode, the interview should converge on a launch-ready research mission, write canonical artifacts under `.omx/specs/`, and preserve the explicit `refine further` vs `launch` boundary for downstream CLI intake.
+- **`--autoresearch`**: switch the interview into autoresearch-intake mode for `$autoresearch` handoff. In this mode, the interview should converge on a validator-ready research mission, write canonical artifacts under `.omx/specs/`, and preserve the explicit `refine further` vs `launch` boundary for downstream skill intake.
 </Mode_Flags>
 </Depth_Profiles>
 
 <Execution_Policy>
-- Ask ONE question per round (never batch)
+- Ask ONE question per round (never batch multiple interview rounds into one `questions[]` form)
 - Ask about intent and boundaries before implementation detail
 - Target the weakest clarity dimension each round after applying the stage-priority rules below
 - Treat every answer as a claim to pressure-test before moving on: the next question should usually demand evidence or examples, expose a hidden assumption, force a tradeoff or boundary, or reframe root cause vs symptom
@@ -49,9 +49,17 @@ If no flag is provided, use **Standard**.
 - Gather codebase facts via `explore` before asking user about internals
 - When session guidance enables `USE_OMX_EXPLORE_CMD`, prefer `omx explore` for simple read-only brownfield fact gathering; keep prompts narrow and concrete, and keep ambiguous or non-shell-only investigation on the richer normal path and fall back normally if `omx explore` is unavailable.
 - Always run a preflight context intake before the first interview question
+- If initial context is oversized or would exceed the prompt budget, do not paste or forward the raw payload into interview prompts; request and record a prompt-safe initial-context summary first
+- The oversized initial-context summary gate is blocking: wait for the concise summary before ambiguity scoring, crystallizing artifacts, or any downstream execution handoff
+- The summary must preserve goals, constraints, success criteria, non-goals, decision boundaries, and references to any full source documents so downstream consumers receive a prompt-safe but faithful context
+- Keep total prompt payloads within a safe budget by summarizing or trimming retained history; preserve newest/highest-signal answers and never let raw oversized context crowd out the current question
 - Reduce user effort: ask only the highest-leverage unresolved question, and never ask the user for codebase facts that can be discovered directly
 - For brownfield work, prefer evidence-backed confirmation questions such as "I found X in Y. Should this change follow that pattern?"
-- In Codex CLI, prefer `request_user_input` when available; if unavailable, fall back to concise plain-text one-question turns
+- In attached-tmux Codex CLI, deep-interview uses `omx question` as the required OMX-owned structured questioning path for every interview round
+- When invoking `omx question` through attached-tmux Bash/tool paths, preserve the leader-pane return target by prefixing the command with `OMX_QUESTION_RETURN_PANE=$TMUX_PANE` (or a concrete `%pane` value)
+- If you launch `omx question` in a background terminal, immediately wait for that background terminal to finish and read its JSON answer before scoring ambiguity, asking another round, or handing off
+- Treat `answers[]` as the primary `omx question` success contract. For a single interview round, read `answers[0].answer`; use legacy top-level `answer` only as a compatibility fallback when needed.
+- If the current runtime is outside tmux and cannot render `omx question`, use the native structured question tool when available; otherwise ask exactly one concise plain-text question and wait for the answer
 - Re-score ambiguity after each answer and show progress transparently
 - Do not hand off to execution while ambiguity remains above threshold unless user explicitly opts to proceed with warning
 - Do not crystallize or hand off while `Non-goals` or `Decision Boundaries` remain unresolved, even if the weighted ambiguity threshold is met
@@ -65,7 +73,8 @@ If no flag is provided, use **Standard**.
 
 1. Parse `{{ARGUMENTS}}` and derive a short task slug.
 2. Attempt to load the latest relevant context snapshot from `.omx/context/{slug}-*.md`.
-3. If no snapshot exists, create a minimum context snapshot with:
+3. Check whether the provided initial context or loaded snapshot is too large for safe prompt use. If it is oversized, the first interview round must ask for a concise prompt-safe summary instead of scoring ambiguity or continuing to downstream handoff.
+4. If no snapshot exists, create a minimum context snapshot with:
    - Task statement
    - Desired outcome
    - Stated solution (what the user asked for)
@@ -75,7 +84,8 @@ If no flag is provided, use **Standard**.
    - Unknowns/open questions
    - Decision-boundary unknowns
    - Likely codebase touchpoints
-4. Save snapshot to `.omx/context/{slug}-{timestamp}.md` (UTC `YYYYMMDDTHHMMSSZ`) and reference it in mode state.
+   - Prompt-safe initial-context summary status (`not_needed`, `needed`, or `recorded`)
+5. Save snapshot to `.omx/context/{slug}-{timestamp}.md` (UTC `YYYYMMDDTHHMMSSZ`) and reference it in mode state.
 
 ## Phase 1: Initialize
 
@@ -114,6 +124,8 @@ If no flag is provided, use **Standard**.
 Repeat until ambiguity `<= threshold`, the pressure pass is complete, the readiness gates are explicit, the user exits with warning, or max rounds are reached.
 
 ### 2a) Generate next question
+If the initial context is oversized and no prompt-safe summary has been recorded yet, the next question must be only a summary request. Do not score ambiguity, do not run readiness gates, and do not hand off to `$ralplan`, `$autopilot`, `$ralph`, or `$team` until that summary answer is captured.
+
 Use:
 - Original idea
 - Prior Q&A rounds
@@ -145,12 +157,104 @@ Detailed dimensions:
 `Non-goals` and `Decision Boundaries` are mandatory readiness gates. Ask about them early and keep revisiting them until they are explicit.
 
 ### 2b) Ask the question
-Use structured user-input tooling available in the runtime (`AskUserQuestion` / equivalent) and present:
+Use the surface-appropriate structured questioning path for every interview round. In attached-tmux sessions, use OMX-owned structured questioning via `omx question` (this is the required structured-question equivalent and required `AskUserQuestion` equivalent for deep-interview). Outside tmux, use native structured input when available; otherwise ask exactly one concise plain-text question and wait for the answer. Present:
 
 ```
 Round {n} | Target: {weakest_dimension} | Ambiguity: {score}%
 
 {question}
+```
+
+`omx question` payload guidance for interview rounds:
+- Deep-interview is Socratic: ask one focused round at a time. Do not use batch `questions[]` to combine multiple interview rounds, even though `omx question` supports batch forms for other workflows.
+- Use canonical `type` values instead of authoring raw `multi_select` flags by hand. `type: "single-answerable"` is the default for one-path decisions; `type: "multi-answerable"` is the canonical shape for bounded multi-select rounds. The runtime will keep `multi_select` aligned with `type`.
+- Use `single-answerable` when exactly one answer should drive the next branch, the options are mutually exclusive, or selecting more than one answer would blur the decision boundary. Typical cases: handoff lane selection, choosing the primary failure mode, or confirming which of several competing interpretations is correct.
+- Use `multi-answerable` when multiple options may all be true at once and you need to capture a bounded set of coexisting constraints, non-goals, risks, or acceptance checks in one round. Typical cases: selecting all out-of-scope items, all success metrics that must hold, or all deployment constraints that apply together.
+- If one selected option would immediately require a follow-up question to disambiguate the others, prefer a `single-answerable` round now and ask the follow-up next. Do not hide a branching interview tree inside one overloaded multi-select prompt.
+- Keep interview options bounded and concrete. If the valid answers are already known, set `allow_other: false`; only leave `allow_other: true` when the interview genuinely needs one user-supplied option that cannot be enumerated in advance.
+- Read answers structurally from the primary `answers[]` array. For a normal single-round interview response, use `answers[0].answer` as the source of truth; the top-level `answer` field is a legacy single-question projection/fallback only.
+- For `single-answerable`, expect one decisive selection in the `value` field of `answers[0].answer` plus its selected-values metadata. For `multi-answerable`, treat the selected-values field inside `answers[0].answer` as the source of truth for all chosen constraints/non-goals and preserve the full set in the transcript/spec. In legacy single-question projections, this is equivalent to: For `multi-answerable`, treat `answer.selected_values` as the source of truth.
+
+Canonical bounded single-choice payload:
+
+```json
+{
+  "question": "Which execution lane should own this once the interview is complete?",
+  "type": "single-answerable",
+  "options": [
+    {
+      "label": "Plan first",
+      "value": "ralplan",
+      "description": "Need architecture and test-shape review before execution"
+    },
+    {
+      "label": "Execute directly",
+      "value": "autopilot",
+      "description": "Requirements are already explicit enough for planning plus execution"
+    },
+    {
+      "label": "Refine further",
+      "value": "refine",
+      "description": "Clarification is still needed before any handoff"
+    }
+  ],
+  "allow_other": false,
+  "other_label": "Other",
+  "source": "deep-interview"
+}
+```
+
+Canonical bounded multi-select payload:
+
+```json
+{
+  "question": "Which non-goals must stay out of scope for the first pass?",
+  "type": "multi-answerable",
+  "options": [
+    {
+      "label": "No UI redesign",
+      "value": "no-ui-redesign",
+      "description": "Keep layout and styling unchanged"
+    },
+    {
+      "label": "No new dependencies",
+      "value": "no-new-dependencies",
+      "description": "Work within the existing toolchain"
+    },
+    {
+      "label": "No API contract changes",
+      "value": "no-api-contract-changes",
+      "description": "Preserve external request and response shapes"
+    }
+  ],
+  "allow_other": false,
+  "other_label": "Other",
+  "source": "deep-interview"
+}
+```
+
+Canonical answer-shape reminders:
+
+```json
+{
+  "answer": {
+    "kind": "option",
+    "value": "ralplan",
+    "selected_labels": ["Plan first"],
+    "selected_values": ["ralplan"]
+  }
+}
+```
+
+```json
+{
+  "answer": {
+    "kind": "multi",
+    "value": ["no-new-dependencies", "no-api-contract-changes"],
+    "selected_labels": ["No new dependencies", "No API contract changes"],
+    "selected_values": ["no-new-dependencies", "no-api-contract-changes"]
+  }
+}
 ```
 
 ### 2c) Score ambiguity
@@ -201,6 +305,7 @@ When threshold is met (or user exits with warning / hard cap):
 Spec should include:
 - Metadata (profile, rounds, final ambiguity, threshold, context type)
 - Context snapshot reference/path (for ralplan/team reuse)
+- Prompt-safe initial-context summary when oversized context was provided, plus references to any full source documents
 - Clarity breakdown table
 - Intent (why the user wants this)
 - Desired Outcome
@@ -217,7 +322,7 @@ Spec should include:
 
 ### Autoresearch specialization
 
-When the clarified task is specifically about `omx autoresearch`, or the skill is invoked with `--autoresearch`, keep the interview domain-specific and emit launch-consumable artifacts without skipping clarification.
+When the clarified task is specifically about `$autoresearch`, or the skill is invoked with `--autoresearch`, keep the interview domain-specific and emit skill-consumable artifacts without skipping clarification.
 
 - **Accepted seed inputs:** `topic`, `evaluator`, `keep-policy`, `slug`, existing mission draft text, and prior evaluator examples/templates
 - **Required interview focus:** mission clarity, evaluator readiness, keep policy, slug/session naming, and whether the draft is ready to launch now or should refine further
@@ -235,8 +340,8 @@ When the clarified task is specifically about `omx autoresearch`, or the skill i
   - `sandbox.md`
   - `result.json`
 - **Launch-readiness rule:** mark the draft as **not launch-ready** while the evaluator command still contains placeholder markers such as `<...>`, `TODO`, `TBD`, `REPLACE_ME`, `CHANGEME`, or `your-command-here`
-- **Structured result contract:** `result.json` should point to the draft + mission/sandbox artifacts and carry the finalized `topic`, `evaluatorCommand`, `keepPolicy`, `slug`, `launchReady`, and `blockedReasons` fields so `omx autoresearch` can consume it directly
-- **Confirmation bridge:** after artifact generation, offer at least `refine further` and `launch`; do not launch detached tmux until the user explicitly confirms `launch`
+- **Structured result contract:** `result.json` should point to the draft + mission/sandbox artifacts and carry the finalized `topic`, `evaluatorCommand`, `keepPolicy`, `slug`, `launchReady`, and `blockedReasons` fields so `$autoresearch` can consume it directly
+- **Confirmation bridge:** after artifact generation, offer at least `refine further` and `launch`; do not run direct CLI launch or detached/split tmux launch, and only hand off to `$autoresearch` after explicit confirmation
 - **Handoff rule:** downstream execution must preserve the clarified mission intent, evaluator expectations, decision boundaries, and launch-readiness status from this artifact rather than bypassing the draft review step
 
 ## Phase 5: Execution Bridge
@@ -296,10 +401,14 @@ Present execution options after artifact generation using explicit handoff contr
 
 <Tool_Usage>
 - Use `explore` for codebase fact gathering
-- Use `request_user_input` / structured user-input tool for each interview round when available
-- If structured question tools are unavailable, use plain-text single-question rounds and keep the same stage order
+- Use `omx question` as the OMX-native structured user-input tool for each interview round when an attached tmux renderer is available
+- From attached-tmux Bash/tool paths, call it as `OMX_QUESTION_RETURN_PANE=$TMUX_PANE omx question ...` unless an explicit `%pane` return target is already known
+- If the current runtime is outside tmux and cannot render `omx question`, use native structured input when available; otherwise ask exactly one concise plain-text question and wait for the answer
+- After `omx question` returns JSON, prefer `answers[0].answer` / `answers[]`; use legacy `answer` only as a fallback for older records
 - Use `state_write` / `state_read` for resumable mode state
+- If the interview cannot ask a required `omx question` round, persist the blocker as terminal state with `active: false` and `current_phase: "blocked"`; do not write a terminal blocked phase with `active: true`
 - Read/write context snapshots under `.omx/context/`
+- Record whether the oversized-context summary gate is not needed, pending, or satisfied before any scoring or handoff step
 - Save transcript/spec artifacts under `.omx/interviews/` and `.omx/specs/`
 </Tool_Usage>
 
@@ -312,6 +421,7 @@ Present execution options after artifact generation using explicit handoff contr
 
 <Final_Checklist>
 - [ ] Preflight context snapshot exists under `.omx/context/{slug}-{timestamp}.md`
+- [ ] Oversized initial context, if present, has a prompt-safe summary recorded before ambiguity scoring or downstream handoff
 - [ ] Ambiguity score shown each round
 - [ ] Intent-first stage priority used before implementation detail
 - [ ] Weakest-dimension targeting used within the active stage

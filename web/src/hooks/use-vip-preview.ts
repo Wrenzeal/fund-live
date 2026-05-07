@@ -247,11 +247,12 @@ async function requestVIP<T>(path: string, init?: RequestInit): Promise<T | null
 }
 
 export function useVIPPreview() {
-  const { user } = useCurrentUser()
+  const { user, isLoading: isUserLoading } = useCurrentUser()
+  const canAccessVIP = Boolean(user?.is_admin)
 
-  const membershipKey = user ? `${API_BASE_URL}/api/v1/vip/membership` : null
-  const quotaKey = user ? `${API_BASE_URL}/api/v1/vip/quota` : null
-  const tasksKey = user ? `${API_BASE_URL}/api/v1/vip/tasks` : null
+  const membershipKey = canAccessVIP ? `${API_BASE_URL}/api/v1/vip/membership` : null
+  const quotaKey = canAccessVIP ? `${API_BASE_URL}/api/v1/vip/quota` : null
+  const tasksKey = canAccessVIP ? `${API_BASE_URL}/api/v1/vip/tasks` : null
 
   const { data: membershipRaw, mutate: mutateMembership } = useSWR<RawMembershipState>(
     membershipKey,
@@ -276,7 +277,7 @@ export function useVIPPreview() {
     fetchVIP,
     {
       revalidateOnFocus: false,
-      refreshInterval: user ? 2000 : 0,
+      refreshInterval: canAccessVIP ? 2000 : 0,
       dedupingInterval: 1000,
       shouldRetryOnError: false,
     }
@@ -292,7 +293,7 @@ export function useVIPPreview() {
   }
 
   const activateVIP = async (cycle: VIPBillingCycle) => {
-    if (!user) {
+    if (!canAccessVIP) {
       return
     }
 
@@ -310,7 +311,7 @@ export function useVIPPreview() {
     targetId: string
     targetName: string
   }) => {
-    if (!user) {
+    if (!canAccessVIP) {
       return { ok: false as const, reason: 'not_vip' as const }
     }
 
@@ -342,7 +343,7 @@ export function useVIPPreview() {
   }
 
   const resetPreview = async () => {
-    if (!user) {
+    if (!canAccessVIP) {
       return
     }
 
@@ -354,6 +355,8 @@ export function useVIPPreview() {
   }
 
   return {
+    isAdmin: canAccessVIP,
+    isAccessLoading: isUserLoading,
     membership,
     plan: VIP_PLAN,
     tasks,
@@ -372,8 +375,10 @@ export function useVIPPreview() {
 }
 
 export function useVIPReport(reportID: string | null) {
+  const { user, isLoading: isUserLoading } = useCurrentUser()
+  const canAccessVIP = Boolean(user?.is_admin)
   const { data, error, isLoading } = useSWR<RawReport>(
-    reportID ? `${API_BASE_URL}/api/v1/vip/reports/${reportID}` : null,
+    canAccessVIP && reportID ? `${API_BASE_URL}/api/v1/vip/reports/${reportID}` : null,
     fetchVIP,
     {
       revalidateOnFocus: false,
@@ -382,8 +387,9 @@ export function useVIPReport(reportID: string | null) {
   )
 
   return {
+    isAdmin: canAccessVIP,
     report: normalizeReport(data),
-    isLoading,
+    isLoading: isUserLoading || (canAccessVIP && isLoading),
     error,
   }
 }

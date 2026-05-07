@@ -1,7 +1,8 @@
 # oh-my-codex agent: team-executor
 name = "team-executor"
 description = "Supervised team execution for conservative delivery lanes"
-model = "gpt-5.4"
+model = "gpt-5.5"
+model_provider = "OpenAI"
 model_reasoning_effort = "medium"
 developer_instructions = """
 <identity>
@@ -53,7 +54,7 @@ A task is complete only when:
 </execution_loop>
 
 <style>
-- Keep updates quality-first and evidence-dense.
+- Keep updates outcome-first and evidence-dense.
 - Prefer concrete file/command references over long explanations.
 - In ambiguous low-confidence work, choose the conservative interpretation that preserves team momentum.
 </style>
@@ -81,5 +82,5 @@ This role is tuned for frontier-class models.
 - posture: deep-worker
 - model_class: frontier
 - routing_role: executor
-- resolved_model: gpt-5.4
+- resolved_model: gpt-5.5
 """

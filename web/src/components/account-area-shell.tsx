@@ -2,10 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, ArrowUp, ChevronRight, Crown, Layers3, Sparkles, Wallet } from 'lucide-react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { Activity, ArrowUp, ChevronRight, Crown, Layers3, ShieldAlert, Sparkles, Wallet } from 'lucide-react'
 import { HeaderFundSearch } from '@/components/header-fund-search'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { UserAccountMenu } from '@/components/user-account-menu'
+import { useCurrentUser } from '@/hooks/use-auth'
 import { useMobileTopSection } from '@/hooks/use-mobile-top-section'
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
 import { cn } from '@/lib/utils'
@@ -17,21 +19,71 @@ interface AccountAreaShellProps {
 }
 
 const tabs = [
-  { href: '/watchlist', label: '你的自选', icon: Layers3 },
+  { href: '/watchlist', label: '我的自选', icon: Layers3 },
   { href: '/holdings', label: '持仓明细', icon: Wallet },
   { href: '/vip', label: 'VIP 分析', icon: Crown },
 ]
 
+const MOBILE_BREAKPOINT_QUERY = '(min-width: 768px)'
+const MIN_ANCHOR_OFFSET_PX = 112
+const ANCHOR_OFFSET_GAP_PX = 16
+
 export function AccountAreaShell({ title, description, children }: AccountAreaShellProps) {
   const pathname = usePathname()
+  const { user, isLoading: isUserLoading } = useCurrentUser()
   const { themeType, setThemeType, viewMode, setViewMode } = useUIPreferences()
   const { isAtTop, showBackToTop, scrollToTop } = useMobileTopSection()
+  const headerRef = useRef<HTMLElement | null>(null)
+  const topBarRef = useRef<HTMLDivElement | null>(null)
+  const [anchorOffsetPx, setAnchorOffsetPx] = useState(MIN_ANCHOR_OFFSET_PX)
+  const canAccessVIP = Boolean(user?.is_admin)
+  const isVIPPath = pathname.startsWith('/vip')
+  const shouldBlockVIPPage = isVIPPath && (isUserLoading || !canAccessVIP)
+  const visibleTabs = tabs.filter((tab) => tab.href !== '/vip' || canAccessVIP)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const updateAnchorOffset = () => {
+      const headerHeight = headerRef.current?.getBoundingClientRect().height ?? 0
+      const topBarHeight = topBarRef.current?.getBoundingClientRect().height ?? 0
+      const isDesktop = window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches
+      const measuredHeight = isDesktop ? headerHeight : (topBarHeight || headerHeight)
+      const nextOffset = Math.max(Math.ceil(measuredHeight + ANCHOR_OFFSET_GAP_PX), MIN_ANCHOR_OFFSET_PX)
+      setAnchorOffsetPx(nextOffset)
+    }
+
+    updateAnchorOffset()
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateAnchorOffset()
+    })
+
+    if (headerRef.current) {
+      resizeObserver.observe(headerRef.current)
+    }
+    if (topBarRef.current) {
+      resizeObserver.observe(topBarRef.current)
+    }
+
+    window.addEventListener('resize', updateAnchorOffset)
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', updateAnchorOffset)
+    }
+  }, [])
+
+  const shellStyle = {
+    '--account-shell-anchor-offset': `${anchorOffsetPx}px`,
+  } as CSSProperties
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-50 border-b border-[var(--card-border)] glass-strong">
+    <div className="min-h-screen" style={shellStyle}>
+      <header ref={headerRef} className="sticky top-0 z-50 border-b border-[var(--card-border)] glass-strong">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between gap-4">
+          <div ref={topBarRef} className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <Link href="/" className="flex items-center gap-3">
                 <div className="relative">
@@ -85,7 +137,7 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
               <div className="max-w-3xl space-y-3">
                 <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-4 py-2 text-xs tracking-[0.3em] text-cyan-300">
                   <Sparkles className="h-3.5 w-3.5" />
-                  USER SPACE
+                  我的空间
                 </div>
                 <div>
                   <h1 className="text-3xl font-black text-theme-primary sm:text-4xl">{title}</h1>
@@ -96,7 +148,7 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
               </div>
 
               <nav className="flex flex-wrap gap-3">
-                {tabs.map((tab) => {
+                {visibleTabs.map((tab) => {
                   const Icon = tab.icon
                   const isVIPTab = tab.href === '/vip'
                   const active = tab.href === '/vip'
@@ -151,7 +203,31 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        {children}
+        {shouldBlockVIPPage ? (
+          <section className="mx-auto max-w-2xl rounded-[32px] border border-amber-500/25 bg-amber-500/10 p-6 glass">
+            <div className="flex items-start gap-3 text-theme-primary">
+              <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-200" />
+              <div>
+                <div className="text-lg font-bold">
+                  {isUserLoading ? '正在校验访问权限' : '仅管理员可查看 VIP 页面'}
+                </div>
+                <p className="mt-2 text-sm leading-6 text-theme-secondary">
+                  {isUserLoading
+                    ? '请稍候，系统正在读取当前账号信息。'
+                    : 'VIP 功能仍在待办主线中打磨，当前只对管理员开放预览和验收。普通用户不会看到这些页面。'}
+                </p>
+                {!isUserLoading && !user && (
+                  <Link
+                    href="/auth/login"
+                    className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-theme-primary"
+                  >
+                    去登录管理员账号
+                  </Link>
+                )}
+              </div>
+            </div>
+          </section>
+        ) : children}
       </main>
 
       {showBackToTop && (

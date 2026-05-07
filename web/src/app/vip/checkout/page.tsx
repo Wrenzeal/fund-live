@@ -42,7 +42,7 @@ export default function VIPCheckoutPage() {
       }
     } catch (error) {
       if (error instanceof VIPRequestError && error.code === 'PAYMENT_NOT_CONFIGURED') {
-        setPaymentMessage('微信支付尚未完成配置。你可以先补充 YAML 中的支付参数，或临时使用预览开通进行联调。')
+        setPaymentMessage('微信支付暂未完成配置。你可以先补充支付参数，或先使用临时开通继续体验。')
       } else {
         setPaymentMessage(error instanceof Error ? error.message : '创建支付订单失败，请稍后重试。')
       }
@@ -93,7 +93,7 @@ export default function VIPCheckoutPage() {
   return (
     <AccountAreaShell
       title="开通 VIP"
-      description="当前版本已支持真实 VIP 订单、微信支付 Native 下单与支付状态查询。若微信配置尚未补齐，页面会明确提示缺失项。"
+      description="支持微信支付下单与支付状态查询；若支付配置尚未补齐，页面会明确提示缺失项。"
     >
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="vip-checkout-shell rounded-[36px] border p-6">
@@ -233,7 +233,7 @@ export default function VIPCheckoutPage() {
             ) : membership.isVip ? (
               <div className="mt-6 space-y-3">
                 <div className="rounded-[24px] border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-50">
-                  当前账号已处于 VIP 状态。你可以直接前往任务中心，或者重置演示状态重新体验开通过程。
+                  当前账号已处于 VIP 状态。你可以直接前往任务中心，或重置当前状态后重新体验开通过程。
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <Link
@@ -247,7 +247,7 @@ export default function VIPCheckoutPage() {
                     onClick={() => void resetPreview()}
                     className="vip-secondary-cta rounded-2xl border px-5 py-3 text-sm font-medium"
                   >
-                    重置演示状态
+                    重置当前状态
                   </button>
                 </div>
               </div>
@@ -269,7 +269,7 @@ export default function VIPCheckoutPage() {
                   disabled={isSubmitting}
                   className="vip-secondary-cta rounded-2xl border px-5 py-3 text-sm font-medium"
                 >
-                  开发环境预览开通
+                  临时开通体验
                 </button>
               </div>
             )}

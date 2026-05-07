@@ -41,6 +41,16 @@ type createWatchlistGroupRequest struct {
 	Description string `json:"description"`
 }
 
+type updateWatchlistGroupRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Accent      string `json:"accent"`
+}
+
+type reorderWatchlistGroupsRequest struct {
+	GroupIDs []string `json:"group_ids"`
+}
+
 type watchlistFundRequest struct {
 	FundID string `json:"fund_id"`
 }
@@ -214,6 +224,77 @@ func (h *UserHandler) CreateWatchlistGroup(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, APIResponse{Success: true, Data: group})
+}
+
+// UpdateWatchlistGroup updates a watchlist group owned by the authenticated user.
+func (h *UserHandler) UpdateWatchlistGroup(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"},
+		})
+		return
+	}
+
+	groupID := c.Param("groupId")
+	if groupID == "" {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_GROUP_ID", Message: "Group ID is required"},
+		})
+		return
+	}
+
+	var req updateWatchlistGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_REQUEST", Message: "Invalid watchlist group payload"},
+		})
+		return
+	}
+
+	group, err := h.userPreferenceService.UpdateWatchlistGroup(c.Request.Context(), user.ID, groupID, req.Name, req.Description, req.Accent)
+	if err != nil {
+		statusCode, apiErr := mapUserPreferenceError(err)
+		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: group})
+}
+
+// ReorderWatchlistGroups persists a full watchlist group order for the authenticated user.
+func (h *UserHandler) ReorderWatchlistGroups(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"},
+		})
+		return
+	}
+
+	var req reorderWatchlistGroupsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_REQUEST", Message: "Invalid watchlist reorder payload"},
+		})
+		return
+	}
+
+	if err := h.userPreferenceService.ReorderWatchlistGroups(c.Request.Context(), user.ID, req.GroupIDs); err != nil {
+		statusCode, apiErr := mapUserPreferenceError(err)
+		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{
+		Success: true,
+		Data:    gin.H{"group_ids": req.GroupIDs},
+	})
 }
 
 // DeleteWatchlistGroup removes a watchlist group owned by the authenticated user.
@@ -678,6 +759,8 @@ func mapUserPreferenceError(err error) (int, *APIError) {
 		return http.StatusNotFound, &APIError{Code: "WATCHLIST_GROUP_NOT_FOUND", Message: err.Error()}
 	case errors.Is(err, service.ErrInvalidWatchlistGroup):
 		return http.StatusBadRequest, &APIError{Code: "INVALID_WATCHLIST_GROUP", Message: err.Error()}
+	case errors.Is(err, service.ErrInvalidWatchlistOrder):
+		return http.StatusBadRequest, &APIError{Code: "INVALID_WATCHLIST_ORDER", Message: err.Error()}
 	case errors.Is(err, service.ErrInvalidHoldingAmount):
 		return http.StatusBadRequest, &APIError{Code: "INVALID_HOLDING_AMOUNT", Message: err.Error()}
 	case errors.Is(err, service.ErrInvalidHoldingDate):

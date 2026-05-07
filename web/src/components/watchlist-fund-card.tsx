@@ -4,22 +4,23 @@ import Link from 'next/link'
 import { ArrowUpRight, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useMarketTradingState } from '@/hooks/use-market-status'
-import { useFund, useFundEstimate, useTimeSeries } from '@/hooks/use-fund-data'
+import { useFundDashboard, type FundAnalysis } from '@/hooks/use-fund-data'
+import { FundAnalysisBadge } from '@/components/fund-analysis-badge'
+import { FundAnalysisEventHint } from '@/components/fund-analysis-event-hint'
 import { FundMiniTrend } from '@/components/fund-mini-trend'
 import { cn, formatPercent } from '@/lib/utils'
 
 interface WatchlistFundCardProps {
   fundId: string
+  analysis?: FundAnalysis | null
   onRemove: () => Promise<void> | void
 }
 
-export function WatchlistFundCard({ fundId, onRemove }: WatchlistFundCardProps) {
+export function WatchlistFundCard({ fundId, analysis, onRemove }: WatchlistFundCardProps) {
   const [isRemoving, setIsRemoving] = useState(false)
   const { session } = useMarketTradingState()
   const isCallAuction = session === 'call_auction'
-  const { estimate, isLoading } = useFundEstimate(isCallAuction ? null : fundId)
-  const { fund } = useFund(fundId)
-  const { timeSeries } = useTimeSeries(isCallAuction ? null : fundId)
+  const { estimate, fund, timeSeries, isLoading } = useFundDashboard(isCallAuction ? null : fundId)
 
   const fundName = fund?.name || estimate?.fund_name || fundId
   const percent = isCallAuction ? { text: '-', isPositive: false } : formatPercent(estimate?.change_percent)
@@ -46,6 +47,12 @@ export function WatchlistFundCard({ fundId, onRemove }: WatchlistFundCardProps) 
         <div className="min-w-0">
           <div className="truncate text-base font-semibold text-theme-primary">{fundName}</div>
           <div className="mt-1 text-xs text-theme-muted">{fundId}</div>
+          {analysis && (
+            <div className="mt-2 space-y-1.5">
+              <FundAnalysisBadge analysis={analysis} compact />
+              <FundAnalysisEventHint analysis={analysis} compact />
+            </div>
+          )}
         </div>
 
         <button

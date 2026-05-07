@@ -9,6 +9,8 @@ type UserPreferenceService interface {
 	RemoveFavoriteFund(ctx context.Context, userID, fundID string) error
 	ListWatchlistGroups(ctx context.Context, userID string) ([]UserWatchlistGroupDetail, error)
 	CreateWatchlistGroup(ctx context.Context, userID, name, description string) (*UserWatchlistGroup, error)
+	UpdateWatchlistGroup(ctx context.Context, userID, groupID, name, description, accent string) (*UserWatchlistGroup, error)
+	ReorderWatchlistGroups(ctx context.Context, userID string, groupIDs []string) error
 	DeleteWatchlistGroup(ctx context.Context, userID, groupID string) error
 	AddWatchlistFund(ctx context.Context, userID, groupID, fundID string) error
 	RemoveWatchlistFund(ctx context.Context, userID, groupID, fundID string) error

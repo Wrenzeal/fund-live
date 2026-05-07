@@ -18,6 +18,7 @@ export interface WatchlistGroup {
   name: string
   description: string
   accent: string
+  sort_order: number
   created_at: string
   updated_at: string
   funds: WatchlistFundEntry[]
@@ -406,6 +407,22 @@ export function useUserPortfolio(userID: string | null) {
       await request('/api/v1/user/watchlist/groups', {
         method: 'POST',
         body: JSON.stringify({ name, description }),
+      })
+      await mutateWatchlistGroups()
+    },
+    updateGroup: async (groupID: string, name: string, description: string, accent: string) => {
+      if (!userID) return
+      await request(`/api/v1/user/watchlist/groups/${groupID}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name, description, accent }),
+      })
+      await mutateWatchlistGroups()
+    },
+    reorderGroups: async (groupIDs: string[]) => {
+      if (!userID) return
+      await request('/api/v1/user/watchlist/groups/reorder', {
+        method: 'PUT',
+        body: JSON.stringify({ group_ids: groupIDs }),
       })
       await mutateWatchlistGroups()
     },

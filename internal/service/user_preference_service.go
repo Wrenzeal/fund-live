@@ -18,6 +18,7 @@ var (
 	ErrInvalidHoldingOverride = errors.New("invalid holding override")
 	ErrWatchlistGroupNotFound = errors.New("watchlist group not found")
 	ErrInvalidWatchlistGroup  = errors.New("invalid watchlist group")
+	ErrInvalidWatchlistOrder  = errors.New("invalid watchlist group order")
 	ErrInvalidHoldingAmount   = errors.New("invalid holding amount")
 	ErrInvalidHoldingDate     = errors.New("invalid holding date")
 	ErrInvalidHoldingTime     = errors.New("invalid holding time")
@@ -144,6 +145,7 @@ func (s *UserPreferenceService) ListWatchlistGroups(ctx context.Context, userID 
 			Name:        group.Name,
 			Description: group.Description,
 			Accent:      group.Accent,
+			SortOrder:   group.SortOrder,
 			CreatedAt:   group.CreatedAt,
 			UpdatedAt:   group.UpdatedAt,
 			Funds:       funds,
@@ -167,12 +169,17 @@ func (s *UserPreferenceService) CreateWatchlistGroup(ctx context.Context, userID
 	}
 
 	now := time.Now()
+	minSortOrder := 0
+	if len(groups) > 0 {
+		minSortOrder = groups[0].SortOrder - 1
+	}
 	group := &domain.UserWatchlistGroup{
 		ID:          generateID("wlg"),
 		UserID:      userID,
 		Name:        name,
 		Description: description,
 		Accent:      pickWatchlistAccent(len(groups)),
+		SortOrder:   minSortOrder,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -180,6 +187,83 @@ func (s *UserPreferenceService) CreateWatchlistGroup(ctx context.Context, userID
 		return nil, err
 	}
 	return group, nil
+}
+
+// UpdateWatchlistGroup updates the name/description/accent of a watchlist group owned by the user.
+func (s *UserPreferenceService) UpdateWatchlistGroup(ctx context.Context, userID, groupID, name, description, accent string) (*domain.UserWatchlistGroup, error) {
+	groupID = strings.TrimSpace(groupID)
+	if groupID == "" {
+		return nil, ErrWatchlistGroupNotFound
+	}
+
+	name = strings.TrimSpace(name)
+	description = strings.TrimSpace(description)
+	if name == "" {
+		return nil, ErrInvalidWatchlistGroup
+	}
+	normalizedAccent := normalizeWatchlistAccent(accent)
+	if accent != "" && normalizedAccent == "" {
+		return nil, ErrInvalidWatchlistGroup
+	}
+
+	group, err := s.watchlistRepo.GetWatchlistGroupByID(ctx, userID, groupID)
+	if err != nil {
+		return nil, err
+	}
+	if group == nil {
+		return nil, ErrWatchlistGroupNotFound
+	}
+
+	group.Name = name
+	group.Description = description
+	if normalizedAccent != "" {
+		group.Accent = normalizedAccent
+	}
+	group.UpdatedAt = time.Now()
+	if err := s.watchlistRepo.SaveWatchlistGroup(ctx, group); err != nil {
+		return nil, err
+	}
+	return group, nil
+}
+
+// ReorderWatchlistGroups persists a full ordered list of group ids for the user.
+func (s *UserPreferenceService) ReorderWatchlistGroups(ctx context.Context, userID string, groupIDs []string) error {
+	groups, err := s.watchlistRepo.ListWatchlistGroups(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if len(groups) != len(groupIDs) {
+		return ErrInvalidWatchlistOrder
+	}
+
+	groupByID := make(map[string]*domain.UserWatchlistGroup, len(groups))
+	for i := range groups {
+		groupByID[groups[i].ID] = &groups[i]
+	}
+
+	seen := make(map[string]struct{}, len(groupIDs))
+	for _, id := range groupIDs {
+		id = strings.TrimSpace(id)
+		group := groupByID[id]
+		if id == "" || group == nil {
+			return ErrInvalidWatchlistOrder
+		}
+		if _, exists := seen[id]; exists {
+			return ErrInvalidWatchlistOrder
+		}
+		seen[id] = struct{}{}
+	}
+
+	for index, id := range groupIDs {
+		group := groupByID[strings.TrimSpace(id)]
+		group.SortOrder = index
+		group.UpdatedAt = time.Now()
+		if err := s.watchlistRepo.SaveWatchlistGroup(ctx, group); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // DeleteWatchlistGroup removes a watchlist group owned by the user.
@@ -511,6 +595,21 @@ func sanitizeHoldingOverrides(userID, fundID string, overrides []domain.UserHold
 func pickWatchlistAccent(index int) string {
 	palette := []string{"cyan", "emerald", "amber", "fuchsia"}
 	return palette[index%len(palette)]
+}
+
+func normalizeWatchlistAccent(raw string) string {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case "cyan":
+		return "cyan"
+	case "emerald":
+		return "emerald"
+	case "amber":
+		return "amber"
+	case "fuchsia":
+		return "fuchsia"
+	default:
+		return ""
+	}
 }
 
 func formatServiceError(action string, err error) error {

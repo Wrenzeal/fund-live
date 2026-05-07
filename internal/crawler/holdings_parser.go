@@ -187,6 +187,50 @@ func (p *EastmoneyHoldingsParser) ParseHoldingsHTML(htmlContent string) ([]Holdi
 	return holdings, reportPeriod, nil
 }
 
+// ParseHoldingsHistoryHTML parses a multi-period holdings response keyed by reporting period.
+// Eastmoney returns multiple <div class='box'> blocks when year=<YYYY> is provided.
+func (p *EastmoneyHoldingsParser) ParseHoldingsHistoryHTML(htmlContent string) (map[string][]HoldingRawData, error) {
+	htmlTable := p.extractTableHTML(htmlContent)
+	if htmlTable == "" {
+		htmlTable = htmlContent
+	}
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlTable))
+	if err != nil {
+		return nil, fmt.Errorf("goquery parse failed: %w", err)
+	}
+
+	results := make(map[string][]HoldingRawData)
+	doc.Find("div.box div.boxitem").Each(func(_ int, box *goquery.Selection) {
+		reportPeriod := p.extractReportPeriodFromBox(box)
+		if reportPeriod == "" {
+			return
+		}
+		table := box.Find("table").First()
+		if table.Length() == 0 {
+			return
+		}
+		holdings := p.parseHoldingsRows(table, reportPeriod)
+		if len(holdings) == 0 {
+			return
+		}
+		results[reportPeriod] = holdings
+	})
+
+	if len(results) > 0 {
+		return results, nil
+	}
+
+	holdings, period, err := p.ParseHoldingsHTML(htmlContent)
+	if err != nil {
+		return nil, err
+	}
+	if period != "" && len(holdings) > 0 {
+		results[period] = holdings
+	}
+	return results, nil
+}
+
 // parseRowSimple provides a simpler row parsing for fallback.
 func (p *EastmoneyHoldingsParser) parseRowSimple(cells *goquery.Selection, rank int) HoldingRawData {
 	holding := HoldingRawData{Rank: rank}
@@ -219,6 +263,120 @@ func (p *EastmoneyHoldingsParser) parseRowSimple(cells *goquery.Selection, rank 
 	})
 
 	return holding
+}
+
+func (p *EastmoneyHoldingsParser) parseHoldingsRows(root *goquery.Selection, reportPeriod string) []HoldingRawData {
+	var holdings []HoldingRawData
+	rank := 0
+
+	root.Find("tbody tr").Each(func(i int, row *goquery.Selection) {
+		if row.Find("th").Length() > 0 {
+			return
+		}
+
+		cells := row.Find("td")
+		cellCount := cells.Length()
+		if cellCount < 4 {
+			return
+		}
+
+		holding := HoldingRawData{}
+		cells.Each(func(j int, cell *goquery.Selection) {
+			text := strings.TrimSpace(cell.Text())
+
+			cell.Find("a").Each(func(_ int, a *goquery.Selection) {
+				href, _ := a.Attr("href")
+				codeRe := regexp.MustCompile(`([a-z]{2})(\d{6})\.html`)
+				if matches := codeRe.FindStringSubmatch(href); len(matches) > 2 {
+					holding.StockCode = matches[2]
+				}
+				if holding.StockCode == "" {
+					if matches := eastmoneyUnifiedQuoteCodeRe.FindStringSubmatch(href); len(matches) > 1 {
+						holding.StockCode = strings.ToUpper(matches[1])
+					}
+				}
+				if holding.StockCode == "" {
+					codeTextRe := regexp.MustCompile(`(\d{6})`)
+					if matches := codeTextRe.FindStringSubmatch(a.Text()); len(matches) > 1 {
+						holding.StockCode = matches[1]
+					}
+				}
+				if holding.StockCode == "" {
+					tickerText := strings.TrimSpace(a.Text())
+					if p.isOverseasTicker(tickerText) {
+						holding.StockCode = strings.ToUpper(tickerText)
+					}
+				}
+				nameText := strings.TrimSpace(a.Text())
+				if holding.StockName == "" && nameText != "" && !p.isStockCode(nameText) && !p.isOverseasTicker(nameText) {
+					holding.StockName = nameText
+				}
+			})
+
+			if p.isStockCode(text) && holding.StockCode == "" {
+				holding.StockCode = text
+			} else if p.isOverseasTicker(text) && holding.StockCode == "" {
+				holding.StockCode = strings.ToUpper(text)
+			} else if strings.Contains(text, "%") {
+				if holding.HoldingRatio == "" {
+					holding.HoldingRatio = text
+				}
+			} else if p.isNumeric(text) && len(text) > 0 {
+				if holding.HoldingShares == "" && j >= 3 {
+					holding.HoldingShares = text
+				} else if holding.MarketValue == "" && j >= 4 {
+					holding.MarketValue = text
+				}
+			}
+		})
+
+		if cellCount >= 3 {
+			if holding.StockCode == "" {
+				code := strings.TrimSpace(cells.Eq(1).Text())
+				if p.isStockCode(code) {
+					holding.StockCode = code
+				} else if p.isOverseasTicker(code) {
+					holding.StockCode = strings.ToUpper(code)
+				}
+			}
+			if holding.StockName == "" {
+				name := strings.TrimSpace(cells.Eq(2).Find("a").Text())
+				if name == "" {
+					name = strings.TrimSpace(cells.Eq(2).Text())
+				}
+				holding.StockName = name
+			}
+			if holding.HoldingRatio == "" {
+				holding.HoldingRatio = strings.TrimSpace(cells.Eq(3).Text())
+			}
+		}
+
+		if holding.StockCode != "" {
+			rank++
+			holding.Rank = rank
+			holding.ReportPeriod = reportPeriod
+			holdings = append(holdings, holding)
+		}
+	})
+
+	if len(holdings) == 0 {
+		root.Find("tr").Each(func(i int, row *goquery.Selection) {
+			if row.Find("th").Length() > 0 {
+				return
+			}
+			cells := row.Find("td")
+			if cells.Length() < 3 {
+				return
+			}
+			holding := p.parseRowSimple(cells, i+1)
+			if holding.StockCode != "" {
+				holding.ReportPeriod = reportPeriod
+				holdings = append(holdings, holding)
+			}
+		})
+	}
+
+	return holdings
 }
 
 // extractTableHTML extracts the HTML table from the JS response.
@@ -254,6 +412,22 @@ func (p *EastmoneyHoldingsParser) extractReportPeriod(content string) string {
 		return matches[1]
 	}
 
+	return ""
+}
+
+func (p *EastmoneyHoldingsParser) extractReportPeriodFromBox(box *goquery.Selection) string {
+	if box == nil {
+		return ""
+	}
+
+	text := strings.TrimSpace(box.Find("label.right").Text())
+	if text == "" {
+		text = strings.TrimSpace(box.Find("h4").Text())
+	}
+	dateRe := regexp.MustCompile(`(\d{4}-\d{2}-\d{2})`)
+	if matches := dateRe.FindStringSubmatch(text); len(matches) > 1 {
+		return matches[1]
+	}
 	return ""
 }
 

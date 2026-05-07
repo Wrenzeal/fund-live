@@ -84,6 +84,46 @@ async function fetchEnvelope<T>(url: string): Promise<{ data: T; meta?: Response
     }
 }
 
+async function fetchEnvelopeWithTimeout<T>(url: string, timeoutMs: number): Promise<{ data: T; meta?: ResponseMeta }> {
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+
+    try {
+        const res = await fetch(url, { signal: controller.signal })
+
+        let json: ApiEnvelope<T> | null = null
+        try {
+            json = await res.json() as ApiEnvelope<T>
+        } catch {
+            json = null
+        }
+
+        if (!res.ok || !json?.success || typeof json.data === 'undefined') {
+            throw new ApiRequestError(
+                json?.error?.message || `API error: ${res.status}`,
+                {
+                    code: json?.error?.code,
+                    status: res.status,
+                    retryAfterSeconds: parseRetryAfter(res),
+                    meta: json?.meta,
+                }
+            )
+        }
+
+        return {
+            data: json.data,
+            meta: json.meta,
+        }
+    } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+            throw new Error(`请求超时（${Math.round(timeoutMs / 1000)} 秒），请稍后重试`)
+        }
+        throw error
+    } finally {
+        window.clearTimeout(timer)
+    }
+}
+
 function getRetryDelayMs(error: unknown, fallbackMs: number) {
     if (error instanceof ApiRequestError && error.retryAfterSeconds > 0) {
         return error.retryAfterSeconds * 1000
@@ -136,6 +176,29 @@ export interface HoldingDetail {
     prev_close: string
 }
 
+export interface FundHoldingRecord {
+    stock_code: string
+    stock_name: string
+    exchange?: string
+    holding_ratio: string
+    holding_shares?: string
+    market_value?: string
+    reporting_period?: string
+}
+
+export interface FundHoldingsDisplayItem {
+    item_type: 'stock' | 'target_fund'
+    target_type?: 'etf_fund' | 'fund' | 'index'
+    code: string
+    name: string
+    exchange?: string
+    holding_ratio?: string
+    weight_percent?: string
+    reporting_period?: string
+    is_primary?: boolean
+    source?: string
+}
+
 export interface FundEstimate {
     fund_id: string
     fund_name: string
@@ -179,6 +242,61 @@ export interface FundSectorSnapshot {
     source: string
     confidence: string
     breakdown: FundSectorBreakdown[]
+}
+
+export interface FundThemeBreakdown {
+    theme_code: string
+    theme_name: string
+    weight_percent: string
+    rank: number
+}
+
+export interface FundThemeSnapshot {
+    fund_id: string
+    as_of_date: string
+    primary_theme_code: string
+    primary_theme_name: string
+    source: string
+    confidence: string
+    breakdown: FundThemeBreakdown[]
+}
+
+export interface FundAnalysisModuleScore {
+    code: string
+    name: string
+    score: string
+    summary?: string
+}
+
+export interface FundAnalysisEventImpact {
+    code: string
+    title: string
+    impact: 'positive' | 'neutral' | 'negative'
+    summary: string
+    target_scope?: 'disclosure' | 'methodology' | 'holding' | 'exposure' | 'fund' | 'macro' | 'index'
+    strength?: 'low' | 'medium' | 'high'
+    horizon?: 'intraday' | 'current' | 'quarterly' | 'medium_term'
+    related_symbols?: string[]
+    weight_hint?: string
+}
+
+export interface FundAnalysis {
+    analysis_version: string
+    analysis_type: 'direct_holdings' | 'tracked_etf' | 'qdii_holdings'
+    analysis_basis: string
+    as_of_time: string
+    total_score: string
+    confidence: 'high' | 'medium' | 'low'
+    risk_level: 'low' | 'medium' | 'high'
+    increase_percent: string
+    hold_percent: string
+    decrease_percent: string
+    latest_holding_period?: string
+    summary: string
+    reasons: string[]
+    warnings: string[]
+    event_impacts: FundAnalysisEventImpact[]
+    module_scores: FundAnalysisModuleScore[]
 }
 
 // 默认 SWR 配置
@@ -318,7 +436,7 @@ export function useFund(fundId: string | null) {
 export function useFundHoldings(fundId: string | null) {
     const swrKey = fundId ? `${API_BASE_URL}/api/v1/fund/${fundId}/holdings` : null
 
-    const { data, error, isLoading, mutate } = useSWR<{ data: { fund: Fund; holdings: HoldingDetail[] }; meta?: ResponseMeta }>(
+    const { data, error, isLoading, mutate } = useSWR<{ data: { fund: Fund; holdings: FundHoldingRecord[]; display_level?: 'stock_layer' | 'target_layer'; display_items?: FundHoldingsDisplayItem[]; lookthrough_available?: boolean }; meta?: ResponseMeta }>(
         swrKey,
         fetchEnvelope,
         {
@@ -346,6 +464,9 @@ export function useFundHoldings(fundId: string | null) {
     return {
         fund: data?.data?.fund,
         holdings: data?.data?.holdings || [],
+        displayLevel: data?.data?.display_level || 'stock_layer',
+        displayItems: data?.data?.display_items || [],
+        lookthroughAvailable: data?.data?.lookthrough_available || false,
         cacheStatus: data?.meta?.cache_status || '',
         isLoading,
         isError: !!error,
@@ -368,13 +489,32 @@ export interface TimeSeriesResponse {
 export interface FundDashboardPayload {
     fund?: Fund
     estimate?: FundEstimate
+    analysis?: FundAnalysis
     sector_snapshot?: FundSectorSnapshot
+    theme_snapshot?: FundThemeSnapshot
     time_series: TimeSeriesPoint[]
     display_date: string
     is_trading: boolean
     is_historical: boolean
     session: 'pre_market' | 'morning' | 'lunch_break' | 'afternoon' | 'after_hours' | 'weekend' | 'holiday'
     last_trading_day: string
+}
+
+export interface FundAnalysisPayload {
+    fund?: Fund
+    analysis?: FundAnalysis
+}
+
+export interface FundAnalysisRankingItem {
+    fund?: Fund
+    analysis?: FundAnalysis
+}
+
+export interface FundAnalysisRankingsPayload {
+    generated_at: string
+    increase_ideas: FundAnalysisRankingItem[]
+    watch_ideas: FundAnalysisRankingItem[]
+    risk_alerts: FundAnalysisRankingItem[]
 }
 
 /**
@@ -442,10 +582,11 @@ export function useTimeSeries(fundId: string | null) {
         isTrading,
         isWarming,
         warmingMessage: isWarming ? error.message : '',
+        mutate,
     }
 }
 
-export function useFundDashboard(fundId: string | null, options?: SWRConfiguration) {
+function useFundDashboardPayload(fundId: string | null, options?: SWRConfiguration) {
     const { isTrading } = useMarketTradingState()
     const refreshInterval = isTrading ? DEFAULT_TRADING_INTERVAL : DEFAULT_CLOSED_INTERVAL
     const {
@@ -502,15 +643,105 @@ export function useFundDashboard(fundId: string | null, options?: SWRConfigurati
     }, [data?.meta?.cache_status])
 
     return {
+        payload: data?.data,
+        meta: data?.meta,
+        isLoading,
+        isValidating,
+        isError: !!error,
+        error,
+        mutate,
+        isTrading,
+        refreshInterval,
+        isWarming: data?.meta?.cache_status === 'warming',
+    }
+}
+
+export function useFundDashboard(fundId: string | null, options?: SWRConfiguration) {
+    const dashboard = useFundDashboardPayload(fundId, options)
+
+    return {
+        fund: dashboard.payload?.fund,
+        estimate: dashboard.payload?.estimate,
+        analysis: dashboard.payload?.analysis,
+        sectorSnapshot: dashboard.payload?.sector_snapshot,
+        themeSnapshot: dashboard.payload?.theme_snapshot,
+        timeSeries: dashboard.payload?.time_series || [],
+        displayDate: dashboard.payload?.display_date || '',
+        isHistorical: dashboard.payload?.is_historical || false,
+        session: dashboard.payload?.session || 'after_hours',
+        lastTradingDay: dashboard.payload?.last_trading_day || '',
+        officialClose: dashboard.payload?.estimate?.official_close,
+        cacheStatus: dashboard.meta?.cache_status || '',
+        isLoading: dashboard.isLoading,
+        isValidating: dashboard.isValidating,
+        isError: dashboard.isError,
+        error: dashboard.error,
+        mutate: dashboard.mutate,
+        isTrading: dashboard.isTrading,
+        refreshInterval: dashboard.refreshInterval,
+        isWarming: dashboard.isWarming,
+    }
+}
+
+export function useFundAnalysis(fundId: string | null, options?: SWRConfiguration) {
+    const { isTrading } = useMarketTradingState()
+    const refreshInterval = isTrading ? DEFAULT_TRADING_INTERVAL : DEFAULT_CLOSED_INTERVAL
+    const {
+        onSuccess,
+        onError,
+        ...restOptions
+    } = options ?? {}
+
+    const swrKey = fundId ? `${API_BASE_URL}/api/v1/fund/${fundId}/analysis` : null
+
+    const { data, error, isLoading, isValidating, mutate } = useSWR<{ data: FundAnalysisPayload; meta?: ResponseMeta }>(
+        swrKey,
+        fetchEnvelope,
+        {
+            refreshInterval,
+            keepPreviousData: true,
+            revalidateOnFocus: false,
+            shouldRetryOnError: false,
+            onErrorRetry: (retryError, _key, _config, revalidate, { retryCount }) => {
+                if (isFundDataWarmingError(retryError)) {
+                    scheduleRetry(retryError, retryCount, revalidate, 12, 5000)
+                    return
+                }
+                scheduleRetry(retryError, retryCount, revalidate, 3, 5000)
+            },
+            onSuccess: (payload, key, config) => {
+                if (typeof onSuccess === 'function') {
+                    ;(onSuccess as (data: FundAnalysisPayload, key: string, config: unknown) => void)(payload.data, key, config)
+                }
+            },
+            onError: (requestError, key, config) => {
+                if (typeof onError === 'function') {
+                    ;(onError as (error: unknown, key: string, config: unknown) => void)(requestError, key, config)
+                }
+            },
+            ...restOptions,
+        }
+    )
+
+    const triggerRetry = useEffectEvent(() => {
+        void mutate()
+    })
+
+    useEffect(() => {
+        if (data?.meta?.cache_status !== 'warming') {
+            return
+        }
+
+        const timer = window.setTimeout(() => {
+            triggerRetry()
+        }, 5000)
+
+        return () => window.clearTimeout(timer)
+    }, [data?.meta?.cache_status])
+
+    return {
         fund: data?.data?.fund,
-        estimate: data?.data?.estimate,
-        sectorSnapshot: data?.data?.sector_snapshot,
-        timeSeries: data?.data?.time_series || [],
-        displayDate: data?.data?.display_date || '',
-        isHistorical: data?.data?.is_historical || false,
-        session: data?.data?.session || 'after_hours',
-        lastTradingDay: data?.data?.last_trading_day || '',
-        officialClose: data?.data?.estimate?.official_close,
+        analysis: data?.data?.analysis,
         cacheStatus: data?.meta?.cache_status || '',
         isLoading,
         isValidating,
@@ -520,6 +751,76 @@ export function useFundDashboard(fundId: string | null, options?: SWRConfigurati
         isTrading,
         refreshInterval,
         isWarming: data?.meta?.cache_status === 'warming',
+    }
+}
+
+async function fetchFundAnalyses(fundIDs: string[]): Promise<Record<string, FundAnalysis | null>> {
+    if (fundIDs.length === 0) {
+        return {}
+    }
+    try {
+        const payload = await fetchEnvelope<{ analyses: Record<string, FundAnalysis | null> }>(
+            `${API_BASE_URL}/api/v1/analysis/batch?fund_ids=${encodeURIComponent(fundIDs.join(','))}`
+        )
+        return payload.data?.analyses || {}
+    } catch {
+        const entries = await Promise.all(
+            fundIDs.map(async (fundID) => {
+                try {
+                    const payload = await fetchEnvelope<FundAnalysisPayload>(`${API_BASE_URL}/api/v1/fund/${fundID}/analysis`)
+                    return [fundID, payload.data?.analysis ?? null] as const
+                } catch {
+                    return [fundID, null] as const
+                }
+            })
+        )
+        return Object.fromEntries(entries)
+    }
+}
+
+export function useFundAnalyses(fundIDs: string[]) {
+    const { isTrading } = useMarketTradingState()
+    const normalizedFundIDs = [...new Set(fundIDs.filter(Boolean))].sort()
+
+    const { data = {}, error, isLoading, isValidating } = useSWR<Record<string, FundAnalysis | null>>(
+        normalizedFundIDs.length > 0 ? ['fund-analyses', normalizedFundIDs.join(',')] : null,
+        () => fetchFundAnalyses(normalizedFundIDs),
+        {
+            refreshInterval: isTrading ? DEFAULT_TRADING_INTERVAL : DEFAULT_CLOSED_INTERVAL,
+            revalidateOnFocus: false,
+            dedupingInterval: 5000,
+        }
+    )
+
+    return {
+        analysesByFundID: data,
+        isLoading,
+        isValidating,
+        isError: !!error,
+    }
+}
+
+export function useFundAnalysisRankings() {
+    const { isTrading } = useMarketTradingState()
+    const refreshInterval = isTrading ? DEFAULT_TRADING_INTERVAL : DEFAULT_CLOSED_INTERVAL
+
+    const { data, error, isLoading, isValidating, mutate } = useSWR<{ data: FundAnalysisRankingsPayload; meta?: ResponseMeta }>(
+        `${API_BASE_URL}/api/v1/analysis/rankings`,
+        (url: string) => fetchEnvelopeWithTimeout<FundAnalysisRankingsPayload>(url, 15000),
+        {
+            refreshInterval,
+            revalidateOnFocus: false,
+            dedupingInterval: 5000,
+        }
+    )
+
+    return {
+        rankings: data?.data,
+        isLoading,
+        isValidating,
+        isError: !!error,
+        error,
+        mutate,
     }
 }
 

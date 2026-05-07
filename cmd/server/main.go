@@ -54,6 +54,8 @@ func main() {
 	var dbInstance = database.GetDB() // Will be nil if not initialized
 	var fundResolver *service.FundResolver
 	var fundSectorStore *service.FundSectorStore
+	var estimateCapabilityService *service.EstimateCapabilityService
+	var analysisSnapshotStore *service.FundAnalysisSnapshotStore
 
 	if storageMode == "postgres" {
 		// Initialize PostgreSQL database
@@ -84,6 +86,8 @@ func main() {
 			log.Fatalf("❌ Failed to seed fund sector data: %v", err)
 		}
 		fundSectorStore = service.NewFundSectorStore(db)
+		estimateCapabilityService = service.NewEstimateCapabilityService(db)
+		analysisSnapshotStore = service.NewFundAnalysisSnapshotStore(db)
 		log.Println("✅ Using PostgreSQL storage")
 	} else {
 		// Use in-memory repository (for development without Docker)
@@ -161,11 +165,32 @@ func main() {
 	// This ensures time series data is collected from market open (09:30)
 	// regardless of frontend activity. Empty list = start idle until funds are tracked by requests.
 	valuationService.StartBackgroundCollector(context.Background(), nil, 1*time.Minute)
+	if estimateCapabilityService != nil {
+		estimateCoverageScheduler := service.NewEstimateCoverageScheduler(estimateCapabilityService, valuationService, defaultQuoteSource)
+		estimateCoverageScheduler.Start(context.Background())
+		log.Println("📡 Estimate coverage scheduler started (all supported funds will gradually enter collector pools)")
+		if analysisSnapshotStore != nil {
+			analysisRefresh := service.NewFundAnalysisSnapshotRefreshService(
+				estimateCapabilityService,
+				service.NewFundAnalysisCoordinator(valuationService, fundRepo, fundResolver, fundSectorStore),
+				analysisSnapshotStore,
+			)
+			analysisRefresh.Start(context.Background())
+			log.Println("🧠 Fund analysis snapshot refresh scheduler started (nightly snapshot recompute)")
+		}
+	}
 
 	// Initialize handlers
 	fundHandler := handler.NewFundHandler(valuationService, fundRepo, fundResolver)
 	fundHandler.SetTransientFundDataLoader(fundDataLoader)
 	fundHandler.SetFundSectorStore(fundSectorStore)
+	if analysisSnapshotStore != nil {
+		fundHandler.SetAnalysisSnapshotStore(analysisSnapshotStore)
+	}
+	fundHandler.SetAnalysisCoordinator(service.NewFundAnalysisCoordinator(valuationService, fundRepo, fundResolver, fundSectorStore))
+	if estimateCapabilityService != nil {
+		fundHandler.SetAnalysisRankingCandidateProvider(estimateCapabilityService)
+	}
 	authHandler := handler.NewAuthHandler(authService, authConfig.CookieName, authConfig.CookieSecure)
 	userHandler := handler.NewUserHandler(userPreferenceService, userRepo, defaultQuoteSource)
 	issueHandler := handler.NewIssueHandler(issueService)
@@ -189,7 +214,7 @@ func main() {
 			"status":       "ok",
 			"timestamp":    time.Now().Unix(),
 			"service":      "FundLive API",
-			"version":      "2026.4.19",
+			"version":      "2026.4.27",
 			"storage_mode": storageMode,
 		})
 	})
@@ -216,6 +241,8 @@ func main() {
 			user.GET("/quote-source", userHandler.GetQuoteSource)
 			user.PUT("/quote-source", userHandler.UpdateQuoteSource)
 			user.POST("/watchlist/groups", userHandler.CreateWatchlistGroup)
+			user.PUT("/watchlist/groups/reorder", userHandler.ReorderWatchlistGroups)
+			user.PUT("/watchlist/groups/:groupId", userHandler.UpdateWatchlistGroup)
 			user.DELETE("/watchlist/groups/:groupId", userHandler.DeleteWatchlistGroup)
 			user.POST("/watchlist/groups/:groupId/funds", userHandler.AddWatchlistFund)
 			user.DELETE("/watchlist/groups/:groupId/funds/:fundId", userHandler.RemoveWatchlistFund)
@@ -234,6 +261,7 @@ func main() {
 			fund.GET("/search", fundHandler.Search)
 			fund.GET("/:id", fundHandler.GetFund)
 			fund.GET("/:id/dashboard", fundHandler.GetDashboard)
+			fund.GET("/:id/analysis", fundHandler.GetAnalysis)
 			fund.GET("/:id/estimate", fundHandler.GetEstimate)
 			fund.GET("/:id/holdings", fundHandler.GetHoldings)
 			fund.GET("/:id/timeseries", fundHandler.GetTimeSeries)
@@ -243,6 +271,12 @@ func main() {
 		{
 			market.GET("/status", fundHandler.GetMarketStatus)
 			market.GET("/pricing-date", fundHandler.GetPricingDatePreview)
+		}
+
+		analysis := v1.Group("/analysis")
+		{
+			analysis.GET("/batch", fundHandler.GetAnalysisBatch)
+			analysis.GET("/rankings", fundHandler.GetAnalysisRankings)
 		}
 
 		issues := v1.Group("/issues")
@@ -278,11 +312,12 @@ func main() {
 
 		vip := v1.Group("/vip")
 		{
-			vip.GET("/reports/:id", vipHandler.GetReport)
 			vip.POST("/payments/wechat/notify", vipHandler.HandleWeChatPayNotify)
 
 			vipProtected := vip.Group("")
 			vipProtected.Use(middleware.RequireAuth(authService, authConfig.CookieName))
+			vipProtected.Use(middleware.RequireAdmin())
+			vipProtected.GET("/reports/:id", vipHandler.GetReport)
 			vipProtected.GET("/membership", vipHandler.GetMembership)
 			vipProtected.POST("/membership/preview-activate", vipHandler.PreviewActivateMembership)
 			vipProtected.POST("/preview/reset", vipHandler.PreviewReset)
@@ -323,6 +358,8 @@ func main() {
 		log.Printf("   POST /api/v1/auth/logout - Logout current session")
 		log.Printf("   GET /api/v1/user/watchlist/groups - List grouped watchlists")
 		log.Printf("   POST /api/v1/user/watchlist/groups - Create watchlist group")
+		log.Printf("   PUT /api/v1/user/watchlist/groups/reorder - Reorder watchlist groups")
+		log.Printf("   PUT /api/v1/user/watchlist/groups/:groupId - Update watchlist group name/description")
 		log.Printf("   DELETE /api/v1/user/watchlist/groups/:groupId - Delete watchlist group")
 		log.Printf("   POST /api/v1/user/watchlist/groups/:groupId/funds - Add fund to watchlist group")
 		log.Printf("   DELETE /api/v1/user/watchlist/groups/:groupId/funds/:fundId - Remove fund from watchlist group")

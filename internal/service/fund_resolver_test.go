@@ -274,6 +274,97 @@ func TestFundResolverTreatsZeroRatioHoldingsAsNoEffectiveHoldings(t *testing.T) 
 	}
 }
 
+func TestFundResolverResolveDisplayHoldingsUsesResolvedTargetLayer(t *testing.T) {
+	store := &stubFundMappingStore{
+		mapping: &database.FundMapping{
+			FeederCode: "006480",
+			FeederName: "广发纳斯达克100ETF联接美元(QDII)C",
+			TargetCode: "159941",
+			TargetName: "旧名称",
+			IsResolved: true,
+		},
+	}
+	repo := repository.NewMemoryFundRepository()
+	if err := repo.SaveFund(context.Background(), &domain.Fund{
+		ID:   "159941",
+		Name: "纳指ETF广发",
+		Type: "index",
+	}); err != nil {
+		t.Fatalf("SaveFund() error = %v", err)
+	}
+	resolver := &FundResolver{
+		mappingStore: store,
+		fundRepo:     repo,
+	}
+
+	display, err := resolver.ResolveDisplayHoldings(context.Background(), "006480", "广发纳斯达克100ETF联接美元(QDII)C")
+	if err != nil {
+		t.Fatalf("ResolveDisplayHoldings() error = %v", err)
+	}
+	if display == nil {
+		t.Fatalf("expected display holdings, got nil")
+	}
+	if display.DisplayLevel != domain.FundHoldingsDisplayLevelTarget {
+		t.Fatalf("display level = %q, want %q", display.DisplayLevel, domain.FundHoldingsDisplayLevelTarget)
+	}
+	if !display.LookthroughAvailable {
+		t.Fatalf("expected lookthrough available")
+	}
+	if len(display.DisplayItems) != 1 {
+		t.Fatalf("display items len = %d, want 1", len(display.DisplayItems))
+	}
+	if display.DisplayItems[0].Code != "159941" {
+		t.Fatalf("display item code = %q, want 159941", display.DisplayItems[0].Code)
+	}
+	if display.DisplayItems[0].Name != "纳指ETF广发" {
+		t.Fatalf("display item name = %q, want 纳指ETF广发", display.DisplayItems[0].Name)
+	}
+	if display.DisplayItems[0].TargetType != domain.FundHoldingsDisplayTargetTypeETFFund {
+		t.Fatalf("display item target type = %q, want etf_fund", display.DisplayItems[0].TargetType)
+	}
+	if display.DisplayItems[0].WeightPercent.String() != "100" {
+		t.Fatalf("display item weight = %s, want 100", display.DisplayItems[0].WeightPercent.String())
+	}
+}
+
+func TestFundResolverResolveDisplayHoldingsUsesTrackingTargetWhenNoRelatedETFCode(t *testing.T) {
+	repo := repository.NewMemoryFundRepository()
+	resolver := &FundResolver{
+		fundRepo: repo,
+		loadDetailHints: func(ctx context.Context, fundCode string) (*fundDetailResolutionHints, error) {
+			return &fundDetailResolutionHints{
+				TrackingTarget: "纳斯达克100指数",
+			}, nil
+		},
+	}
+
+	display, err := resolver.ResolveDisplayHoldings(context.Background(), "999999", "示例联接基金")
+	if err != nil {
+		t.Fatalf("ResolveDisplayHoldings() error = %v", err)
+	}
+	if display == nil {
+		t.Fatalf("expected display holdings, got nil")
+	}
+	if display.DisplayLevel != domain.FundHoldingsDisplayLevelTarget {
+		t.Fatalf("display level = %q, want %q", display.DisplayLevel, domain.FundHoldingsDisplayLevelTarget)
+	}
+	if len(display.DisplayItems) != 1 {
+		t.Fatalf("display items len = %d, want 1", len(display.DisplayItems))
+	}
+	if display.DisplayItems[0].TargetType != domain.FundHoldingsDisplayTargetTypeIndex {
+		t.Fatalf("target type = %q, want index", display.DisplayItems[0].TargetType)
+	}
+	if display.DisplayItems[0].Name != "纳斯达克100指数" {
+		t.Fatalf("display item name = %q, want 纳斯达克100指数", display.DisplayItems[0].Name)
+	}
+	if display.DisplayItems[0].WeightPercent.String() != "100" {
+		t.Fatalf("display item weight = %s, want 100", display.DisplayItems[0].WeightPercent.String())
+	}
+	if display.LookthroughAvailable {
+		t.Fatalf("expected no lookthrough available for tracking target without code")
+	}
+}
+
 func TestParseFundDetailResolutionHintsHTML(t *testing.T) {
 	html := `银华中证5G通信主题ETF联接C<a style='float: right;' href="http://fund.eastmoney.com/159994.html">查看相关ETF></a><tr><td class='specialData'><a href="http://fundf10.eastmoney.com/tsdata_010524.html">跟踪标的：</a>中证5G通信主题指数 | <a href="http://fundf10.eastmoney.com/tsdata_010524.html">年化跟踪误差：</a>2.81%</td></tr>`
 

@@ -62,6 +62,7 @@ type UserWatchlistGroup struct {
 	Name        string    `gorm:"type:varchar(100);not null" json:"name"`
 	Description string    `gorm:"type:text" json:"description"`
 	Accent      string    `gorm:"type:varchar(32);not null" json:"accent"`
+	SortOrder   int       `gorm:"not null;default:0;index:idx_user_watchlist_group_sort_order,priority:2" json:"sort_order"`
 	CreatedAt   time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }

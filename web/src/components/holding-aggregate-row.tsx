@@ -2,6 +2,9 @@
 
 import { useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronUp, Layers3 } from 'lucide-react'
+import { FundAnalysisBadge } from '@/components/fund-analysis-badge'
+import { FundAnalysisEventHint } from '@/components/fund-analysis-event-hint'
+import type { FundAnalysis } from '@/hooks/use-fund-data'
 import { cn } from '@/lib/utils'
 import type {
   HoldingAggregateEntry,
@@ -12,6 +15,7 @@ interface HoldingAggregateRowProps {
   aggregate: HoldingAggregateEntry
   metricScope: 'official' | 'estimate'
   estimateMetrics?: HoldingEstimateAggregateMetrics
+  analysis?: FundAnalysis | null
   children?: ReactNode
 }
 
@@ -45,17 +49,18 @@ function formatPercent(value?: string) {
   return `${parsed >= 0 ? '+' : ''}${parsed.toFixed(2)}%`
 }
 
-export function HoldingAggregateRow({ aggregate, metricScope, estimateMetrics, children }: HoldingAggregateRowProps) {
+export function HoldingAggregateRow({ aggregate, metricScope, estimateMetrics, analysis, children }: HoldingAggregateRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const fundName = aggregate.fund?.name || aggregate.fund_id
   const hasChildren = Boolean(children)
   const isOfficialScope = metricScope === 'official'
+  const shouldUseOfficialValues = isOfficialScope && aggregate.real_metrics_ready
 
-  const currentMarketValueText = isOfficialScope
+  const currentMarketValueText = shouldUseOfficialValues
     ? (aggregate.real_metrics_ready_count > 0 ? formatMoney(aggregate.official_current_market_value) : '--')
     : (estimateMetrics?.preview_ready ? formatMoney(estimateMetrics.preview_current_market_value) : '--')
 
-  const todayProfitText = isOfficialScope
+  const todayProfitText = shouldUseOfficialValues
     ? (aggregate.real_metrics_ready_count > 0 ? formatMoney(aggregate.official_today_profit) : '--')
     : estimateMetrics?.preview_ready
       ? formatMoney(estimateMetrics.preview_today_profit)
@@ -63,14 +68,14 @@ export function HoldingAggregateRow({ aggregate, metricScope, estimateMetrics, c
         ? formatMoney(estimateMetrics.fallback_today_profit)
         : '--'
 
-  const todayChangePercentText = isOfficialScope
+  const todayChangePercentText = shouldUseOfficialValues
     ? (aggregate.real_metrics_ready_count > 0 ? formatPercent(aggregate.official_today_change_percent) : '--')
     : estimateMetrics?.estimate?.change_percent
       ? formatPercent(estimateMetrics.preview_today_change_percent || estimateMetrics.estimate.change_percent)
       : '--'
 
   const todayProfitTone = (() => {
-    const reference = isOfficialScope
+    const reference = shouldUseOfficialValues
       ? aggregate.official_today_profit
       : estimateMetrics?.preview_ready
         ? estimateMetrics.preview_today_profit
@@ -83,7 +88,7 @@ export function HoldingAggregateRow({ aggregate, metricScope, estimateMetrics, c
   })()
 
   const todayChangeTone = (() => {
-    const reference = isOfficialScope
+    const reference = shouldUseOfficialValues
       ? aggregate.official_today_change_percent
       : estimateMetrics?.preview_today_change_percent || estimateMetrics?.estimate?.change_percent
     const parsed = Number.parseFloat(reference || '')
@@ -93,14 +98,14 @@ export function HoldingAggregateRow({ aggregate, metricScope, estimateMetrics, c
     return parsed >= 0 ? 'text-up' : 'text-down'
   })()
 
-  const valueNote = isOfficialScope
+  const valueNote = shouldUseOfficialValues
     ? aggregate.real_metrics_ready_count > 0
       ? `官方口径：已就绪 ${aggregate.real_metrics_ready_count}/${aggregate.holding_count} 笔`
       : aggregate.message || '待官方净值齐备'
     : estimateMetrics?.preview_ready
-      ? `盘中预估：已按 ${aggregate.confirmed_shares || '--'} 份估算`
+      ? `实时盈亏预估：已按 ${aggregate.confirmed_shares || '--'} 份估算，夜间真实涨跌会自动覆盖`
       : estimateMetrics?.fallback_ready
-        ? `盘中预估：仅能按本金口径提示 ${formatMoney(estimateMetrics.fallback_today_profit)}`
+        ? `实时盈亏预估：仅能按本金口径提示 ${formatMoney(estimateMetrics.fallback_today_profit)}`
         : '待确认份额补齐后展示盘中预估'
 
   return (
@@ -117,32 +122,40 @@ export function HoldingAggregateRow({ aggregate, metricScope, estimateMetrics, c
             </span>
           </div>
           <div className="mt-1 text-xs text-theme-muted">{aggregate.fund_id}</div>
+          <div className="mt-2">
+            <FundAnalysisBadge analysis={analysis} showScore />
+          </div>
+          <div className="mt-2">
+            <FundAnalysisEventHint analysis={analysis} />
+          </div>
           <div className="mt-2 text-xs text-theme-secondary">{valueNote}</div>
         </div>
 
         <div>
-          <div className="text-xs text-theme-muted">{isOfficialScope ? '官方市值' : '预估市值'}</div>
+          <div className="text-xs text-theme-muted">{shouldUseOfficialValues ? '官方市值' : '预估市值'}</div>
           <div className="mt-1 text-lg font-semibold text-theme-primary">{currentMarketValueText}</div>
           <div className="mt-1 text-xs text-theme-muted">
-            已覆盖本金 {formatMoney(isOfficialScope ? aggregate.ready_principal : aggregate.confirmed_principal)} / {formatMoney(aggregate.total_principal)}
+            已覆盖本金 {formatMoney(shouldUseOfficialValues ? aggregate.ready_principal : aggregate.confirmed_principal)} / {formatMoney(aggregate.total_principal)}
           </div>
         </div>
 
         <div>
-          <div className="text-xs text-theme-muted">{isOfficialScope ? '官方盈亏' : '预估盈亏'}</div>
+          <div className="text-xs text-theme-muted">{shouldUseOfficialValues ? '官方盈亏' : '实时盈亏预估'}</div>
           <div className={cn('mt-1 text-lg font-semibold', todayProfitTone)}>{todayProfitText}</div>
           <div className="mt-1 text-xs text-theme-muted">
-            {isOfficialScope ? '按已就绪分笔汇总' : estimateMetrics?.preview_ready ? '按确认份额汇总' : '按当前可用数据提示'}
+            {shouldUseOfficialValues ? '按已就绪分笔汇总' : estimateMetrics?.preview_ready ? '根据基金预估涨跌幅估算' : '按当前可用数据提示'}
           </div>
         </div>
 
         <div>
-          <div className="text-xs text-theme-muted">{isOfficialScope ? '官方涨跌幅' : '预估涨跌幅'}</div>
+          <div className="text-xs text-theme-muted">{shouldUseOfficialValues ? '官方涨跌幅' : '实时涨跌预估'}</div>
           <div className={cn('mt-1 text-lg font-semibold', todayChangeTone)}>{todayChangePercentText}</div>
           <div className="mt-1 text-xs text-theme-muted">
-            {aggregate.metrics_scope === 'partial' || (!isOfficialScope && estimateMetrics && !estimateMetrics.preview_ready)
-              ? `待补齐 ${aggregate.incomplete_holdings_count} 笔`
-              : '口径已对齐当前视图'}
+            {shouldUseOfficialValues
+              ? (aggregate.metrics_scope === 'partial' ? `待补齐 ${aggregate.incomplete_holdings_count} 笔` : '夜间真实涨跌幅已同步')
+              : estimateMetrics?.estimate?.change_percent
+                ? '夜间真实涨跌幅同步后会自动覆盖'
+                : '待确认份额补齐后展示'}
           </div>
         </div>
 

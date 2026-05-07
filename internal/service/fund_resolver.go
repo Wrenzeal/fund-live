@@ -17,6 +17,7 @@ import (
 
 	"github.com/RomaticDOG/fund/internal/database"
 	"github.com/RomaticDOG/fund/internal/domain"
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
 
@@ -112,6 +113,76 @@ func (r *FundResolver) SetFundDataLoader(loader *FundDataLoader) {
 // IsFeederFund checks if a fund is a feeder fund (联接基金).
 func IsFeederFund(fundName string) bool {
 	return strings.Contains(fundName, "联接")
+}
+
+// ResolveDisplayHoldings returns the next-layer display holdings for a fund when available.
+// Unlike GetHoldingsWithFallback, this is meant for UI display and intentionally stops at the
+// immediate target layer (ETF / fund / index) instead of continuing to stock lookthrough.
+func (r *FundResolver) ResolveDisplayHoldings(ctx context.Context, fundID string, fundName string) (*domain.FundHoldingsDisplay, error) {
+	cachedMapping, err := r.getCachedMapping(ctx, fundID)
+	if err != nil {
+		return nil, err
+	}
+
+	if cachedMapping != nil && cachedMapping.IsResolved && cachedMapping.TargetCode != "" {
+		targetName := strings.TrimSpace(cachedMapping.TargetName)
+		if targetName == "" {
+			targetName = r.lookupTargetFundName(ctx, cachedMapping.TargetCode)
+		}
+		return &domain.FundHoldingsDisplay{
+			DisplayLevel: domain.FundHoldingsDisplayLevelTarget,
+			DisplayItems: []domain.FundHoldingsDisplayItem{
+				r.buildTargetDisplayItem(ctx, cachedMapping.TargetCode, targetName, domain.FundHoldingsDisplayTargetTypeETFFund, "mapping", true),
+			},
+			LookthroughAvailable: true,
+		}, nil
+	}
+
+	if !IsFeederFund(fundName) {
+		return nil, nil
+	}
+
+	detailHints, err := r.fetchResolutionHints(ctx, fundID)
+	if err != nil {
+		return nil, err
+	}
+	if detailHints == nil {
+		return nil, nil
+	}
+
+	if detailHints.RelatedETFCode != "" && detailHints.RelatedETFCode != fundID {
+		targetName := r.lookupTargetFundName(ctx, detailHints.RelatedETFCode)
+		if targetName == "" {
+			targetName = strings.TrimSpace(detailHints.TrackingTarget)
+		}
+		return &domain.FundHoldingsDisplay{
+			DisplayLevel: domain.FundHoldingsDisplayLevelTarget,
+			DisplayItems: []domain.FundHoldingsDisplayItem{
+				r.buildTargetDisplayItem(ctx, detailHints.RelatedETFCode, targetName, domain.FundHoldingsDisplayTargetTypeETFFund, "detail_related_etf", true),
+			},
+			LookthroughAvailable: true,
+		}, nil
+	}
+
+	if strings.TrimSpace(detailHints.TrackingTarget) != "" {
+		return &domain.FundHoldingsDisplay{
+			DisplayLevel: domain.FundHoldingsDisplayLevelTarget,
+			DisplayItems: []domain.FundHoldingsDisplayItem{
+				{
+					ItemType:      domain.FundHoldingsDisplayItemTypeTargetFund,
+					TargetType:    domain.FundHoldingsDisplayTargetTypeIndex,
+					Code:          "",
+					Name:          strings.TrimSpace(detailHints.TrackingTarget),
+					WeightPercent: decimal.NewFromInt(100),
+					IsPrimary:     true,
+					Source:        "detail_tracking_target",
+				},
+			},
+			LookthroughAvailable: false,
+		}, nil
+	}
+
+	return nil, nil
 }
 
 // GetHoldingsWithFallback returns holdings for a fund, with fallback to the target ETF for feeder funds.
@@ -439,6 +510,54 @@ func (r *FundResolver) lookupTargetFundName(ctx context.Context, targetCode stri
 		return ""
 	}
 	return strings.TrimSpace(targetFund.Name)
+}
+
+func (r *FundResolver) buildTargetDisplayItem(
+	ctx context.Context,
+	targetCode string,
+	targetName string,
+	fallbackTargetType string,
+	source string,
+	isPrimary bool,
+) domain.FundHoldingsDisplayItem {
+	item := domain.FundHoldingsDisplayItem{
+		ItemType:   domain.FundHoldingsDisplayItemTypeTargetFund,
+		TargetType: fallbackTargetType,
+		Code:       strings.TrimSpace(targetCode),
+		Name:       strings.TrimSpace(targetName),
+		WeightPercent: func() decimal.Decimal {
+			if isPrimary {
+				return decimal.NewFromInt(100)
+			}
+			return decimal.Zero
+		}(),
+		IsPrimary: isPrimary,
+		Source:    source,
+	}
+
+	if r == nil || r.fundRepo == nil || targetCode == "" {
+		return item
+	}
+
+	targetFund, err := r.fundRepo.GetFundByID(ctx, targetCode)
+	if err != nil || targetFund == nil {
+		return item
+	}
+
+	if strings.TrimSpace(targetFund.Name) != "" {
+		item.Name = strings.TrimSpace(targetFund.Name)
+	}
+	if strings.Contains(strings.ToUpper(targetFund.Name), "ETF") {
+		item.TargetType = domain.FundHoldingsDisplayTargetTypeETFFund
+		return item
+	}
+	if strings.Contains(targetFund.Type, "index") || strings.Contains(targetFund.Type, "指数") {
+		item.TargetType = domain.FundHoldingsDisplayTargetTypeIndex
+		return item
+	}
+
+	item.TargetType = domain.FundHoldingsDisplayTargetTypeFund
+	return item
 }
 
 // saveMapping saves a fund mapping to the database.

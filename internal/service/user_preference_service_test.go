@@ -124,6 +124,124 @@ func TestUserPreferenceServiceCreatesWatchlistGroupAndFund(t *testing.T) {
 	}
 }
 
+func TestUserPreferenceServiceUpdatesWatchlistGroup(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	group, err := service.CreateWatchlistGroup(context.Background(), "user-1", "核心观察", "长期重点跟踪")
+	if err != nil {
+		t.Fatalf("CreateWatchlistGroup() error = %v", err)
+	}
+
+	updated, err := service.UpdateWatchlistGroup(context.Background(), "user-1", group.ID, "核心跟踪", "聚焦长期配置与核心风格切换", "amber")
+	if err != nil {
+		t.Fatalf("UpdateWatchlistGroup() error = %v", err)
+	}
+	if updated.Name != "核心跟踪" {
+		t.Fatalf("updated name = %q", updated.Name)
+	}
+	if updated.Description != "聚焦长期配置与核心风格切换" {
+		t.Fatalf("updated description = %q", updated.Description)
+	}
+	if updated.Accent != "amber" {
+		t.Fatalf("updated accent = %q", updated.Accent)
+	}
+	if !updated.UpdatedAt.After(group.UpdatedAt) && !updated.UpdatedAt.Equal(group.UpdatedAt) {
+		t.Fatalf("updated timestamp = %v, created timestamp = %v", updated.UpdatedAt, group.UpdatedAt)
+	}
+
+	groups, err := service.ListWatchlistGroups(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("ListWatchlistGroups() error = %v", err)
+	}
+	if len(groups) != 1 {
+		t.Fatalf("groups len = %d, want 1", len(groups))
+	}
+	if groups[0].Name != "核心跟踪" {
+		t.Fatalf("persisted name = %q", groups[0].Name)
+	}
+	if groups[0].Description != "聚焦长期配置与核心风格切换" {
+		t.Fatalf("persisted description = %q", groups[0].Description)
+	}
+	if groups[0].Accent != "amber" {
+		t.Fatalf("persisted accent = %q", groups[0].Accent)
+	}
+}
+
+func TestUserPreferenceServiceRejectsEmptyWatchlistGroupNameUpdate(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	group, err := service.CreateWatchlistGroup(context.Background(), "user-1", "核心观察", "长期重点跟踪")
+	if err != nil {
+		t.Fatalf("CreateWatchlistGroup() error = %v", err)
+	}
+
+	_, err = service.UpdateWatchlistGroup(context.Background(), "user-1", group.ID, "   ", "新的说明", "cyan")
+	if !errors.Is(err, ErrInvalidWatchlistGroup) {
+		t.Fatalf("UpdateWatchlistGroup() error = %v, want %v", err, ErrInvalidWatchlistGroup)
+	}
+}
+
+func TestUserPreferenceServiceReordersWatchlistGroups(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	first, err := service.CreateWatchlistGroup(context.Background(), "user-1", "第一组", "说明一")
+	if err != nil {
+		t.Fatalf("CreateWatchlistGroup(first) error = %v", err)
+	}
+	second, err := service.CreateWatchlistGroup(context.Background(), "user-1", "第二组", "说明二")
+	if err != nil {
+		t.Fatalf("CreateWatchlistGroup(second) error = %v", err)
+	}
+	third, err := service.CreateWatchlistGroup(context.Background(), "user-1", "第三组", "说明三")
+	if err != nil {
+		t.Fatalf("CreateWatchlistGroup(third) error = %v", err)
+	}
+
+	if err := service.ReorderWatchlistGroups(context.Background(), "user-1", []string{first.ID, third.ID, second.ID}); err != nil {
+		t.Fatalf("ReorderWatchlistGroups() error = %v", err)
+	}
+
+	groups, err := service.ListWatchlistGroups(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("ListWatchlistGroups() error = %v", err)
+	}
+	if len(groups) != 3 {
+		t.Fatalf("groups len = %d, want 3", len(groups))
+	}
+	if groups[0].ID != first.ID || groups[1].ID != third.ID || groups[2].ID != second.ID {
+		t.Fatalf("group order = [%s %s %s]", groups[0].ID, groups[1].ID, groups[2].ID)
+	}
+	if groups[0].SortOrder != 0 || groups[1].SortOrder != 1 || groups[2].SortOrder != 2 {
+		t.Fatalf("sort orders = [%d %d %d]", groups[0].SortOrder, groups[1].SortOrder, groups[2].SortOrder)
+	}
+}
+
+func TestUserPreferenceServiceRejectsInvalidWatchlistGroupReorder(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	first, err := service.CreateWatchlistGroup(context.Background(), "user-1", "第一组", "说明一")
+	if err != nil {
+		t.Fatalf("CreateWatchlistGroup(first) error = %v", err)
+	}
+	_, err = service.CreateWatchlistGroup(context.Background(), "user-1", "第二组", "说明二")
+	if err != nil {
+		t.Fatalf("CreateWatchlistGroup(second) error = %v", err)
+	}
+
+	err = service.ReorderWatchlistGroups(context.Background(), "user-1", []string{first.ID})
+	if !errors.Is(err, ErrInvalidWatchlistOrder) {
+		t.Fatalf("ReorderWatchlistGroups() error = %v, want %v", err, ErrInvalidWatchlistOrder)
+	}
+}
+
 func TestUserPreferenceServiceCreatesFundHolding(t *testing.T) {
 	fundRepo := repository.NewMemoryFundRepository()
 	userRepo := repository.NewMemoryUserRepository()
@@ -333,7 +451,15 @@ func TestUserPreferenceServiceListFundHoldingsComputesRealMetricsAndSummary(t *t
 		t.Fatalf("ready principal = %s, want 50000.00", holdings.Summary.ReadyPrincipal)
 	}
 
-	aggregate := holdings.Aggregates[0]
+	aggregatesByFundID := make(map[string]domain.UserFundHoldingAggregate, len(holdings.Aggregates))
+	for _, aggregate := range holdings.Aggregates {
+		aggregatesByFundID[aggregate.FundID] = aggregate
+	}
+
+	aggregate, ok := aggregatesByFundID["005827"]
+	if !ok {
+		t.Fatalf("missing aggregate for 005827: %+v", holdings.Aggregates)
+	}
 	if aggregate.FundID != "005827" {
 		t.Fatalf("aggregate fund id = %s, want 005827", aggregate.FundID)
 	}
@@ -436,7 +562,15 @@ func TestUserPreferenceServiceListFundHoldingsComputesPartialOfficialSummary(t *
 		t.Fatalf("message = %q, want partial coverage hint", holdings.Summary.Message)
 	}
 
-	aggregate := holdings.Aggregates[0]
+	aggregatesByFundID := make(map[string]domain.UserFundHoldingAggregate, len(holdings.Aggregates))
+	for _, item := range holdings.Aggregates {
+		aggregatesByFundID[item.FundID] = item
+	}
+
+	aggregate, ok := aggregatesByFundID["005827"]
+	if !ok {
+		t.Fatalf("missing aggregate for 005827: %+v", holdings.Aggregates)
+	}
 	if aggregate.FundID != "005827" {
 		t.Fatalf("aggregate fund id = %s, want 005827", aggregate.FundID)
 	}
@@ -447,7 +581,10 @@ func TestUserPreferenceServiceListFundHoldingsComputesPartialOfficialSummary(t *
 		t.Fatalf("expected aggregate 005827 full ready, got %+v", aggregate)
 	}
 
-	partialAggregate := holdings.Aggregates[1]
+	partialAggregate, ok := aggregatesByFundID["003095"]
+	if !ok {
+		t.Fatalf("missing aggregate for 003095: %+v", holdings.Aggregates)
+	}
 	if partialAggregate.FundID != "003095" {
 		t.Fatalf("aggregate fund id = %s, want 003095", partialAggregate.FundID)
 	}

@@ -184,8 +184,8 @@ export function UserAccountMenu() {
                     <Layers3 className="h-4 w-4" />
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-theme-primary">你的自选</div>
-                    <div className="text-xs text-theme-muted">分组查看基金走势与预估涨跌幅</div>
+                    <div className="text-sm font-medium text-theme-primary">我的自选</div>
+                    <div className="text-xs text-theme-muted">按分组查看关注基金的走势与预估涨跌幅</div>
                   </div>
                 </Link>
 

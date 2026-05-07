@@ -9,7 +9,7 @@ import { HoldingAggregateRow } from '@/components/holding-aggregate-row'
 import { HoldingFundRow } from '@/components/holding-fund-row'
 import { VIPAnalysisEntry } from '@/components/vip-analysis-entry'
 import { useCurrentUser } from '@/hooks/use-auth'
-import { useFundSearch } from '@/hooks/use-fund-data'
+import { useFundAnalyses, useFundSearch } from '@/hooks/use-fund-data'
 import { useMarketStatus, usePricingDatePreview } from '@/hooks/use-market-status'
 import { useHoldingEstimateMetrics, useUserPortfolio } from '@/hooks/use-user-portfolio'
 import { useVIPPreview } from '@/hooks/use-vip-preview'
@@ -20,6 +20,7 @@ const BEIJING_OFFSET = '+08:00'
 type TradeTiming = 'before_close' | 'after_close'
 type HoldingViewMode = 'aggregate' | 'detail'
 type HoldingMetricScope = 'official' | 'estimate'
+type HoldingSortMode = 'default' | 'analysis_recommendation' | 'analysis_risk'
 
 function buildTradeAtValue(date: string, tradeTiming: TradeTiming) {
   if (!date) {
@@ -97,6 +98,47 @@ function formatSummaryPercent(value?: string) {
   return `${parsed >= 0 ? '+' : ''}${parsed.toFixed(2)}%`
 }
 
+function parseAnalysisPercent(value?: string) {
+  const parsed = Number.parseFloat(value || '')
+  return Number.isNaN(parsed) ? 0 : parsed
+}
+
+function analysisRecommendationWeight(analysis?: { increase_percent?: string; hold_percent?: string; decrease_percent?: string } | null) {
+  if (!analysis) {
+    return -1
+  }
+
+  const increase = parseAnalysisPercent(analysis.increase_percent)
+  const hold = parseAnalysisPercent(analysis.hold_percent)
+  const decrease = parseAnalysisPercent(analysis.decrease_percent)
+
+  if (increase >= hold && increase >= decrease) {
+    return 3_000 + increase
+  }
+  if (hold >= increase && hold >= decrease) {
+    return 2_000 + hold
+  }
+  return 1_000 + decrease
+}
+
+function analysisRiskWeight(analysis?: { risk_level?: string; total_score?: string } | null) {
+  if (!analysis) {
+    return -1
+  }
+
+  const score = parseAnalysisPercent(analysis.total_score)
+  switch (analysis.risk_level) {
+    case 'high':
+      return 3_000 + (100 - score)
+    case 'medium':
+      return 2_000 + (100 - score)
+    case 'low':
+      return 1_000 + (100 - score)
+    default:
+      return score
+  }
+}
+
 export default function HoldingsPage() {
   const router = useRouter()
   const { user, isLoading } = useCurrentUser()
@@ -110,6 +152,7 @@ export default function HoldingsPage() {
   const [tradeTiming, setTradeTiming] = useState<TradeTiming>('before_close')
   const [viewMode, setViewMode] = useState<HoldingViewMode>('aggregate')
   const [metricScope, setMetricScope] = useState<HoldingMetricScope>('official')
+  const [sortMode, setSortMode] = useState<HoldingSortMode>('default')
   const [note, setNote] = useState('')
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [vipFeedback, setVipFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -117,7 +160,12 @@ export default function HoldingsPage() {
   const [isAddingHolding, setIsAddingHolding] = useState(false)
   const defaultsInitializedRef = useRef(false)
   const { results } = useFundSearch(query)
-  const { membership, remainingQuota, createTask, latestCompletedTask } = useVIPPreview()
+  const fundIDsForAnalysis = useMemo(
+    () => Array.from(new Set(holdings.map((holding) => holding.fund_id).filter(Boolean))),
+    [holdings]
+  )
+  const { analysesByFundID } = useFundAnalyses(fundIDsForAnalysis)
+  const { isAdmin: canAccessVIP, membership, remainingQuota, createTask, latestCompletedTask } = useVIPPreview()
   const normalizedQuery = query.trim()
 
   const autoMatchedFund = useMemo(() => {
@@ -162,12 +210,12 @@ export default function HoldingsPage() {
   const previousTradeDate = marketStatus.previousTradingDay || ''
   const nextTradeDate = marketStatus.nextTradingDay || ''
   const pricingRuleLabel = !tradeDate
-    ? '选择交易日期和提交时段后，会自动预览确认净值日。'
+    ? '选择交易日期和提交时段后，会自动显示确认净值日。'
     : pricingPreviewError
       ? pricingPreviewError.message
     : isPricingPreviewLoading
-      ? '正在按后端交易日历校验确认净值日...'
-      : preview?.message || '正在按后端交易日历校验确认净值日...'
+      ? '正在按交易日历校验确认净值日...'
+      : preview?.message || '正在按交易日历校验确认净值日...'
   const hasOfficialSummaryMetrics = holdingSummary.real_metrics_ready_count > 0
   const officialSummaryCoverage = hasOfficialSummaryMetrics
     ? `${holdingSummary.real_metrics_ready_count}/${holdingSummary.total_holdings} 条`
@@ -187,6 +235,39 @@ export default function HoldingsPage() {
       return groups
     }, {})
   }, [holdings])
+  const sortedHoldingAggregates = useMemo(() => {
+    if (sortMode === 'default') {
+      return holdingAggregates
+    }
+
+    return holdingAggregates.slice().sort((left, right) => {
+      const leftAnalysis = analysesByFundID[left.fund_id]
+      const rightAnalysis = analysesByFundID[right.fund_id]
+
+      if (sortMode === 'analysis_recommendation') {
+        return analysisRecommendationWeight(rightAnalysis) - analysisRecommendationWeight(leftAnalysis)
+      }
+
+      return analysisRiskWeight(rightAnalysis) - analysisRiskWeight(leftAnalysis)
+    })
+  }, [analysesByFundID, holdingAggregates, sortMode])
+  const sortedHoldings = useMemo(() => {
+    if (sortMode === 'default') {
+      return holdings
+    }
+
+    return holdings.slice().sort((left, right) => {
+      const leftAnalysis = analysesByFundID[left.fund_id]
+      const rightAnalysis = analysesByFundID[right.fund_id]
+
+      if (sortMode === 'analysis_recommendation') {
+        return analysisRecommendationWeight(rightAnalysis) - analysisRecommendationWeight(leftAnalysis)
+      }
+
+      return analysisRiskWeight(rightAnalysis) - analysisRiskWeight(leftAnalysis)
+    })
+  }, [analysesByFundID, holdings, sortMode])
+  const shouldUseOfficialSummary = metricScope === 'official' && holdingSummary.real_metrics_ready
 
   const handleSeedDemo = async () => {
     setFeedback(null)
@@ -196,12 +277,12 @@ export default function HoldingsPage() {
       await seedDemoData()
       setFeedback({
         type: 'success',
-        message: '已载入演示持仓。若你没有自选分组，也会一并创建演示分组。',
+        message: '已为你填入一组参考持仓；如果还没有自选分组，也会一并创建默认分组。',
       })
     } catch (error) {
       setFeedback({
         type: 'error',
-        message: error instanceof Error ? error.message : '载入演示持仓失败，请稍后重试。',
+        message: error instanceof Error ? error.message : '初始化参考持仓失败，请稍后重试。',
       })
     } finally {
       setIsSeedingDemo(false)
@@ -254,7 +335,7 @@ export default function HoldingsPage() {
         type: 'success',
         message: pricingDatePreview
           ? `已加入 ${resolvedFundName || resolvedFundID} 的持仓记录，将按 ${pricingDatePreview} 收盘净值确认。`
-          : `已加入 ${resolvedFundName || resolvedFundID} 的持仓记录，确认净值日已按服务端交易日历计算。`,
+          : `已加入 ${resolvedFundName || resolvedFundID} 的持仓记录，确认净值日已按交易日历计算。`,
       })
     } catch (error) {
       setFeedback({
@@ -332,7 +413,7 @@ export default function HoldingsPage() {
         <div className="glass rounded-[32px] border border-[var(--card-border)] p-8 text-center">
           <div className="mb-3 text-2xl font-bold text-theme-primary">登录后可查看持仓明细</div>
           <p className="mx-auto max-w-xl text-sm leading-6 text-theme-secondary">
-            持仓明细现在已经绑定到账户，可以在服务端持久化保存你的基金持仓记录。
+            登录后可同步查看和管理你的基金持仓记录。
           </p>
           <div className="mt-6 flex justify-center gap-3">
             <Link href="/auth/login" className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm text-theme-secondary">
@@ -388,10 +469,10 @@ export default function HoldingsPage() {
                 <div className="mt-1 text-3xl font-black text-theme-primary">{holdings.length} 条持仓记录</div>
                 <div className="mt-2 text-xs text-theme-muted">
                   {metricScope === 'official'
-                    ? holdingSummary.real_metrics_ready
+                    ? shouldUseOfficialSummary
                       ? '总仓官方市值与今日盈亏已按最新官方净值完整计算。'
-                      : hasOfficialSummaryMetrics
-                        ? holdingSummary.message || `已按最新官方净值汇总 ${officialSummaryCoverage} 条持仓。`
+                      : hasPreviewSummaryMetrics
+                        ? '当前显示实时盈亏预估，夜间官方净值同步后会自动覆盖。'
                         : holdingSummary.message || '总仓真实口径会在官方净值和确认份额齐备后展示。'
                     : hasPreviewSummaryMetrics
                       ? previewSummary.message || `盘中预估已按确认份额汇总 ${previewSummaryCoverage}。`
@@ -417,7 +498,7 @@ export default function HoldingsPage() {
                   ) : (
                     <BarChart4 className="relative z-10 h-4 w-4 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110" />
                   )}
-                  <span className="relative z-10">{isSeedingDemo ? '载入中...' : '载入演示持仓'}</span>
+                  <span className="relative z-10">{isSeedingDemo ? '准备中...' : '快速开始'}</span>
                 </button>
               )}
             </div>
@@ -469,6 +550,38 @@ export default function HoldingsPage() {
               </div>
             )}
 
+            {holdings.length > 0 && (
+              <div className="mb-6 flex flex-col gap-3 rounded-[24px] border border-[var(--card-border)] bg-[var(--card-bg)]/50 p-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="text-sm font-medium text-theme-primary">量化排序</div>
+                  <div className="mt-1 text-xs text-theme-muted">
+                    可按量化建议倾向或风险等级快速重排持仓列表。
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    { id: 'default', label: '默认顺序' },
+                    { id: 'analysis_recommendation', label: '建议倾向优先' },
+                    { id: 'analysis_risk', label: '风险等级优先' },
+                  ] as const).map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setSortMode(option.id)}
+                      className={cn(
+                        'rounded-full border px-3 py-2 text-xs transition-all duration-200',
+                        sortMode === option.id
+                          ? 'border-fuchsia-400/45 bg-fuchsia-400/14 text-fuchsia-100 shadow-[0_10px_22px_rgba(217,70,239,0.12)]'
+                          : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-fuchsia-300/35 hover:text-theme-primary'
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="mb-6 grid gap-4 lg:grid-cols-4">
               {[
                 {
@@ -478,12 +591,12 @@ export default function HoldingsPage() {
                   note: '按录入持仓本金汇总',
                 },
                 {
-                  label: metricScope === 'official' ? '总最新官方市值' : '总盘中预估市值',
-                  value: metricScope === 'official'
+                  label: shouldUseOfficialSummary ? '总最新官方市值' : '总盘中预估市值',
+                  value: shouldUseOfficialSummary
                     ? (hasOfficialSummaryMetrics ? formatSummaryMoney(holdingSummary.total_current_market_value) : '--')
                     : (hasPreviewSummaryMetrics ? formatSummaryMoney(previewSummary.total_current_market_value) : '--'),
                   tone: 'text-theme-primary',
-                  note: metricScope === 'official'
+                  note: shouldUseOfficialSummary
                     ? (hasOfficialSummaryMetrics
                       ? `已就绪本金 ${officialReadyPrincipalText} / ${totalPrincipalText}`
                       : '待真实净值与份额齐备')
@@ -492,34 +605,34 @@ export default function HoldingsPage() {
                       : '待确认份额齐备'),
                 },
                 {
-                  label: metricScope === 'official' ? '总官方盈亏' : '总预估盈亏',
-                  value: metricScope === 'official'
+                  label: shouldUseOfficialSummary ? '总官方盈亏' : '总实时盈亏预估',
+                  value: shouldUseOfficialSummary
                     ? (hasOfficialSummaryMetrics ? formatSummaryMoney(holdingSummary.total_today_profit) : '--')
                     : (hasPreviewSummaryMetrics ? formatSummaryMoney(previewSummary.total_today_profit) : '--'),
-                  tone: !(metricScope === 'official' ? hasOfficialSummaryMetrics : hasPreviewSummaryMetrics)
+                  tone: !(shouldUseOfficialSummary ? hasOfficialSummaryMetrics : hasPreviewSummaryMetrics)
                     ? 'text-theme-primary'
-                    : Number.parseFloat((metricScope === 'official' ? holdingSummary.total_today_profit : previewSummary.total_today_profit) || '0') >= 0
+                    : Number.parseFloat((shouldUseOfficialSummary ? holdingSummary.total_today_profit : previewSummary.total_today_profit) || '0') >= 0
                       ? 'text-up'
                       : 'text-down',
-                  note: metricScope === 'official'
+                  note: shouldUseOfficialSummary
                     ? (hasOfficialSummaryMetrics
                       ? `官方口径：已就绪 ${officialSummaryCoverage}`
                       : '暂不混入盘中预估')
                     : (hasPreviewSummaryMetrics
-                      ? `预估口径：已就绪 ${previewSummaryCoverage}`
+                      ? `根据基金预估涨跌幅估算，夜间真实值会自动覆盖`
                       : '仅在确认份额后纳入预估'),
                 },
                 {
-                  label: metricScope === 'official' ? '总官方涨跌幅' : '总预估涨跌幅',
-                  value: metricScope === 'official'
+                  label: shouldUseOfficialSummary ? '总官方涨跌幅' : '总实时涨跌预估',
+                  value: shouldUseOfficialSummary
                     ? (hasOfficialSummaryMetrics ? formatSummaryPercent(holdingSummary.total_today_change_percent) : '--')
                     : (hasPreviewSummaryMetrics ? formatSummaryPercent(previewSummary.total_today_change_percent) : '--'),
-                  tone: !(metricScope === 'official' ? hasOfficialSummaryMetrics : hasPreviewSummaryMetrics)
+                  tone: !(shouldUseOfficialSummary ? hasOfficialSummaryMetrics : hasPreviewSummaryMetrics)
                     ? 'text-theme-primary'
-                    : Number.parseFloat((metricScope === 'official' ? holdingSummary.total_today_change_percent : previewSummary.total_today_change_percent) || '0') >= 0
+                    : Number.parseFloat((shouldUseOfficialSummary ? holdingSummary.total_today_change_percent : previewSummary.total_today_change_percent) || '0') >= 0
                       ? 'text-up'
                       : 'text-down',
-                  note: metricScope === 'official'
+                  note: shouldUseOfficialSummary
                     ? (hasOfficialSummaryMetrics
                       ? (holdingSummary.metrics_scope === 'partial'
                         ? `按已就绪部分加权（剩余 ${holdingSummary.incomplete_holdings_count ?? 0} 条待补齐）`
@@ -528,7 +641,7 @@ export default function HoldingsPage() {
                     : (hasPreviewSummaryMetrics
                       ? (previewSummary.metrics_scope === 'partial'
                         ? `按确认份额部分加权（剩余 ${previewSummary.total_count - previewSummary.ready_count} 只基金待补齐）`
-                        : '按全部确认份额加权计算')
+                        : '夜间真实涨跌幅同步后会自动覆盖')
                       : `已就绪 ${previewSummary.ready_count}/${previewSummary.total_count} 只基金`),
                 },
               ].map((metric) => (
@@ -638,7 +751,7 @@ export default function HoldingsPage() {
                       <div className="mt-1 text-xs text-theme-secondary">{pricingRuleLabel}</div>
                     </div>
                     <p className="mt-2 text-sm leading-6 text-theme-secondary">
-                      当前版本会把交易日期和提交时段一并保存，后端自动计算确认净值日，并在拿到对应官方净值后补齐份额与真实口径。
+                      系统会一并记录交易日期和提交时段，自动计算确认净值日，并在同步到对应官方净值后补齐份额与真实口径。
                     </p>
                     <button
                       type="button"
@@ -767,7 +880,7 @@ export default function HoldingsPage() {
                   </div>
 
                   <div className="mt-4 rounded-[22px] border border-cyan-400/18 bg-cyan-400/8 px-4 py-4">
-                      <div className="text-[11px] font-medium tracking-[0.18em] text-cyan-200">净值确认预览</div>
+                      <div className="text-[11px] font-medium tracking-[0.18em] text-cyan-200">净值确认提示</div>
                       <div className="mt-3 flex items-start justify-between gap-4">
                         <div className="min-w-0">
                         <div className="text-sm font-medium text-theme-primary">{tradeDate ? `${tradeDate} · ${tradeTimingLabel}` : '请选择交易日期'}</div>
@@ -790,18 +903,19 @@ export default function HoldingsPage() {
             <Wallet className="mx-auto h-10 w-10 text-theme-muted" />
             <div className="mt-4 text-xl font-semibold text-theme-primary">还没有持仓记录</div>
             <p className="mt-2 text-sm leading-6 text-theme-secondary">
-              你可以在上方选择基金、录入持仓金额和日期。当前版本会把数据保存到服务端，并在官方净值同步后展示真实市值与盈亏。
+              你可以在上方选择基金、录入持仓金额和日期；保存后会在官方净值同步后展示真实市值与盈亏。
             </p>
           </div>
         ) : (
           <div className="space-y-4">
             {viewMode === 'aggregate'
-              ? holdingAggregates.map((aggregate) => (
+              ? sortedHoldingAggregates.map((aggregate) => (
                   <HoldingAggregateRow
                     key={aggregate.fund_id}
                     aggregate={aggregate}
                     metricScope={metricScope}
                     estimateMetrics={aggregateMetrics[aggregate.fund_id]}
+                    analysis={analysesByFundID[aggregate.fund_id]}
                   >
                     {(holdingsByFundID[aggregate.fund_id] ?? []).map((holding) => (
                       <HoldingFundRow
@@ -809,62 +923,66 @@ export default function HoldingsPage() {
                         holding={holding}
                         metricScope={metricScope}
                         estimate={estimatesByFundID[holding.fund_id]}
+                        analysis={analysesByFundID[holding.fund_id]}
                         onRemove={() => removeHolding(holding.id)}
                       />
                     ))}
                   </HoldingAggregateRow>
                 ))
-              : holdings.map((holding) => (
+              : sortedHoldings.map((holding) => (
                   <HoldingFundRow
                     key={holding.id}
                     holding={holding}
                     metricScope={metricScope}
                     estimate={estimatesByFundID[holding.fund_id]}
+                    analysis={analysesByFundID[holding.fund_id]}
                     onRemove={() => removeHolding(holding.id)}
                   />
                 ))}
           </div>
         )}
 
-        <VIPAnalysisEntry
-          title="VIP 持仓组合分析"
-          description="围绕你的全部持仓组合输出结构化报告，聚合宏观、政策、财报与市场走势后给出可读性更强的结论与建议。"
-          accent="amber"
-          badgeLabel={membership.isVip ? 'VIP ACTIVE' : 'VIP'}
-          quotaLabel={membership.isVip
-            ? `今日剩余：组合 ${remainingQuota.portfolioAnalysis} 次 · 板块 ${remainingQuota.sectorAnalysis} 次`
-            : '开通后可用：2 次板块分析 · 2 次组合分析'}
-          note={holdings.length > 0
-            ? '默认分析对象：全部持仓组合'
-            : '当前没有持仓记录，开通后建议先录入组合再发起分析'}
-          actions={membership.isVip ? [
-            {
-              label: '发起组合分析',
-              onClick: () => void handleCreatePortfolioVIPTask(),
-              variant: 'primary',
-            },
-            {
-              label: latestCompletedTask?.reportId ? '查看最近报告' : '查看示例报告',
-              href: latestCompletedTask?.reportId
-                ? `/vip/reports/${latestCompletedTask.reportId}`
-                : `/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultPortfolio}`,
-              variant: 'secondary',
-              icon: <FileStack className="h-4 w-4" />,
-            },
-          ] : [
-            {
-              label: '开通 VIP',
-              href: '/vip',
-              variant: 'primary',
-            },
-            {
-              label: '查看示例报告',
-              href: `/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultPortfolio}`,
-              variant: 'secondary',
-              icon: <FileStack className="h-4 w-4" />,
-            },
-          ]}
-        />
+        {canAccessVIP && (
+          <VIPAnalysisEntry
+            title="VIP 持仓组合分析"
+            description="围绕你的全部持仓组合输出结构化报告，聚合宏观、政策、财报与市场走势后给出可读性更强的结论与建议。"
+            accent="amber"
+            badgeLabel={membership.isVip ? '已开通 VIP' : 'VIP'}
+            quotaLabel={membership.isVip
+              ? `今日剩余：组合 ${remainingQuota.portfolioAnalysis} 次 · 板块 ${remainingQuota.sectorAnalysis} 次`
+              : '开通后可用：2 次板块分析 · 2 次组合分析'}
+            note={holdings.length > 0
+              ? '默认分析对象：全部持仓组合'
+              : '当前没有持仓记录，开通后建议先录入组合再发起分析'}
+            actions={membership.isVip ? [
+              {
+                label: '发起组合分析',
+                onClick: () => void handleCreatePortfolioVIPTask(),
+                variant: 'primary',
+              },
+              {
+                label: latestCompletedTask?.reportId ? '查看最近报告' : '查看示例报告',
+                href: latestCompletedTask?.reportId
+                  ? `/vip/reports/${latestCompletedTask.reportId}`
+                  : `/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultPortfolio}`,
+                variant: 'secondary',
+                icon: <FileStack className="h-4 w-4" />,
+              },
+            ] : [
+              {
+                label: '开通 VIP',
+                href: '/vip',
+                variant: 'primary',
+              },
+              {
+                label: '查看示例报告',
+                href: `/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultPortfolio}`,
+                variant: 'secondary',
+                icon: <FileStack className="h-4 w-4" />,
+              },
+            ]}
+          />
+        )}
       </div>
     </AccountAreaShell>
   )

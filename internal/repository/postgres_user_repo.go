@@ -273,7 +273,7 @@ func (r *PostgresUserRepository) ListWatchlistGroups(ctx context.Context, userID
 	var dbGroups []database.UserWatchlistGroup
 	if err := r.db.WithContext(ctx).
 		Where("user_id = ?", userID).
-		Order("created_at DESC").
+		Order("sort_order ASC, created_at DESC").
 		Find(&dbGroups).Error; err != nil {
 		return nil, fmt.Errorf("failed to list watchlist groups: %w", err)
 	}
@@ -286,6 +286,7 @@ func (r *PostgresUserRepository) ListWatchlistGroups(ctx context.Context, userID
 			Name:        group.Name,
 			Description: group.Description,
 			Accent:      group.Accent,
+			SortOrder:   group.SortOrder,
 			CreatedAt:   group.CreatedAt,
 			UpdatedAt:   group.UpdatedAt,
 		})
@@ -309,6 +310,7 @@ func (r *PostgresUserRepository) GetWatchlistGroupByID(ctx context.Context, user
 		Name:        dbGroup.Name,
 		Description: dbGroup.Description,
 		Accent:      dbGroup.Accent,
+		SortOrder:   dbGroup.SortOrder,
 		CreatedAt:   dbGroup.CreatedAt,
 		UpdatedAt:   dbGroup.UpdatedAt,
 	}, nil
@@ -321,6 +323,7 @@ func (r *PostgresUserRepository) SaveWatchlistGroup(ctx context.Context, group *
 		Name:        group.Name,
 		Description: group.Description,
 		Accent:      group.Accent,
+		SortOrder:   group.SortOrder,
 		CreatedAt:   group.CreatedAt,
 		UpdatedAt:   group.UpdatedAt,
 	}
@@ -331,6 +334,7 @@ func (r *PostgresUserRepository) SaveWatchlistGroup(ctx context.Context, group *
 			"name",
 			"description",
 			"accent",
+			"sort_order",
 			"updated_at",
 		}),
 	}).Create(dbGroup)

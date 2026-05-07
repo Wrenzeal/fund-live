@@ -3,6 +3,7 @@
 package database
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -106,6 +107,37 @@ type StockHolding struct {
 // TableName 指定 StockHolding 的表名。
 func (StockHolding) TableName() string {
 	return "stock_holdings"
+}
+
+// StockHoldingHistory stores historical holdings snapshots by reporting period.
+type StockHoldingHistory struct {
+	ID uint `gorm:"primaryKey;autoIncrement" json:"id"`
+
+	FundID string `gorm:"type:varchar(10);index:idx_stock_holding_history_fund_period,priority:1;uniqueIndex:uq_stock_holding_history_fund_stock_period,priority:1;not null" json:"fund_id"`
+
+	StockCode string `gorm:"type:varchar(10);index;uniqueIndex:uq_stock_holding_history_fund_stock_period,priority:2;not null" json:"stock_code"`
+
+	StockName string `gorm:"type:varchar(50)" json:"stock_name"`
+
+	Exchange string `gorm:"type:varchar(5)" json:"exchange"`
+
+	HoldingRatio decimal.Decimal `gorm:"type:decimal(8,4)" json:"holding_ratio"`
+
+	HoldingShares decimal.Decimal `gorm:"type:decimal(18,2)" json:"holding_shares"`
+
+	MarketValue decimal.Decimal `gorm:"type:decimal(18,2)" json:"market_value"`
+
+	ReportingPeriod string `gorm:"type:varchar(10);index:idx_stock_holding_history_fund_period,priority:2;uniqueIndex:uq_stock_holding_history_fund_stock_period,priority:3;not null" json:"reporting_period"`
+
+	Source string `gorm:"type:varchar(50)" json:"source"`
+
+	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
+
+	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+func (StockHoldingHistory) TableName() string {
+	return "stock_holding_history"
 }
 
 // FundTimeSeries 存储基金的盘中时间序列数据。
@@ -219,11 +251,55 @@ func (FundMapping) TableName() string {
 	return "fund_mappings"
 }
 
+// FundEstimateCapability stores whether a fund can currently participate in realtime estimate coverage.
+type FundEstimateCapability struct {
+	FundID               string          `gorm:"primaryKey;type:varchar(10)" json:"fund_id"`
+	CapabilityStatus     string          `gorm:"type:varchar(20);index" json:"capability_status"`
+	CapabilityType       string          `gorm:"type:varchar(50);index" json:"capability_type"`
+	QuoteSourceMode      string          `gorm:"type:varchar(20);index" json:"quote_source_mode"`
+	TargetCode           string          `gorm:"type:varchar(10);index" json:"target_code"`
+	HoldingsCount        int64           `gorm:"type:bigint;default:0" json:"holdings_count"`
+	TotalHoldRatio       decimal.Decimal `gorm:"type:decimal(10,4);default:0" json:"total_hold_ratio"`
+	HasEffectiveHoldings bool            `gorm:"default:false" json:"has_effective_holdings"`
+	HasValuationProfile  bool            `gorm:"default:false" json:"has_valuation_profile"`
+	HasTargetMapping     bool            `gorm:"default:false" json:"has_target_mapping"`
+	CheckedAt            time.Time       `gorm:"index" json:"checked_at"`
+	CreatedAt            time.Time       `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt            time.Time       `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+func (FundEstimateCapability) TableName() string {
+	return "fund_estimate_capabilities"
+}
+
+type FundAnalysisSnapshot struct {
+	FundID              string          `gorm:"primaryKey;type:varchar(10)" json:"fund_id"`
+	AnalysisType        string          `gorm:"type:varchar(32);not null" json:"analysis_type"`
+	AnalysisBasis       string          `gorm:"type:varchar(64);not null" json:"analysis_basis"`
+	TotalScore          decimal.Decimal `gorm:"type:decimal(8,4);default:0" json:"total_score"`
+	Confidence          string          `gorm:"type:varchar(16);default:''" json:"confidence"`
+	RiskLevel           string          `gorm:"type:varchar(16);default:''" json:"risk_level"`
+	IncreasePercent     decimal.Decimal `gorm:"type:decimal(8,4);default:0" json:"increase_percent"`
+	HoldPercent         decimal.Decimal `gorm:"type:decimal(8,4);default:0" json:"hold_percent"`
+	DecreasePercent     decimal.Decimal `gorm:"type:decimal(8,4);default:0" json:"decrease_percent"`
+	LatestHoldingPeriod string          `gorm:"type:varchar(16)" json:"latest_holding_period"`
+	Summary             string          `gorm:"type:text" json:"summary"`
+	GeneratedAt         time.Time       `gorm:"index;not null" json:"generated_at"`
+	AnalysisJSON        json.RawMessage `gorm:"type:jsonb;serializer:json;not null" json:"analysis_json"`
+	CreatedAt           time.Time       `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt           time.Time       `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+func (FundAnalysisSnapshot) TableName() string {
+	return "fund_analysis_snapshots"
+}
+
 // AllModels 返回所有数据库模型，用于自动迁移。
 func AllModels() []interface{} {
 	models := []interface{}{
 		&Fund{},
 		&StockHolding{},
+		&StockHoldingHistory{},
 		&FundTimeSeries{},
 		&FundHistory{},
 		&FundValuationProfile{},
@@ -233,7 +309,13 @@ func AllModels() []interface{} {
 		&InstrumentSectorMap{},
 		&FundSectorSnapshot{},
 		&FundSectorBreakdown{},
+		&FundTheme{},
+		&InstrumentThemeMap{},
+		&FundThemeSnapshot{},
+		&FundThemeBreakdown{},
 		&FundClassificationOverride{},
+		&FundEstimateCapability{},
+		&FundAnalysisSnapshot{},
 	}
 	return append(models, UserModels()...)
 }

@@ -40,17 +40,27 @@ type ValuationServiceImpl struct {
 	collectorOnce sync.Once
 
 	// Fund IDs to track (set by StartBackgroundCollector)
-	trackedFunds         []trackedFundTarget
-	trackedFundsMu       sync.RWMutex
-	trackedFundTTL       time.Duration
-	collectorConcurrency int
-	now                  func() time.Time
+	trackedFunds                 []trackedFundTarget
+	trackedFundsMu               sync.RWMutex
+	managedTargets               []trackedFundTarget
+	managedTargetsMu             sync.RWMutex
+	trackedFundTTL               time.Duration
+	collectorConcurrency         int
+	domesticCollectorConcurrency int
+	overseasCollectorConcurrency int
+	domesticBatchSize            int
+	overseasBatchSize            int
+	now                          func() time.Time
 }
 
 type trackedFundTarget struct {
-	FundID        string
-	Source        domain.QuoteSource
-	LastTrackedAt time.Time
+	FundID          string
+	Source          domain.QuoteSource
+	LastTrackedAt   time.Time
+	LastCollectedAt time.Time
+	RefreshInterval time.Duration
+	QuoteMode       string
+	Persistent      bool
 }
 
 // NewValuationService creates a new ValuationService instance.
@@ -60,18 +70,23 @@ func NewValuationService(
 	cache domain.CacheRepository,
 ) *ValuationServiceImpl {
 	return &ValuationServiceImpl{
-		fundRepo:             fundRepo,
-		quoteProvider:        quoteProvider,
-		quoteProviders:       map[domain.QuoteSource]domain.QuoteProvider{domain.QuoteSourceSina: quoteProvider},
-		defaultQuoteSource:   domain.QuoteSourceSina,
-		cache:                cache,
-		dataLoader:           NewFundDataLoader(fundRepo),
-		timeSeries:           make(map[string][]domain.TimeSeriesPoint),
-		stopCollector:        make(chan struct{}),
-		trackedFunds:         []trackedFundTarget{},
-		trackedFundTTL:       6 * time.Hour,
-		collectorConcurrency: 4,
-		now:                  time.Now,
+		fundRepo:                     fundRepo,
+		quoteProvider:                quoteProvider,
+		quoteProviders:               map[domain.QuoteSource]domain.QuoteProvider{domain.QuoteSourceSina: quoteProvider},
+		defaultQuoteSource:           domain.QuoteSourceSina,
+		cache:                        cache,
+		dataLoader:                   NewFundDataLoader(fundRepo),
+		timeSeries:                   make(map[string][]domain.TimeSeriesPoint),
+		stopCollector:                make(chan struct{}),
+		trackedFunds:                 []trackedFundTarget{},
+		managedTargets:               []trackedFundTarget{},
+		trackedFundTTL:               6 * time.Hour,
+		collectorConcurrency:         4,
+		domesticCollectorConcurrency: 8,
+		overseasCollectorConcurrency: 3,
+		domesticBatchSize:            300,
+		overseasBatchSize:            100,
+		now:                          time.Now,
 	}
 }
 
@@ -153,7 +168,7 @@ func (s *ValuationServiceImpl) runBackgroundCollector(ctx context.Context, inter
 	defer ticker.Stop()
 
 	// Do an initial collection immediately
-	s.collectDataForAllFunds(ctx)
+	s.collectDataForDueFunds(ctx)
 
 	for {
 		select {
@@ -166,40 +181,73 @@ func (s *ValuationServiceImpl) runBackgroundCollector(ctx context.Context, inter
 		case <-ticker.C:
 			// Only collect during trading hours
 			if trading.IsTradingHours(time.Now()) {
-				s.collectDataForAllFunds(ctx)
+				s.collectDataForDueFunds(ctx)
 			}
 		}
 	}
 }
 
-// collectDataForAllFunds fetches estimates for all tracked funds.
-func (s *ValuationServiceImpl) collectDataForAllFunds(ctx context.Context) {
-	funds := s.snapshotTrackedFunds()
-
-	if len(funds) == 0 {
+// collectDataForDueFunds fetches estimates only for due tracked funds and applies batch limits.
+func (s *ValuationServiceImpl) collectDataForDueFunds(ctx context.Context) {
+	now := time.Now()
+	if s.now != nil {
+		now = s.now()
+	}
+	domesticTargets, overseasTargets := s.snapshotDueTrackedFunds(now)
+	if len(domesticTargets) == 0 && len(overseasTargets) == 0 {
 		return
 	}
 
-	group, groupCtx := errgroup.WithContext(ctx)
-	if s.collectorConcurrency > 0 {
-		group.SetLimit(s.collectorConcurrency)
-	}
+	s.markTargetsCollected(append(domesticTargets, overseasTargets...), now)
 
-	for _, target := range funds {
-		target := target
+	group, groupCtx := errgroup.WithContext(ctx)
+	if len(domesticTargets) > 0 {
+		targets := append([]trackedFundTarget(nil), domesticTargets...)
 		group.Go(func() error {
-			targetCtx := domain.WithQuoteSource(groupCtx, target.Source)
-			_, err := s.CalculateEstimate(targetCtx, target.FundID)
-			if err != nil {
-				// Log error but continue with other funds
-				log.Printf("⚠️ Background collector: failed to collect data for %s[%s]: %v", target.FundID, target.Source, err)
-			}
+			s.collectTargets(groupCtx, targets, s.domesticCollectorConcurrency)
+			return nil
+		})
+	}
+	if len(overseasTargets) > 0 {
+		targets := append([]trackedFundTarget(nil), overseasTargets...)
+		group.Go(func() error {
+			s.collectTargets(groupCtx, targets, s.overseasCollectorConcurrency)
 			return nil
 		})
 	}
 
 	if err := group.Wait(); err != nil {
 		log.Printf("⚠️ Background collector group wait failed: %v", err)
+	}
+}
+
+func (s *ValuationServiceImpl) collectTargets(ctx context.Context, targets []trackedFundTarget, concurrency int) {
+	if len(targets) == 0 {
+		return
+	}
+
+	group, groupCtx := errgroup.WithContext(ctx)
+	if concurrency <= 0 {
+		concurrency = s.collectorConcurrency
+	}
+	if concurrency > 0 {
+		group.SetLimit(concurrency)
+	}
+
+	for _, target := range targets {
+		target := target
+		group.Go(func() error {
+			targetCtx := domain.WithQuoteSource(groupCtx, target.Source)
+			_, err := s.CalculateEstimate(targetCtx, target.FundID)
+			if err != nil {
+				log.Printf("⚠️ Background collector: failed to collect data for %s[%s|%s]: %v", target.FundID, target.Source, target.QuoteMode, err)
+			}
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		log.Printf("⚠️ Background collector target group wait failed: %v", err)
 	}
 }
 
@@ -231,8 +279,38 @@ func (s *ValuationServiceImpl) CalculateEstimate(ctx context.Context, fundID str
 
 	fund, holdings, warmupScheduled := useCachedFundDataOrScheduleWarmup(s.dataLoader, fundID, fund, holdings)
 
+	trackedETFCode := ""
+	if s.fundResolver != nil {
+		if display, displayErr := s.fundResolver.ResolveDisplayHoldings(ctx, fundID, fund.Name); displayErr != nil {
+			log.Printf("⚠️ Tracked ETF resolution failed for %s: %v", fundID, displayErr)
+		} else if targetItem, ok := domain.PrimaryTrackedETF(display); ok {
+			trackedETFCode = strings.TrimSpace(targetItem.Code)
+		}
+	}
+
+	if trackedETFCode != "" {
+		quoteSource, _ := s.resolveQuoteProvider(ctx)
+		targetEstimate, targetErr := s.calculateEstimateFromTargetETF(ctx, fund, trackedETFCode, quoteSource)
+		if targetErr == nil {
+			s.recordTimeSeriesPoint(fundID, quoteSource, targetEstimate)
+			return targetEstimate, nil
+		}
+
+		log.Printf("⚠️ Target ETF quote estimate failed for feeder fund %s via %s: %v; falling back to target ETF holdings", fundID, trackedETFCode, targetErr)
+		targetHoldings, holdingsErr := s.fundResolver.loadTargetHoldingsWithFallback(ctx, trackedETFCode)
+		if holdingsErr == nil && hasEffectiveHoldings(targetHoldings) {
+			holdings = targetHoldings
+			holdingsSource = trackedETFCode
+		} else {
+			if warmupScheduled {
+				return nil, ErrFundDataWarmupInProgress
+			}
+			return nil, targetErr
+		}
+	}
+
 	// If no effective holdings and we have a fund resolver, try feeder fund resolution
-	if !hasEffectiveHoldings(holdings) && s.fundResolver != nil {
+	if trackedETFCode == "" && !hasEffectiveHoldings(holdings) && s.fundResolver != nil {
 		holdings, holdingsSource, err = s.fundResolver.GetHoldingsWithFallback(ctx, fundID, fund.Name)
 		if err != nil {
 			log.Printf("⚠️ Feeder fund resolution failed for %s: %v", fundID, err)
@@ -279,8 +357,17 @@ func (s *ValuationServiceImpl) CalculateEstimate(ctx context.Context, fundID str
 	}
 
 	// Log if using fallback holdings
-	if holdingsSource != fundID {
+	if holdingsSource != fundID && trackedETFCode == "" {
 		log.Printf("📊 Using holdings from target ETF %s for feeder fund %s", holdingsSource, fundID)
+
+		quoteSource, _ := s.resolveQuoteProvider(ctx)
+		targetEstimate, targetErr := s.calculateEstimateFromTargetETF(ctx, fund, holdingsSource, quoteSource)
+		if targetErr == nil {
+			s.recordTimeSeriesPoint(fundID, quoteSource, targetEstimate)
+			return targetEstimate, nil
+		}
+
+		log.Printf("⚠️ Target ETF quote estimate failed for feeder fund %s via %s: %v; falling back to holdings-based estimate", fundID, holdingsSource, targetErr)
 	}
 
 	// Step 3: Get stock codes for quote fetching
@@ -446,15 +533,9 @@ func (s *ValuationServiceImpl) fetchQuotesForFund(
 // calculateEstimateFromTargetETF estimates fund value using the target ETF's direct quote.
 // This is used for feeder funds tracking ETFs that don't have stock holdings (e.g. Gold ETFs).
 func (s *ValuationServiceImpl) calculateEstimateFromTargetETF(ctx context.Context, fund *domain.Fund, targetCode string, source domain.QuoteSource) (*domain.FundEstimate, error) {
-	// Fetch quote for the target ETF
-	quotes, err := s.fetchQuotesWithCache(ctx, []string{targetCode})
+	quote, resolvedSource, err := s.fetchTargetETFQuoteWithFallback(ctx, targetCode, source)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch quote for target ETF %s: %w", targetCode, err)
-	}
-
-	quote, ok := quotes[targetCode]
-	if !ok || quote.CurrentPrice.IsZero() {
-		return nil, fmt.Errorf("no quote data for target ETF %s", targetCode)
 	}
 
 	// Calculate estimated NAV based on ETF change
@@ -491,8 +572,65 @@ func (s *ValuationServiceImpl) calculateEstimateFromTargetETF(ctx context.Contex
 		CalculatedAt:   now,
 		HoldingDetails: details,
 		TotalHoldRatio: decimal.NewFromFloat(100.00),
-		DataSource:     fmt.Sprintf("追踪目标ETF: %s", quote.StockName),
+		DataSource:     fmt.Sprintf("追踪目标ETF(%s): %s", resolvedSource, quote.StockName),
 	}, nil
+}
+
+func (s *ValuationServiceImpl) fetchTargetETFQuoteWithFallback(
+	ctx context.Context,
+	targetCode string,
+	preferredSource domain.QuoteSource,
+) (domain.StockQuote, domain.QuoteSource, error) {
+	sources := s.targetETFFallbackSources(preferredSource)
+	var lastErr error
+
+	for _, source := range sources {
+		quotes, err := s.fetchQuotesWithCache(domain.WithQuoteSource(ctx, source), []string{targetCode})
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		quote, ok := quotes[targetCode]
+		if !ok || quote.CurrentPrice.IsZero() {
+			lastErr = fmt.Errorf("no quote data for target ETF %s via %s", targetCode, source)
+			continue
+		}
+		return quote, source, nil
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no quote data for target ETF %s", targetCode)
+	}
+	return domain.StockQuote{}, "", lastErr
+}
+
+func (s *ValuationServiceImpl) targetETFFallbackSources(preferredSource domain.QuoteSource) []domain.QuoteSource {
+	preferredSource = domain.ResolveQuoteSource(preferredSource, s.defaultQuoteSource)
+	candidates := []domain.QuoteSource{preferredSource}
+
+	for _, source := range []domain.QuoteSource{domain.QuoteSourceSina, domain.QuoteSourceTencent} {
+		if source == preferredSource {
+			continue
+		}
+		if provider, ok := s.quoteProviders[source]; ok && provider != nil {
+			candidates = append(candidates, source)
+		}
+	}
+
+	deduped := make([]domain.QuoteSource, 0, len(candidates))
+	seen := make(map[domain.QuoteSource]struct{}, len(candidates))
+	for _, source := range candidates {
+		if _, exists := seen[source]; exists {
+			continue
+		}
+		if provider, ok := s.quoteProviders[source]; !ok || provider == nil {
+			continue
+		}
+		seen[source] = struct{}{}
+		deduped = append(deduped, source)
+	}
+	return deduped
 }
 
 // calculateWeightedEstimate performs the core weighted average calculation.
@@ -837,13 +975,22 @@ func (s *ValuationServiceImpl) TrackFundsForSource(source domain.QuoteSource, fu
 		seenKey := string(source) + "|" + fundID
 		if idx, ok := seen[seenKey]; ok {
 			s.trackedFunds[idx].LastTrackedAt = now
+			if s.trackedFunds[idx].RefreshInterval <= 0 {
+				s.trackedFunds[idx].RefreshInterval = time.Minute
+			}
+			if strings.TrimSpace(s.trackedFunds[idx].QuoteMode) == "" {
+				s.trackedFunds[idx].QuoteMode = EstimateQuoteModeDomestic
+			}
 			continue
 		}
 		seen[seenKey] = len(s.trackedFunds)
 		s.trackedFunds = append(s.trackedFunds, trackedFundTarget{
-			FundID:        fundID,
-			Source:        source,
-			LastTrackedAt: now,
+			FundID:          fundID,
+			Source:          source,
+			LastTrackedAt:   now,
+			RefreshInterval: time.Minute,
+			QuoteMode:       EstimateQuoteModeDomestic,
+			Persistent:      false,
 		})
 	}
 }
@@ -852,9 +999,13 @@ func (s *ValuationServiceImpl) snapshotTrackedFunds() []trackedFundTarget {
 	s.cleanupExpiredTrackedFunds()
 
 	s.trackedFundsMu.RLock()
-	defer s.trackedFundsMu.RUnlock()
+	ephemeral := append([]trackedFundTarget(nil), s.trackedFunds...)
+	s.trackedFundsMu.RUnlock()
+	s.managedTargetsMu.RLock()
+	managed := append([]trackedFundTarget(nil), s.managedTargets...)
+	s.managedTargetsMu.RUnlock()
 
-	if len(s.trackedFunds) == 0 {
+	if len(ephemeral) == 0 && len(managed) == 0 {
 		return nil
 	}
 
@@ -863,11 +1014,25 @@ func (s *ValuationServiceImpl) snapshotTrackedFunds() []trackedFundTarget {
 		now = s.now()
 	}
 
-	funds := make([]trackedFundTarget, 0, len(s.trackedFunds))
-	for _, target := range s.trackedFunds {
+	funds := make([]trackedFundTarget, 0, len(ephemeral)+len(managed))
+	seen := make(map[string]struct{}, len(ephemeral)+len(managed))
+	for _, target := range ephemeral {
 		if s.isTrackedFundExpired(target, now) {
 			continue
 		}
+		key := makeTrackedTargetKey(target)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		funds = append(funds, target)
+	}
+	for _, target := range managed {
+		key := makeTrackedTargetKey(target)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
 		funds = append(funds, target)
 	}
 	return funds
@@ -908,6 +1073,132 @@ func (s *ValuationServiceImpl) cleanupExpiredTrackedFunds() {
 		activeTargets = append(activeTargets, target)
 	}
 	s.trackedFunds = activeTargets
+}
+
+func (s *ValuationServiceImpl) SetManagedTargets(targets []trackedFundTarget) {
+	if s == nil {
+		return
+	}
+
+	s.managedTargetsMu.Lock()
+	defer s.managedTargetsMu.Unlock()
+
+	existing := make(map[string]trackedFundTarget, len(s.managedTargets))
+	for _, target := range s.managedTargets {
+		existing[makeTrackedTargetKey(target)] = target
+	}
+
+	nextTargets := make([]trackedFundTarget, 0, len(targets))
+	seen := make(map[string]struct{}, len(targets))
+	for _, target := range targets {
+		target.FundID = strings.TrimSpace(target.FundID)
+		if target.FundID == "" {
+			continue
+		}
+		target.Source = domain.ResolveQuoteSource(target.Source, s.defaultQuoteSource)
+		if target.RefreshInterval <= 0 {
+			target.RefreshInterval = 3 * time.Minute
+		}
+		target.QuoteMode = normalizeEstimateQuoteMode(target.QuoteMode)
+		target.Persistent = true
+		key := makeTrackedTargetKey(target)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		if previous, ok := existing[key]; ok {
+			target.LastCollectedAt = previous.LastCollectedAt
+		}
+		nextTargets = append(nextTargets, target)
+	}
+
+	s.managedTargets = nextTargets
+}
+
+func (s *ValuationServiceImpl) snapshotDueTrackedFunds(now time.Time) ([]trackedFundTarget, []trackedFundTarget) {
+	targets := s.snapshotTrackedFunds()
+	if len(targets) == 0 {
+		return nil, nil
+	}
+
+	domesticDue := make([]trackedFundTarget, 0, len(targets))
+	overseasDue := make([]trackedFundTarget, 0, len(targets))
+	for _, target := range targets {
+		interval := target.RefreshInterval
+		if interval <= 0 {
+			interval = time.Minute
+		}
+		if !target.LastCollectedAt.IsZero() && now.Before(target.LastCollectedAt.Add(interval)) {
+			continue
+		}
+		if target.QuoteMode == EstimateQuoteModeOverseas || target.QuoteMode == EstimateQuoteModeMixed {
+			overseasDue = append(overseasDue, target)
+			continue
+		}
+		domesticDue = append(domesticDue, target)
+	}
+
+	sortTrackedTargetsByLastCollected(domesticDue)
+	sortTrackedTargetsByLastCollected(overseasDue)
+
+	return limitTrackedTargets(domesticDue, s.domesticBatchSize), limitTrackedTargets(overseasDue, s.overseasBatchSize)
+}
+
+func (s *ValuationServiceImpl) markTargetsCollected(targets []trackedFundTarget, collectedAt time.Time) {
+	if len(targets) == 0 {
+		return
+	}
+
+	keys := make(map[string]struct{}, len(targets))
+	for _, target := range targets {
+		keys[makeTrackedTargetKey(target)] = struct{}{}
+	}
+
+	s.trackedFundsMu.Lock()
+	for i := range s.trackedFunds {
+		if _, ok := keys[makeTrackedTargetKey(s.trackedFunds[i])]; ok {
+			s.trackedFunds[i].LastCollectedAt = collectedAt
+		}
+	}
+	s.trackedFundsMu.Unlock()
+
+	s.managedTargetsMu.Lock()
+	for i := range s.managedTargets {
+		if _, ok := keys[makeTrackedTargetKey(s.managedTargets[i])]; ok {
+			s.managedTargets[i].LastCollectedAt = collectedAt
+		}
+	}
+	s.managedTargetsMu.Unlock()
+}
+
+func makeTrackedTargetKey(target trackedFundTarget) string {
+	return string(target.Source) + "|" + strings.TrimSpace(target.FundID)
+}
+
+func sortTrackedTargetsByLastCollected(targets []trackedFundTarget) {
+	sort.Slice(targets, func(i, j int) bool {
+		left := targets[i]
+		right := targets[j]
+		switch {
+		case left.LastCollectedAt.IsZero() && right.LastCollectedAt.IsZero():
+			return left.FundID < right.FundID
+		case left.LastCollectedAt.IsZero():
+			return true
+		case right.LastCollectedAt.IsZero():
+			return false
+		case !left.LastCollectedAt.Equal(right.LastCollectedAt):
+			return left.LastCollectedAt.Before(right.LastCollectedAt)
+		default:
+			return left.FundID < right.FundID
+		}
+	})
+}
+
+func limitTrackedTargets(targets []trackedFundTarget, limit int) []trackedFundTarget {
+	if limit <= 0 || len(targets) <= limit {
+		return targets
+	}
+	return targets[:limit]
 }
 
 func (s *ValuationServiceImpl) resolveQuoteProvider(ctx context.Context) (domain.QuoteSource, domain.QuoteProvider) {
