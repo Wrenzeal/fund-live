@@ -242,22 +242,88 @@ type FundAnalysisEventImpact struct {
 	WeightHint     *decimal.Decimal `json:"weight_hint,omitempty"`
 }
 
+// FundAnalysisConfidenceFactor explains one component of the overall analysis confidence.
+type FundAnalysisConfidenceFactor struct {
+	Code    string          `json:"code"`
+	Name    string          `json:"name"`
+	Level   string          `json:"level"`
+	Score   decimal.Decimal `json:"score"`
+	Summary string          `json:"summary"`
+}
+
+// FundAnalysisEvidenceItem links a conclusion back to structured evidence.
+type FundAnalysisEvidenceItem struct {
+	Code           string           `json:"code"`
+	Title          string           `json:"title"`
+	Summary        string           `json:"summary"`
+	EvidenceType   string           `json:"evidence_type"`
+	SourceScope    string           `json:"source_scope,omitempty"`
+	Impact         string           `json:"impact,omitempty"`
+	Strength       string           `json:"strength,omitempty"`
+	Horizon        string           `json:"horizon,omitempty"`
+	RelatedSymbols []string         `json:"related_symbols,omitempty"`
+	WeightHint     *decimal.Decimal `json:"weight_hint,omitempty"`
+}
+
+// FundAnalysisAIExplanationCitation is a provider-visible reference that an AI explanation may cite.
+type FundAnalysisAIExplanationCitation struct {
+	Code        string `json:"code"`
+	SourceType  string `json:"source_type"`
+	SourceScope string `json:"source_scope,omitempty"`
+	Title       string `json:"title"`
+	Summary     string `json:"summary,omitempty"`
+}
+
+// FundAnalysisAIExplanationSection is an evidence-cited explanation paragraph.
+type FundAnalysisAIExplanationSection struct {
+	Title         string   `json:"title"`
+	Summary       string   `json:"summary"`
+	CitationCodes []string `json:"citation_codes,omitempty"`
+}
+
+// FundAnalysisAIExplanation stores an optional evidence-grounded explanation layer.
+//
+// This layer is intentionally separate from rule scores: it must not write back to
+// total_score, risk_level, recommendation percentages, module scores, or event impacts.
+type FundAnalysisAIExplanation struct {
+	Status             string                              `json:"status"`
+	Provider           string                              `json:"provider"`
+	Model              string                              `json:"model,omitempty"`
+	GeneratedAt        time.Time                           `json:"generated_at,omitempty"`
+	CacheKey           string                              `json:"cache_key,omitempty"`
+	CacheStatus        string                              `json:"cache_status,omitempty"`
+	ExpiresAt          time.Time                           `json:"expires_at,omitempty"`
+	InvalidationBasis  []string                            `json:"invalidation_basis,omitempty"`
+	RuleRecommendation string                              `json:"rule_recommendation,omitempty"`
+	BoundaryNotice     string                              `json:"boundary_notice"`
+	Summary            string                              `json:"summary"`
+	Attribution        []FundAnalysisAIExplanationSection  `json:"attribution,omitempty"`
+	RiskNotes          []FundAnalysisAIExplanationSection  `json:"risk_notes,omitempty"`
+	Citations          []FundAnalysisAIExplanationCitation `json:"citations,omitempty"`
+	Limitations        []string                            `json:"limitations,omitempty"`
+}
+
 // FundAnalysis summarizes the current rule-based quant analysis result for a fund.
 type FundAnalysis struct {
-	AnalysisVersion     string                    `json:"analysis_version"`
-	AnalysisType        string                    `json:"analysis_type"`
-	AnalysisBasis       string                    `json:"analysis_basis"`
-	AsOfTime            time.Time                 `json:"as_of_time"`
-	TotalScore          decimal.Decimal           `json:"total_score"`
-	Confidence          string                    `json:"confidence"`
-	RiskLevel           string                    `json:"risk_level"`
-	IncreasePercent     decimal.Decimal           `json:"increase_percent"`
-	HoldPercent         decimal.Decimal           `json:"hold_percent"`
-	DecreasePercent     decimal.Decimal           `json:"decrease_percent"`
-	LatestHoldingPeriod string                    `json:"latest_holding_period,omitempty"`
-	Summary             string                    `json:"summary"`
-	Reasons             []string                  `json:"reasons"`
-	Warnings            []string                  `json:"warnings"`
-	EventImpacts        []FundAnalysisEventImpact `json:"event_impacts"`
-	ModuleScores        []FundAnalysisModuleScore `json:"module_scores"`
+	AnalysisVersion      string                         `json:"analysis_version"`
+	AnalysisType         string                         `json:"analysis_type"`
+	AnalysisBasis        string                         `json:"analysis_basis"`
+	AsOfTime             time.Time                      `json:"as_of_time"`
+	TotalScore           decimal.Decimal                `json:"total_score"`
+	Confidence           string                         `json:"confidence"`
+	RiskLevel            string                         `json:"risk_level"`
+	IncreasePercent      decimal.Decimal                `json:"increase_percent"`
+	HoldPercent          decimal.Decimal                `json:"hold_percent"`
+	DecreasePercent      decimal.Decimal                `json:"decrease_percent"`
+	LatestHoldingPeriod  string                         `json:"latest_holding_period,omitempty"`
+	Summary              string                         `json:"summary"`
+	Reasons              []string                       `json:"reasons"`
+	Warnings             []string                       `json:"warnings"`
+	EventImpacts         []FundAnalysisEventImpact      `json:"event_impacts"`
+	ModuleScores         []FundAnalysisModuleScore      `json:"module_scores"`
+	ConfidenceFactors    []FundAnalysisConfidenceFactor `json:"confidence_factors,omitempty"`
+	PrimaryEvidence      []FundAnalysisEvidenceItem     `json:"primary_evidence,omitempty"`
+	CounterEvidence      []FundAnalysisEvidenceItem     `json:"counter_evidence,omitempty"`
+	ConfidenceDeductions []string                       `json:"confidence_deductions,omitempty"`
+	AIExplanation        *FundAnalysisAIExplanation     `json:"ai_explanation,omitempty"`
 }

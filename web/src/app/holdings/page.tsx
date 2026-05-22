@@ -3,10 +3,12 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, BarChart4, CalendarDays, CheckCircle2, Clock3, FileStack, Layers3, ListTree, LoaderCircle, Plus, Wallet } from 'lucide-react'
+import { AlertTriangle, BarChart4, CalendarDays, CheckCircle2, Clock3, FileStack, LoaderCircle, Plus, Wallet } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
-import { HoldingAggregateRow } from '@/components/holding-aggregate-row'
-import { HoldingFundRow } from '@/components/holding-fund-row'
+import { HoldingFeedbackBanner, type HoldingFeedbackMessage } from '@/components/holding-feedback-banner'
+import { HoldingsViewControls } from '@/components/holdings-view-controls'
+import { HoldingsList } from '@/components/holdings-list'
+import { HoldingsSummaryMetrics } from '@/components/holdings-summary-metrics'
 import { VIPAnalysisEntry } from '@/components/vip-analysis-entry'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { useFundAnalyses, useFundSearch } from '@/hooks/use-fund-data'
@@ -15,129 +17,33 @@ import { useHoldingEstimateMetrics, useUserPortfolio } from '@/hooks/use-user-po
 import { useVIPPreview } from '@/hooks/use-vip-preview'
 import { VIP_SAMPLE_REPORT_IDS } from '@/mocks/vip'
 import { cn } from '@/lib/utils'
+import {
+  aggregateChangeValue,
+  aggregateLatestUpdatedAt,
+  aggregateProfitValue,
+  analysisRecommendationWeight,
+  analysisRiskWeight,
+  buildTradeAtValue,
+  compareOptionalNumbers,
+  detailChangeValue,
+  detailProfitValue,
+  formatSummaryMoney,
+  formatTradeDateLabel,
+  formatTradeTimingLabel,
+  isAggregateIncomplete,
+  isHoldingIncomplete,
+  matchesAggregateFilter,
+  matchesHoldingFilter,
+  parseOptionalNumber,
+  resolveTradeTimingFromServerClock,
+  timestampValue,
+  type HoldingFilterMode,
+  type HoldingMetricScope,
+  type HoldingSortMode,
+  type TradeTiming,
+} from '@/lib/holding-display'
 
-const BEIJING_OFFSET = '+08:00'
-type TradeTiming = 'before_close' | 'after_close'
 type HoldingViewMode = 'aggregate' | 'detail'
-type HoldingMetricScope = 'official' | 'estimate'
-type HoldingSortMode = 'default' | 'analysis_recommendation' | 'analysis_risk'
-
-function buildTradeAtValue(date: string, tradeTiming: TradeTiming) {
-  if (!date) {
-    return ''
-  }
-
-  const marker = tradeTiming === 'before_close' ? '14:59:00' : '15:01:00'
-  return `${date}T${marker}${BEIJING_OFFSET}`
-}
-
-function formatTradeDateLabel(date: string) {
-  if (!date) {
-    return '选择交易日期'
-  }
-
-  const parsed = new Date(`${date}T12:00:00${BEIJING_OFFSET}`)
-  if (Number.isNaN(parsed.getTime())) {
-    return date
-  }
-
-  return new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    month: 'long',
-    day: 'numeric',
-    weekday: 'short',
-  }).format(parsed)
-}
-
-function formatTradeTimingLabel(tradeTiming: TradeTiming) {
-  if (tradeTiming === 'after_close') {
-    return '15:00 后'
-  }
-
-  return '15:00 前'
-}
-
-function resolveTradeTimingFromServerClock(currentTime: Date) {
-  const beijingTime = currentTime.toLocaleTimeString('en-GB', {
-    timeZone: 'Asia/Shanghai',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-
-  return beijingTime >= '15:00' ? 'after_close' : 'before_close'
-}
-
-function formatSummaryMoney(value?: string) {
-  if (!value) {
-    return '--'
-  }
-
-  const parsed = Number.parseFloat(value)
-  if (Number.isNaN(parsed)) {
-    return '--'
-  }
-
-  return new Intl.NumberFormat('zh-CN', {
-    style: 'currency',
-    currency: 'CNY',
-    maximumFractionDigits: 2,
-  }).format(parsed)
-}
-
-function formatSummaryPercent(value?: string) {
-  if (!value) {
-    return '--'
-  }
-
-  const parsed = Number.parseFloat(value)
-  if (Number.isNaN(parsed)) {
-    return '--'
-  }
-
-  return `${parsed >= 0 ? '+' : ''}${parsed.toFixed(2)}%`
-}
-
-function parseAnalysisPercent(value?: string) {
-  const parsed = Number.parseFloat(value || '')
-  return Number.isNaN(parsed) ? 0 : parsed
-}
-
-function analysisRecommendationWeight(analysis?: { increase_percent?: string; hold_percent?: string; decrease_percent?: string } | null) {
-  if (!analysis) {
-    return -1
-  }
-
-  const increase = parseAnalysisPercent(analysis.increase_percent)
-  const hold = parseAnalysisPercent(analysis.hold_percent)
-  const decrease = parseAnalysisPercent(analysis.decrease_percent)
-
-  if (increase >= hold && increase >= decrease) {
-    return 3_000 + increase
-  }
-  if (hold >= increase && hold >= decrease) {
-    return 2_000 + hold
-  }
-  return 1_000 + decrease
-}
-
-function analysisRiskWeight(analysis?: { risk_level?: string; total_score?: string } | null) {
-  if (!analysis) {
-    return -1
-  }
-
-  const score = parseAnalysisPercent(analysis.total_score)
-  switch (analysis.risk_level) {
-    case 'high':
-      return 3_000 + (100 - score)
-    case 'medium':
-      return 2_000 + (100 - score)
-    case 'low':
-      return 1_000 + (100 - score)
-    default:
-      return score
-  }
-}
 
 export default function HoldingsPage() {
   const router = useRouter()
@@ -153,9 +59,11 @@ export default function HoldingsPage() {
   const [viewMode, setViewMode] = useState<HoldingViewMode>('aggregate')
   const [metricScope, setMetricScope] = useState<HoldingMetricScope>('official')
   const [sortMode, setSortMode] = useState<HoldingSortMode>('default')
+  const [filterMode, setFilterMode] = useState<HoldingFilterMode>('all')
+  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false)
   const [note, setNote] = useState('')
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-  const [vipFeedback, setVipFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [feedback, setFeedback] = useState<HoldingFeedbackMessage | null>(null)
+  const [vipFeedback, setVipFeedback] = useState<HoldingFeedbackMessage | null>(null)
   const [isSeedingDemo, setIsSeedingDemo] = useState(false)
   const [isAddingHolding, setIsAddingHolding] = useState(false)
   const defaultsInitializedRef = useRef(false)
@@ -235,12 +143,38 @@ export default function HoldingsPage() {
       return groups
     }, {})
   }, [holdings])
+  const incompleteHoldingCount = useMemo(
+    () => holdings.filter(isHoldingIncomplete).length,
+    [holdings]
+  )
+  const incompleteAggregateCount = useMemo(
+    () => holdingAggregates.filter(isAggregateIncomplete).length,
+    [holdingAggregates]
+  )
+  const filteredHoldingAggregates = useMemo(
+    () => holdingAggregates.filter((aggregate) => {
+      if (showIncompleteOnly && !isAggregateIncomplete(aggregate)) {
+        return false
+      }
+      return matchesAggregateFilter(aggregate, aggregateMetrics[aggregate.fund_id], metricScope, filterMode)
+    }),
+    [aggregateMetrics, filterMode, holdingAggregates, metricScope, showIncompleteOnly]
+  )
+  const filteredHoldings = useMemo(
+    () => holdings.filter((holding) => {
+      if (showIncompleteOnly && !isHoldingIncomplete(holding)) {
+        return false
+      }
+      return matchesHoldingFilter(holding, estimatesByFundID[holding.fund_id], metricScope, filterMode, holdingsByFundID[holding.fund_id]?.length ?? 1)
+    }),
+    [estimatesByFundID, filterMode, holdings, holdingsByFundID, metricScope, showIncompleteOnly]
+  )
   const sortedHoldingAggregates = useMemo(() => {
     if (sortMode === 'default') {
-      return holdingAggregates
+      return filteredHoldingAggregates
     }
 
-    return holdingAggregates.slice().sort((left, right) => {
+    return filteredHoldingAggregates.slice().sort((left, right) => {
       const leftAnalysis = analysesByFundID[left.fund_id]
       const rightAnalysis = analysesByFundID[right.fund_id]
 
@@ -248,15 +182,39 @@ export default function HoldingsPage() {
         return analysisRecommendationWeight(rightAnalysis) - analysisRecommendationWeight(leftAnalysis)
       }
 
-      return analysisRiskWeight(rightAnalysis) - analysisRiskWeight(leftAnalysis)
+      if (sortMode === 'analysis_risk') {
+        return analysisRiskWeight(rightAnalysis) - analysisRiskWeight(leftAnalysis)
+      }
+
+      if (sortMode === 'principal_desc') {
+        return compareOptionalNumbers(parseOptionalNumber(left.total_principal), parseOptionalNumber(right.total_principal), 'desc')
+      }
+
+      if (sortMode === 'count_desc') {
+        return compareOptionalNumbers(left.holding_count ?? null, right.holding_count ?? null, 'desc')
+      }
+
+      if (sortMode === 'recent_desc') {
+        return compareOptionalNumbers(aggregateLatestUpdatedAt(holdingsByFundID[left.fund_id] ?? []), aggregateLatestUpdatedAt(holdingsByFundID[right.fund_id] ?? []), 'desc')
+      }
+
+      if (sortMode === 'change_asc' || sortMode === 'change_desc') {
+        const leftChange = aggregateChangeValue(left, aggregateMetrics[left.fund_id], metricScope)
+        const rightChange = aggregateChangeValue(right, aggregateMetrics[right.fund_id], metricScope)
+        return compareOptionalNumbers(leftChange, rightChange, sortMode === 'change_asc' ? 'asc' : 'desc')
+      }
+
+      const leftProfit = aggregateProfitValue(left, aggregateMetrics[left.fund_id], metricScope)
+      const rightProfit = aggregateProfitValue(right, aggregateMetrics[right.fund_id], metricScope)
+      return compareOptionalNumbers(leftProfit, rightProfit, sortMode === 'profit_asc' ? 'asc' : 'desc')
     })
-  }, [analysesByFundID, holdingAggregates, sortMode])
+  }, [aggregateMetrics, analysesByFundID, filteredHoldingAggregates, holdingsByFundID, metricScope, sortMode])
   const sortedHoldings = useMemo(() => {
     if (sortMode === 'default') {
-      return holdings
+      return filteredHoldings
     }
 
-    return holdings.slice().sort((left, right) => {
+    return filteredHoldings.slice().sort((left, right) => {
       const leftAnalysis = analysesByFundID[left.fund_id]
       const rightAnalysis = analysesByFundID[right.fund_id]
 
@@ -264,10 +222,42 @@ export default function HoldingsPage() {
         return analysisRecommendationWeight(rightAnalysis) - analysisRecommendationWeight(leftAnalysis)
       }
 
-      return analysisRiskWeight(rightAnalysis) - analysisRiskWeight(leftAnalysis)
+      if (sortMode === 'analysis_risk') {
+        return analysisRiskWeight(rightAnalysis) - analysisRiskWeight(leftAnalysis)
+      }
+
+      if (sortMode === 'principal_desc') {
+        return compareOptionalNumbers(parseOptionalNumber(left.amount), parseOptionalNumber(right.amount), 'desc')
+      }
+
+      if (sortMode === 'count_desc') {
+        return compareOptionalNumbers(holdingsByFundID[left.fund_id]?.length ?? null, holdingsByFundID[right.fund_id]?.length ?? null, 'desc')
+      }
+
+      if (sortMode === 'recent_desc') {
+        return compareOptionalNumbers(timestampValue(left.updated_at || left.created_at), timestampValue(right.updated_at || right.created_at), 'desc')
+      }
+
+      if (sortMode === 'change_asc' || sortMode === 'change_desc') {
+        const leftChange = detailChangeValue(left, estimatesByFundID[left.fund_id], metricScope)
+        const rightChange = detailChangeValue(right, estimatesByFundID[right.fund_id], metricScope)
+        return compareOptionalNumbers(leftChange, rightChange, sortMode === 'change_asc' ? 'asc' : 'desc')
+      }
+
+      const leftProfit = detailProfitValue(left, estimatesByFundID[left.fund_id], metricScope)
+      const rightProfit = detailProfitValue(right, estimatesByFundID[right.fund_id], metricScope)
+      return compareOptionalNumbers(leftProfit, rightProfit, sortMode === 'profit_asc' ? 'asc' : 'desc')
     })
-  }, [analysesByFundID, holdings, sortMode])
+  }, [analysesByFundID, estimatesByFundID, filteredHoldings, holdingsByFundID, metricScope, sortMode])
   const shouldUseOfficialSummary = metricScope === 'official' && holdingSummary.real_metrics_ready
+  const activeDisplayCount = viewMode === 'aggregate' ? sortedHoldingAggregates.length : sortedHoldings.length
+  const hasActiveFilter = showIncompleteOnly || filterMode !== 'all'
+  const activeFilterDescription = viewMode === 'aggregate'
+    ? `当前筛选后显示 ${activeDisplayCount}/${holdingAggregates.length} 只基金。`
+    : `当前筛选后显示 ${activeDisplayCount}/${holdings.length} 条记录。`
+  const incompleteFilterDescription = viewMode === 'aggregate'
+    ? `当前仅显示部分就绪或完全未就绪的基金，共 ${activeDisplayCount}/${holdingAggregates.length} 只。`
+    : `当前仅显示待确认份额、待同步官方净值或真实口径未就绪的记录，共 ${activeDisplayCount}/${holdings.length} 条。`
 
   const handleSeedDemo = async () => {
     setFeedback(null)
@@ -431,35 +421,8 @@ export default function HoldingsPage() {
   return (
     <AccountAreaShell title="持仓明细" description="记录你的持仓本金、日期与备注，并在官方净值同步后查看每只基金和总仓的真实市值与今日盈亏。">
       <div className="space-y-8">
-        {feedback && (
-          <div
-            className={cn(
-              'flex items-start gap-3 rounded-[28px] border px-4 py-4 text-sm',
-              feedback.type === 'success'
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-50'
-                : 'border-amber-500/30 bg-amber-500/10 text-amber-100'
-            )}
-          >
-            {feedback.type === 'success' ? (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-            ) : (
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            )}
-            <span>{feedback.message}</span>
-          </div>
-        )}
-        {vipFeedback && (
-          <div
-            className={cn(
-              'flex items-start gap-3 rounded-[28px] border px-4 py-4 text-sm',
-              vipFeedback.type === 'success'
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-50'
-                : 'border-amber-500/30 bg-amber-500/10 text-amber-100'
-            )}
-          >
-            <span>{vipFeedback.message}</span>
-          </div>
-        )}
+        {feedback && <HoldingFeedbackBanner feedback={feedback} />}
+        {vipFeedback && <HoldingFeedbackBanner feedback={vipFeedback} showIcon={false} />}
 
         <div className="grid gap-6 xl:grid-cols-[1.65fr_0.85fr]">
           <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass xl:col-span-2">
@@ -504,154 +467,52 @@ export default function HoldingsPage() {
             </div>
 
             {holdings.length > 0 && (
-              <div className="mb-6 flex flex-col gap-3 rounded-[24px] border border-[var(--card-border)] bg-[var(--card-bg)]/66 p-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex flex-wrap gap-2">
-                  {([
-                    { id: 'aggregate', label: '按基金', icon: Layers3 },
-                    { id: 'detail', label: '分笔明细', icon: ListTree },
-                  ] as const).map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => setViewMode(option.id)}
-                      className={cn(
-                        'inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs transition-all duration-200',
-                        viewMode === option.id
-                          ? 'border-cyan-400/50 bg-cyan-400/14 text-cyan-100 shadow-[0_10px_22px_rgba(34,211,238,0.12)]'
-                          : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-400/35 hover:text-theme-primary'
-                      )}
-                    >
-                      <option.icon className="h-3.5 w-3.5" />
-                      <span>{option.label}</span>
-                    </button>
-                  ))}
-                </div>
+              <HoldingsViewControls
+                viewMode={viewMode}
+                metricScope={metricScope}
+                sortMode={sortMode}
+                filterMode={filterMode}
+                showIncompleteOnly={showIncompleteOnly}
+                incompleteCount={viewMode === 'aggregate' ? incompleteAggregateCount : incompleteHoldingCount}
+                onViewModeChange={setViewMode}
+                onMetricScopeChange={setMetricScope}
+                onSortModeChange={setSortMode}
+                onFilterModeChange={setFilterMode}
+                onToggleIncompleteOnly={() => setShowIncompleteOnly((value) => !value)}
+              />
+            )}
 
-                <div className="flex flex-wrap gap-2">
-                  {([
-                    { id: 'official', label: '官方口径' },
-                    { id: 'estimate', label: '盘中预估' },
-                  ] as const).map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => setMetricScope(option.id)}
-                      className={cn(
-                        'rounded-full border px-3 py-2 text-xs transition-all duration-200',
-                        metricScope === option.id
-                          ? 'border-amber-400/45 bg-amber-400/14 text-amber-100 shadow-[0_10px_22px_rgba(251,191,36,0.12)]'
-                          : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-amber-300/35 hover:text-theme-primary'
-                      )}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
+            {holdings.length > 0 && hasActiveFilter && (
+              <div className="mb-6 flex flex-col gap-2 rounded-[22px] border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{showIncompleteOnly ? incompleteFilterDescription : activeFilterDescription}</span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowIncompleteOnly(false)
+                    setFilterMode('all')
+                  }}
+                  className="text-left text-xs font-medium text-amber-50 underline-offset-4 hover:underline sm:text-right"
+                >
+                  取消筛选
+                </button>
               </div>
             )}
 
-            {holdings.length > 0 && (
-              <div className="mb-6 flex flex-col gap-3 rounded-[24px] border border-[var(--card-border)] bg-[var(--card-bg)]/50 p-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <div className="text-sm font-medium text-theme-primary">量化排序</div>
-                  <div className="mt-1 text-xs text-theme-muted">
-                    可按量化建议倾向或风险等级快速重排持仓列表。
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {([
-                    { id: 'default', label: '默认顺序' },
-                    { id: 'analysis_recommendation', label: '建议倾向优先' },
-                    { id: 'analysis_risk', label: '风险等级优先' },
-                  ] as const).map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => setSortMode(option.id)}
-                      className={cn(
-                        'rounded-full border px-3 py-2 text-xs transition-all duration-200',
-                        sortMode === option.id
-                          ? 'border-fuchsia-400/45 bg-fuchsia-400/14 text-fuchsia-100 shadow-[0_10px_22px_rgba(217,70,239,0.12)]'
-                          : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-fuchsia-300/35 hover:text-theme-primary'
-                      )}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="mb-6 grid gap-4 lg:grid-cols-4">
-              {[
-                {
-                  label: '总本金',
-                  value: totalPrincipalText,
-                  tone: 'text-theme-primary',
-                  note: '按录入持仓本金汇总',
-                },
-                {
-                  label: shouldUseOfficialSummary ? '总最新官方市值' : '总盘中预估市值',
-                  value: shouldUseOfficialSummary
-                    ? (hasOfficialSummaryMetrics ? formatSummaryMoney(holdingSummary.total_current_market_value) : '--')
-                    : (hasPreviewSummaryMetrics ? formatSummaryMoney(previewSummary.total_current_market_value) : '--'),
-                  tone: 'text-theme-primary',
-                  note: shouldUseOfficialSummary
-                    ? (hasOfficialSummaryMetrics
-                      ? `已就绪本金 ${officialReadyPrincipalText} / ${totalPrincipalText}`
-                      : '待真实净值与份额齐备')
-                    : (hasPreviewSummaryMetrics
-                      ? `已确认本金 ${previewReadyPrincipalText} / ${totalPrincipalText}`
-                      : '待确认份额齐备'),
-                },
-                {
-                  label: shouldUseOfficialSummary ? '总官方盈亏' : '总实时盈亏预估',
-                  value: shouldUseOfficialSummary
-                    ? (hasOfficialSummaryMetrics ? formatSummaryMoney(holdingSummary.total_today_profit) : '--')
-                    : (hasPreviewSummaryMetrics ? formatSummaryMoney(previewSummary.total_today_profit) : '--'),
-                  tone: !(shouldUseOfficialSummary ? hasOfficialSummaryMetrics : hasPreviewSummaryMetrics)
-                    ? 'text-theme-primary'
-                    : Number.parseFloat((shouldUseOfficialSummary ? holdingSummary.total_today_profit : previewSummary.total_today_profit) || '0') >= 0
-                      ? 'text-up'
-                      : 'text-down',
-                  note: shouldUseOfficialSummary
-                    ? (hasOfficialSummaryMetrics
-                      ? `官方口径：已就绪 ${officialSummaryCoverage}`
-                      : '暂不混入盘中预估')
-                    : (hasPreviewSummaryMetrics
-                      ? `根据基金预估涨跌幅估算，夜间真实值会自动覆盖`
-                      : '仅在确认份额后纳入预估'),
-                },
-                {
-                  label: shouldUseOfficialSummary ? '总官方涨跌幅' : '总实时涨跌预估',
-                  value: shouldUseOfficialSummary
-                    ? (hasOfficialSummaryMetrics ? formatSummaryPercent(holdingSummary.total_today_change_percent) : '--')
-                    : (hasPreviewSummaryMetrics ? formatSummaryPercent(previewSummary.total_today_change_percent) : '--'),
-                  tone: !(shouldUseOfficialSummary ? hasOfficialSummaryMetrics : hasPreviewSummaryMetrics)
-                    ? 'text-theme-primary'
-                    : Number.parseFloat((shouldUseOfficialSummary ? holdingSummary.total_today_change_percent : previewSummary.total_today_change_percent) || '0') >= 0
-                      ? 'text-up'
-                      : 'text-down',
-                  note: shouldUseOfficialSummary
-                    ? (hasOfficialSummaryMetrics
-                      ? (holdingSummary.metrics_scope === 'partial'
-                        ? `按已就绪部分加权（剩余 ${holdingSummary.incomplete_holdings_count ?? 0} 条待补齐）`
-                        : '按总仓位加权计算')
-                      : `已就绪 ${holdingSummary.real_metrics_ready_count}/${holdingSummary.total_holdings} 条`)
-                    : (hasPreviewSummaryMetrics
-                      ? (previewSummary.metrics_scope === 'partial'
-                        ? `按确认份额部分加权（剩余 ${previewSummary.total_count - previewSummary.ready_count} 只基金待补齐）`
-                        : '夜间真实涨跌幅同步后会自动覆盖')
-                      : `已就绪 ${previewSummary.ready_count}/${previewSummary.total_count} 只基金`),
-                },
-              ].map((metric) => (
-                <div key={metric.label} className="rounded-[24px] border border-[var(--card-border)] bg-[var(--card-bg)]/76 p-4">
-                  <div className="text-xs text-theme-muted">{metric.label}</div>
-                  <div className={cn('mt-3 text-2xl font-black', metric.tone)}>{metric.value}</div>
-                  <div className="mt-2 text-xs text-theme-secondary">{metric.note}</div>
-                </div>
-              ))}
-            </div>
+            <HoldingsSummaryMetrics
+              holdingSummary={holdingSummary}
+              previewSummary={previewSummary}
+              metricScope={metricScope}
+              shouldUseOfficialSummary={shouldUseOfficialSummary}
+              hasOfficialSummaryMetrics={hasOfficialSummaryMetrics}
+              hasPreviewSummaryMetrics={hasPreviewSummaryMetrics}
+              officialReadyPrincipalText={officialReadyPrincipalText}
+              previewReadyPrincipalText={previewReadyPrincipalText}
+              totalPrincipalText={totalPrincipalText}
+              officialSummaryCoverage={officialSummaryCoverage}
+            />
 
             <div className="space-y-5">
               <div className="grid gap-4 lg:grid-cols-3">
@@ -906,40 +767,41 @@ export default function HoldingsPage() {
               你可以在上方选择基金、录入持仓金额和日期；保存后会在官方净值同步后展示真实市值与盈亏。
             </p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {viewMode === 'aggregate'
-              ? sortedHoldingAggregates.map((aggregate) => (
-                  <HoldingAggregateRow
-                    key={aggregate.fund_id}
-                    aggregate={aggregate}
-                    metricScope={metricScope}
-                    estimateMetrics={aggregateMetrics[aggregate.fund_id]}
-                    analysis={analysesByFundID[aggregate.fund_id]}
-                  >
-                    {(holdingsByFundID[aggregate.fund_id] ?? []).map((holding) => (
-                      <HoldingFundRow
-                        key={holding.id}
-                        holding={holding}
-                        metricScope={metricScope}
-                        estimate={estimatesByFundID[holding.fund_id]}
-                        analysis={analysesByFundID[holding.fund_id]}
-                        onRemove={() => removeHolding(holding.id)}
-                      />
-                    ))}
-                  </HoldingAggregateRow>
-                ))
-              : sortedHoldings.map((holding) => (
-                  <HoldingFundRow
-                    key={holding.id}
-                    holding={holding}
-                    metricScope={metricScope}
-                    estimate={estimatesByFundID[holding.fund_id]}
-                    analysis={analysesByFundID[holding.fund_id]}
-                    onRemove={() => removeHolding(holding.id)}
-                  />
-                ))}
+        ) : hasActiveFilter && activeDisplayCount === 0 ? (
+          <div className="rounded-[32px] border border-dashed border-[var(--card-border)] p-10 text-center glass">
+            <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-300" />
+            <div className="mt-4 text-xl font-semibold text-theme-primary">当前没有匹配记录</div>
+            <p className="mt-2 text-sm leading-6 text-theme-secondary">
+              {showIncompleteOnly
+                ? viewMode === 'aggregate'
+                  ? '所有基金聚合项都已完成当前口径所需数据，或暂无部分就绪/未就绪基金。'
+                  : '所有分笔持仓都已补齐确认份额和真实口径数据。'
+                : '当前排序与筛选条件下暂无命中记录，可取消筛选后查看全部持仓。'}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setShowIncompleteOnly(false)
+                setFilterMode('all')
+              }}
+              className="mt-5 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition-colors hover:border-cyan-400/35 hover:text-theme-primary"
+            >
+              查看全部持仓
+            </button>
           </div>
+        ) : (
+          <HoldingsList
+            viewMode={viewMode}
+            metricScope={metricScope}
+            sortedHoldingAggregates={sortedHoldingAggregates}
+            sortedHoldings={sortedHoldings}
+            holdingsByFundID={holdingsByFundID}
+            aggregateMetrics={aggregateMetrics}
+            estimatesByFundID={estimatesByFundID}
+            analysesByFundID={analysesByFundID}
+            showIncompleteOnly={showIncompleteOnly}
+            onRemoveHolding={removeHolding}
+          />
         )}
 
         {canAccessVIP && (

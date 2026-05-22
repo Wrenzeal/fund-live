@@ -3,7 +3,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -17,7 +16,6 @@ import (
 	"github.com/RomaticDOG/fund/internal/trading"
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
-	"golang.org/x/sync/errgroup"
 )
 
 type transientFundDataLoader interface {
@@ -39,8 +37,8 @@ type analysisRankingCandidateProvider interface {
 
 type analysisSnapshotReader interface {
 	Get(ctx context.Context, fundID string) (*domain.FundAnalysis, time.Time, error)
-	GetByFundIDs(ctx context.Context, fundIDs []string) (map[string]*domain.FundAnalysis, error)
-	ListRankings(ctx context.Context, limit int) (increase, watch, risk []database.FundAnalysisSnapshot, err error)
+	GetByFundIDs(ctx context.Context, fundIDs []string, now time.Time) (map[string]*domain.FundAnalysis, error)
+	ListRankings(ctx context.Context, limit int, now time.Time) (increase, watch, risk []database.FundAnalysisSnapshot, err error)
 	Save(ctx context.Context, fundID string, analysis *domain.FundAnalysis, generatedAt time.Time) error
 }
 
@@ -56,14 +54,15 @@ type fundSectorSnapshotStore interface {
 
 // FundHandler handles fund-related HTTP requests.
 type FundHandler struct {
-	valuationService domain.ValuationService
-	fundRepo         domain.FundRepository
-	dataLoader       transientFundDataLoader
-	holdingsResolver holdingsFallbackResolver
-	sectorStore      fundSectorSnapshotStore
+	valuationService  domain.ValuationService
+	fundRepo          domain.FundRepository
+	dataLoader        transientFundDataLoader
+	holdingsResolver  holdingsFallbackResolver
+	sectorStore       fundSectorSnapshotStore
 	rankingCandidates analysisRankingCandidateProvider
-	snapshotStore    analysisSnapshotReader
-	coordinator      *service.FundAnalysisCoordinator
+	snapshotStore     analysisSnapshotReader
+	coordinator       *service.FundAnalysisCoordinator
+	aiExplanation     *service.AIExplanationService
 }
 
 // NewFundHandler creates a new FundHandler instance.
@@ -77,6 +76,7 @@ func NewFundHandler(
 		fundRepo:         fundRepo,
 		dataLoader:       service.NewFundDataLoader(fundRepo),
 		holdingsResolver: holdingsResolver,
+		aiExplanation:    service.NewAIExplanationService(nil),
 	}
 }
 
@@ -108,6 +108,18 @@ func (h *FundHandler) SetAnalysisSnapshotStore(store analysisSnapshotReader) {
 func (h *FundHandler) SetAnalysisCoordinator(coordinator *service.FundAnalysisCoordinator) {
 	if h != nil && coordinator != nil {
 		h.coordinator = coordinator
+		if h.aiExplanation != nil {
+			h.coordinator.SetAIExplanationService(h.aiExplanation)
+		}
+	}
+}
+
+func (h *FundHandler) SetAIExplanationService(explanationService *service.AIExplanationService) {
+	if h != nil && explanationService != nil {
+		h.aiExplanation = explanationService
+		if h.coordinator != nil {
+			h.coordinator.SetAIExplanationService(explanationService)
+		}
 	}
 }
 
@@ -185,11 +197,6 @@ type AnalysisRankingsResponse struct {
 
 type AnalysisBatchResponse struct {
 	Analyses map[string]*domain.FundAnalysis `json:"analyses"`
-}
-
-type analysisRankingCandidate struct {
-	fund     *domain.Fund
-	analysis *domain.FundAnalysis
 }
 
 // Search handles fund search requests.
@@ -436,7 +443,8 @@ func (h *FundHandler) GetDashboard(c *gin.Context) {
 		fund.CategoryName = category.Name
 	}
 	var analysis *domain.FundAnalysis
-	if estimate != nil {
+	includeAnalysis := strings.TrimSpace(c.DefaultQuery("include_analysis", "true")) != "false"
+	if includeAnalysis && estimate != nil {
 		analysis, err = h.buildFundAnalysis(c.Request.Context(), fundID, fund, estimate, timeSeries, sectorSnapshot, themeSnapshot, now)
 		if err != nil {
 			log.Printf("⚠️ Failed to build fund analysis for %s: %v", fundID, err)
@@ -478,6 +486,36 @@ func (h *FundHandler) GetAnalysis(c *gin.Context) {
 	}
 
 	now := time.Now()
+	fund, fundErr := h.fundRepo.GetFundByID(c.Request.Context(), fundID)
+	if fundErr != nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: &APIError{Code: "FETCH_FAILED", Message: fundErr.Error()}})
+		return
+	}
+	if fund == nil {
+		c.JSON(http.StatusNotFound, APIResponse{
+			Success: false,
+			Error: &APIError{
+				Code:    "FUND_NOT_FOUND",
+				Message: "Fund not found: " + fundID,
+			},
+		})
+		return
+	}
+	if h.snapshotStore != nil {
+		if cachedAnalysis, generatedAt, snapshotErr := h.snapshotStore.Get(c.Request.Context(), fundID); snapshotErr == nil && service.IsFundAnalysisSnapshotFresh(cachedAnalysis, generatedAt, now) {
+			cachedAnalysis.AIExplanation = service.MarkAIExplanationSnapshotHit(cachedAnalysis.AIExplanation)
+			c.JSON(http.StatusOK, APIResponse{
+				Success: true,
+				Data: FundAnalysisResponse{
+					Fund:     fund,
+					Analysis: cachedAnalysis,
+				},
+				Meta: buildResponseMeta("", "analysis_snapshot"),
+			})
+			return
+		}
+	}
+
 	fund, analysis, err := h.buildSingleFundAnalysis(c.Request.Context(), fundID, now)
 	if err != nil {
 		statusCode, apiErr := mapEstimateErrorToResponse(err)
@@ -527,10 +565,11 @@ func (h *FundHandler) GetAnalysisBatch(c *gin.Context) {
 		return
 	}
 
+	now := time.Now()
 	result := make(map[string]*domain.FundAnalysis, len(fundIDs))
 	missing := append([]string(nil), fundIDs...)
 	if h.snapshotStore != nil {
-		snapshots, err := h.snapshotStore.GetByFundIDs(c.Request.Context(), fundIDs)
+		snapshots, err := h.snapshotStore.GetByFundIDs(c.Request.Context(), fundIDs, now)
 		if err == nil {
 			missing = missing[:0]
 			for _, fundID := range fundIDs {
@@ -543,7 +582,6 @@ func (h *FundHandler) GetAnalysisBatch(c *gin.Context) {
 		}
 	}
 
-	now := time.Now()
 	for _, fundID := range missing {
 		_, analysis, err := h.buildSingleFundAnalysis(c.Request.Context(), fundID, now)
 		if err != nil || analysis == nil {
@@ -557,124 +595,6 @@ func (h *FundHandler) GetAnalysisBatch(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, APIResponse{Success: true, Data: AnalysisBatchResponse{Analyses: result}})
-}
-
-// GetAnalysisRankings returns a lightweight leaderboard built from the same standalone analysis surface.
-// GET /api/v1/analysis/rankings
-func (h *FundHandler) GetAnalysisRankings(c *gin.Context) {
-	now := time.Now()
-	if h.snapshotStore != nil {
-		increaseRows, watchRows, riskRows, err := h.snapshotStore.ListRankings(c.Request.Context(), 12)
-		if err == nil && len(increaseRows) > 0 {
-			fundIDs := make([]string, 0, len(increaseRows)+len(watchRows)+len(riskRows))
-			for _, row := range increaseRows {
-				fundIDs = append(fundIDs, row.FundID)
-			}
-			for _, row := range watchRows {
-				fundIDs = append(fundIDs, row.FundID)
-			}
-			for _, row := range riskRows {
-				fundIDs = append(fundIDs, row.FundID)
-			}
-			fundMap, _ := h.fundRepo.GetFundsByIDs(c.Request.Context(), uniqueStrings(fundIDs))
-			c.JSON(http.StatusOK, APIResponse{
-				Success: true,
-				Data: AnalysisRankingsResponse{
-					GeneratedAt:   now,
-					IncreaseIdeas: buildRankingItemsFromSnapshots(increaseRows, fundMap),
-					WatchIdeas:    buildRankingItemsFromSnapshots(watchRows, fundMap),
-					RiskAlerts:    buildRankingItemsFromSnapshots(riskRows, fundMap),
-				},
-			})
-			return
-		}
-	}
-
-	candidateIDs, err := h.listAnalysisRankingCandidateFundIDs(c.Request.Context(), 36)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, APIResponse{
-			Success: false,
-			Error: &APIError{
-				Code:    "FETCH_FAILED",
-				Message: err.Error(),
-			},
-		})
-		return
-	}
-
-	candidates := make([]analysisRankingCandidate, len(candidateIDs))
-	group, ctx := errgroup.WithContext(c.Request.Context())
-	group.SetLimit(6)
-	for index, fundID := range candidateIDs {
-		index := index
-		fundID := fundID
-		group.Go(func() error {
-			fund, analysis, buildErr := h.buildSingleFundAnalysis(ctx, fundID, now)
-			if buildErr != nil {
-				log.Printf("⚠️ Failed to build ranking analysis for %s: %v", fundID, buildErr)
-				return nil
-			}
-			if fund == nil || analysis == nil {
-				return nil
-			}
-			candidates[index] = analysisRankingCandidate{fund: fund, analysis: analysis}
-			return nil
-		})
-	}
-	if err := group.Wait(); err != nil {
-		log.Printf("⚠️ ranking build group wait failed: %v", err)
-	}
-	filteredCandidates := make([]analysisRankingCandidate, 0, len(candidates))
-	for _, item := range candidates {
-		if item.fund == nil || item.analysis == nil {
-			continue
-		}
-		filteredCandidates = append(filteredCandidates, item)
-		if h.snapshotStore != nil && item.analysis != nil {
-			_ = h.snapshotStore.Save(c.Request.Context(), item.fund.ID, item.analysis, now)
-		}
-	}
-
-	increaseItems := make([]analysisRankingCandidate, 0, len(filteredCandidates))
-	watchItems := make([]analysisRankingCandidate, 0, len(filteredCandidates))
-	riskItems := make([]analysisRankingCandidate, 0, len(filteredCandidates))
-	for _, item := range filteredCandidates {
-		if item.analysis == nil {
-			continue
-		}
-		dominant := dominantRecommendation(item.analysis)
-		switch dominant {
-		case "increase":
-			increaseItems = append(increaseItems, item)
-		case "decrease":
-			riskItems = append(riskItems, item)
-		default:
-			watchItems = append(watchItems, item)
-		}
-		if item.analysis.RiskLevel == "high" && dominant != "decrease" {
-			riskItems = append(riskItems, item)
-		}
-	}
-
-	sort.SliceStable(increaseItems, func(i, j int) bool {
-		return compareIncreaseRanking(increaseItems[i].analysis, increaseItems[j].analysis)
-	})
-	sort.SliceStable(watchItems, func(i, j int) bool {
-		return compareWatchRanking(watchItems[i].analysis, watchItems[j].analysis)
-	})
-	sort.SliceStable(riskItems, func(i, j int) bool {
-		return compareRiskRanking(riskItems[i].analysis, riskItems[j].analysis)
-	})
-
-	c.JSON(http.StatusOK, APIResponse{
-		Success: true,
-		Data: AnalysisRankingsResponse{
-			GeneratedAt:   now,
-			IncreaseIdeas: buildRankingItems(increaseItems, 12),
-			WatchIdeas:    buildRankingItems(watchItems, 12),
-			RiskAlerts:    buildUniqueRiskItems(riskItems, 12),
-		},
-	})
 }
 
 func (h *FundHandler) buildFundThemeSnapshot(ctx context.Context, fundID string, fund *domain.Fund) (*domain.FundThemeSnapshot, error) {
@@ -747,7 +667,7 @@ func (h *FundHandler) buildFundAnalysis(
 		}
 	}
 
-	return service.NewFundAnalysisService().Build(service.FundAnalysisInput{
+	analysisInput := service.FundAnalysisInput{
 		Fund:                   fund,
 		Estimate:               estimate,
 		TimeSeries:             timeSeries,
@@ -765,7 +685,39 @@ func (h *FundHandler) buildFundAnalysis(
 		PreviousHoldingPeriod:  previousHoldingPeriod,
 		HoldingsSource:         source,
 		Now:                    now,
-	}), nil
+	}
+	analysis := service.NewFundAnalysisService().Build(analysisInput)
+	explanationInput := service.AIExplanationInput{
+		Fund:           fund,
+		Analysis:       analysis,
+		Holdings:       holdings,
+		SectorSnapshot: sectorSnapshot,
+		ThemeSnapshot:  themeSnapshot,
+		Now:            now,
+	}
+	if cached := h.cachedAIExplanation(ctx, fundID, explanationInput, now); cached != nil && analysis != nil {
+		analysis.AIExplanation = cached
+		return analysis, nil
+	}
+	return service.AttachAIExplanation(ctx, h.aiExplanation, explanationInput), nil
+}
+
+func (h *FundHandler) cachedAIExplanation(ctx context.Context, fundID string, input service.AIExplanationInput, now time.Time) *domain.FundAnalysisAIExplanation {
+	if h == nil || h.snapshotStore == nil || input.Analysis == nil {
+		return nil
+	}
+	cacheKey := service.BuildAIExplanationCacheKey(input)
+	if cacheKey == "" {
+		return nil
+	}
+	cachedAnalysis, generatedAt, err := h.snapshotStore.Get(ctx, fundID)
+	if err != nil || !service.IsFundAnalysisSnapshotFresh(cachedAnalysis, generatedAt, now) {
+		return nil
+	}
+	if !service.CanReuseAIExplanation(cachedAnalysis.AIExplanation, cacheKey, now) {
+		return nil
+	}
+	return service.MarkAIExplanationSnapshotHit(cachedAnalysis.AIExplanation)
 }
 
 func (h *FundHandler) buildSingleFundAnalysis(
@@ -823,131 +775,6 @@ func (h *FundHandler) buildSingleFundAnalysis(
 		return nil, nil, err
 	}
 	return fund, analysis, nil
-}
-
-func (h *FundHandler) listAnalysisRankingCandidateFundIDs(ctx context.Context, limit int) ([]string, error) {
-	if h != nil && h.rankingCandidates != nil {
-		fundIDs, err := h.rankingCandidates.ListRankingCandidateFundIDs(ctx, limit)
-		if err != nil {
-			return nil, err
-		}
-		if len(fundIDs) > 0 {
-			return fundIDs, nil
-		}
-	}
-	return h.fundRepo.ListFundIDsWithHoldings(ctx)
-}
-
-func dominantRecommendation(analysis *domain.FundAnalysis) string {
-	if analysis == nil {
-		return "hold"
-	}
-	if analysis.IncreasePercent.GreaterThanOrEqual(analysis.HoldPercent) && analysis.IncreasePercent.GreaterThanOrEqual(analysis.DecreasePercent) {
-		return "increase"
-	}
-	if analysis.DecreasePercent.GreaterThanOrEqual(analysis.IncreasePercent) && analysis.DecreasePercent.GreaterThanOrEqual(analysis.HoldPercent) {
-		return "decrease"
-	}
-	return "hold"
-}
-
-func compareIncreaseRanking(left *domain.FundAnalysis, right *domain.FundAnalysis) bool {
-	if left == nil || right == nil {
-		return right != nil
-	}
-	if !left.IncreasePercent.Equal(right.IncreasePercent) {
-		return left.IncreasePercent.GreaterThan(right.IncreasePercent)
-	}
-	if !left.TotalScore.Equal(right.TotalScore) {
-		return left.TotalScore.GreaterThan(right.TotalScore)
-	}
-	return left.Confidence > right.Confidence
-}
-
-func compareWatchRanking(left *domain.FundAnalysis, right *domain.FundAnalysis) bool {
-	if left == nil || right == nil {
-		return right != nil
-	}
-	if !left.HoldPercent.Equal(right.HoldPercent) {
-		return left.HoldPercent.GreaterThan(right.HoldPercent)
-	}
-	if !left.TotalScore.Equal(right.TotalScore) {
-		return left.TotalScore.GreaterThan(right.TotalScore)
-	}
-	return left.Confidence > right.Confidence
-}
-
-func compareRiskRanking(left *domain.FundAnalysis, right *domain.FundAnalysis) bool {
-	if left == nil || right == nil {
-		return right != nil
-	}
-	leftHigh := left.RiskLevel == "high"
-	rightHigh := right.RiskLevel == "high"
-	if leftHigh != rightHigh {
-		return leftHigh
-	}
-	if !left.DecreasePercent.Equal(right.DecreasePercent) {
-		return left.DecreasePercent.GreaterThan(right.DecreasePercent)
-	}
-	return left.TotalScore.LessThan(right.TotalScore)
-}
-
-func buildRankingItems(items []analysisRankingCandidate, limit int) []AnalysisRankingItem {
-	if limit <= 0 || len(items) == 0 {
-		return []AnalysisRankingItem{}
-	}
-	if len(items) > limit {
-		items = items[:limit]
-	}
-	result := make([]AnalysisRankingItem, 0, len(items))
-	for _, item := range items {
-		result = append(result, AnalysisRankingItem{
-			Fund:     item.fund,
-			Analysis: item.analysis,
-		})
-	}
-	return result
-}
-
-func buildUniqueRiskItems(items []analysisRankingCandidate, limit int) []AnalysisRankingItem {
-	if limit <= 0 || len(items) == 0 {
-		return []AnalysisRankingItem{}
-	}
-	result := make([]AnalysisRankingItem, 0, min(limit, len(items)))
-	seen := make(map[string]struct{}, len(items))
-	for _, item := range items {
-		if item.fund == nil {
-			continue
-		}
-		if _, ok := seen[item.fund.ID]; ok {
-			continue
-		}
-		seen[item.fund.ID] = struct{}{}
-		result = append(result, AnalysisRankingItem{Fund: item.fund, Analysis: item.analysis})
-		if len(result) >= limit {
-			break
-		}
-	}
-	return result
-}
-
-func buildRankingItemsFromSnapshots(records []database.FundAnalysisSnapshot, fundMap map[string]*domain.Fund) []AnalysisRankingItem {
-	result := make([]AnalysisRankingItem, 0, len(records))
-	for _, record := range records {
-		var analysis domain.FundAnalysis
-		if err := json.Unmarshal(record.AnalysisJSON, &analysis); err != nil {
-			continue
-		}
-		fund := &domain.Fund{ID: record.FundID}
-		if existing := fundMap[record.FundID]; existing != nil {
-			fund = existing
-		}
-		result = append(result, AnalysisRankingItem{
-			Fund: fund,
-			Analysis: &analysis,
-		})
-	}
-	return result
 }
 
 func uniqueStrings(values []string) []string {

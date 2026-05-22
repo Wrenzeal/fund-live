@@ -6,9 +6,11 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/RomaticDOG/fund/internal/database"
 	"github.com/RomaticDOG/fund/internal/domain"
 	"github.com/RomaticDOG/fund/internal/repository"
 	"github.com/RomaticDOG/fund/internal/service"
@@ -198,6 +200,11 @@ type dashboardResponseEnvelope struct {
 				Code   string `json:"code"`
 				Impact string `json:"impact"`
 			} `json:"event_impacts"`
+			AIExplanation *struct {
+				Status         string `json:"status"`
+				Provider       string `json:"provider"`
+				BoundaryNotice string `json:"boundary_notice"`
+			} `json:"ai_explanation"`
 		} `json:"analysis"`
 		SectorSnapshot *domain.FundSectorSnapshot `json:"sector_snapshot"`
 		ThemeSnapshot  *domain.FundThemeSnapshot  `json:"theme_snapshot"`
@@ -213,12 +220,17 @@ type analysisResponseEnvelope struct {
 	Data    struct {
 		Fund     *domain.Fund `json:"fund"`
 		Analysis *struct {
-			AnalysisType string `json:"analysis_type"`
+			AnalysisType  string `json:"analysis_type"`
 			AnalysisBasis string `json:"analysis_basis"`
-			TotalScore   string `json:"total_score"`
-			EventImpacts []struct {
+			TotalScore    string `json:"total_score"`
+			EventImpacts  []struct {
 				Code string `json:"code"`
 			} `json:"event_impacts"`
+			AIExplanation *struct {
+				Status         string `json:"status"`
+				Provider       string `json:"provider"`
+				BoundaryNotice string `json:"boundary_notice"`
+			} `json:"ai_explanation"`
 		} `json:"analysis"`
 	} `json:"data"`
 	Meta *APIMeta `json:"meta,omitempty"`
@@ -1014,6 +1026,12 @@ func TestGetDashboardAlignsTimeSeriesLastPointWithEstimateSnapshot(t *testing.T)
 	if len(response.Data.Analysis.EventImpacts) == 0 {
 		t.Fatalf("analysis event impacts should not be empty")
 	}
+	if response.Data.Analysis.AIExplanation == nil {
+		t.Fatalf("analysis AI explanation should expose disabled/fallback boundary")
+	}
+	if response.Data.Analysis.AIExplanation.Status != service.AIExplanationStatusDisabled && response.Data.Analysis.AIExplanation.Status != service.AIExplanationStatusRejected {
+		t.Fatalf("AI explanation status = %s, want disabled or rejected", response.Data.Analysis.AIExplanation.Status)
+	}
 	lastPoint := response.Data.TimeSeries[len(response.Data.TimeSeries)-1]
 	if got := lastPoint.ChangePercent; got != "-1.6819" {
 		t.Fatalf("last point change percent = %s, want -1.6819", got)
@@ -1109,6 +1127,15 @@ func TestGetAnalysisReturnsStandaloneAnalysisPayload(t *testing.T) {
 	if len(response.Data.Analysis.EventImpacts) == 0 {
 		t.Fatal("analysis event impacts should not be empty")
 	}
+	if response.Data.Analysis.AIExplanation == nil {
+		t.Fatal("analysis AI explanation should not be nil")
+	}
+	if response.Data.Analysis.AIExplanation.Status != service.AIExplanationStatusDisabled && response.Data.Analysis.AIExplanation.Status != service.AIExplanationStatusRejected {
+		t.Fatalf("AI explanation status = %s, want disabled or rejected", response.Data.Analysis.AIExplanation.Status)
+	}
+	if !strings.Contains(response.Data.Analysis.AIExplanation.BoundaryNotice, "不得改写") {
+		t.Fatalf("AI explanation boundary = %q, want scoring boundary", response.Data.Analysis.AIExplanation.BoundaryNotice)
+	}
 	if response.Meta == nil || response.Meta.DataSource != "sina" {
 		t.Fatalf("meta = %+v, want data source sina", response.Meta)
 	}
@@ -1168,10 +1195,10 @@ func TestGetAnalysisRankingsReturnsBuckets(t *testing.T) {
 	}
 
 	handler := &FundHandler{
-		valuationService:   valuation,
-		fundRepo:           fundRepo,
-		dataLoader:         &stubTransientFundDataLoader{},
-		rankingCandidates:  &stubAnalysisRankingCandidateProvider{fundIDs: []string{"005827", "003095", "320007"}},
+		valuationService:  valuation,
+		fundRepo:          fundRepo,
+		dataLoader:        &stubTransientFundDataLoader{},
+		rankingCandidates: &stubAnalysisRankingCandidateProvider{fundIDs: []string{"005827", "003095", "320007"}},
 	}
 
 	router := gin.New()
@@ -1199,6 +1226,86 @@ func TestGetAnalysisRankingsReturnsBuckets(t *testing.T) {
 	if response.Data.GeneratedAt == "" {
 		t.Fatalf("generated_at should not be empty")
 	}
+}
+
+func TestAnalysisRankingsUseThresholdedDominantRecommendation(t *testing.T) {
+	items := []analysisRankingCandidate{
+		{
+			fund: &domain.Fund{ID: "slight-positive", Name: "略偏积极样本"},
+			analysis: &domain.FundAnalysis{
+				IncreasePercent: decimal.RequireFromString("46.5"),
+				HoldPercent:     decimal.RequireFromString("42.6"),
+				DecreasePercent: decimal.RequireFromString("10.9"),
+				TotalScore:      decimal.RequireFromString("58.0"),
+				Confidence:      "medium",
+			},
+		},
+	}
+
+	increaseItems, watchItems, _ := bucketAnalysisRankingCandidates(items)
+
+	if len(increaseItems) != 0 {
+		t.Fatalf("slight positive sample should not enter increase bucket before threshold: %+v", increaseItems)
+	}
+	if len(watchItems) != 1 || watchItems[0].fund.ID != "slight-positive" {
+		t.Fatalf("watch items = %+v, want slight-positive", watchItems)
+	}
+}
+
+func TestBuildRankingItemsFromSnapshotsUsesThresholdedBuckets(t *testing.T) {
+	records := []database.FundAnalysisSnapshot{
+		analysisSnapshotRecord(t, "slight-positive", &domain.FundAnalysis{
+			IncreasePercent: decimal.RequireFromString("46.5"),
+			HoldPercent:     decimal.RequireFromString("42.6"),
+			DecreasePercent: decimal.RequireFromString("10.9"),
+			TotalScore:      decimal.RequireFromString("58.0"),
+			Confidence:      "medium",
+		}),
+		analysisSnapshotRecord(t, "strong-positive", &domain.FundAnalysis{
+			IncreasePercent: decimal.RequireFromString("56.0"),
+			HoldPercent:     decimal.RequireFromString("35.0"),
+			DecreasePercent: decimal.RequireFromString("9.0"),
+			TotalScore:      decimal.RequireFromString("76.0"),
+			Confidence:      "high",
+		}),
+		analysisSnapshotRecord(t, "high-risk-watch", &domain.FundAnalysis{
+			IncreasePercent: decimal.RequireFromString("28.0"),
+			HoldPercent:     decimal.RequireFromString("52.0"),
+			DecreasePercent: decimal.RequireFromString("20.0"),
+			TotalScore:      decimal.RequireFromString("42.0"),
+			Confidence:      "low",
+			RiskLevel:       "high",
+		}),
+	}
+
+	fundMap := map[string]*domain.Fund{
+		"slight-positive": &domain.Fund{ID: "slight-positive", Name: "略偏积极样本"},
+		"strong-positive": &domain.Fund{ID: "strong-positive", Name: "强积极样本"},
+		"high-risk-watch": &domain.Fund{ID: "high-risk-watch", Name: "高风险观察样本"},
+	}
+
+	increaseItems := buildRankingItemsFromSnapshots(records, fundMap, analysisRankingBucketIncrease, 12)
+	watchItems := buildRankingItemsFromSnapshots(records, fundMap, analysisRankingBucketWatch, 12)
+	riskItems := buildRankingItemsFromSnapshots(records, fundMap, analysisRankingBucketRisk, 12)
+
+	if len(increaseItems) != 1 || increaseItems[0].Fund.ID != "strong-positive" {
+		t.Fatalf("increase snapshot items = %+v, want only strong-positive", increaseItems)
+	}
+	if len(watchItems) != 2 || watchItems[0].Fund.ID != "slight-positive" || watchItems[1].Fund.ID != "high-risk-watch" {
+		t.Fatalf("watch snapshot items = %+v, want slight-positive and high-risk-watch", watchItems)
+	}
+	if len(riskItems) != 1 || riskItems[0].Fund.ID != "high-risk-watch" {
+		t.Fatalf("risk snapshot items = %+v, want high-risk-watch", riskItems)
+	}
+}
+
+func analysisSnapshotRecord(t *testing.T, fundID string, analysis *domain.FundAnalysis) database.FundAnalysisSnapshot {
+	t.Helper()
+	payload, err := json.Marshal(analysis)
+	if err != nil {
+		t.Fatalf("marshal analysis snapshot: %v", err)
+	}
+	return database.FundAnalysisSnapshot{FundID: fundID, AnalysisJSON: payload}
 }
 
 func TestResolveOfficialCloseInfoHidesAfterNineEvenIfHistoryExists(t *testing.T) {

@@ -108,6 +108,7 @@ func main() {
 	// Initialize cache repository
 	cacheRepo := repository.NewMemoryCacheRepository(60*time.Second, 5*time.Minute)
 	defaultQuoteSource := loadDefaultQuoteSource(fileCfg)
+	overseasQuoteSource := appconfig.ResolveOverseasQuoteSource(fileCfg)
 
 	// Initialize quote provider (Sina Finance)
 	quoteProvider := adapter.NewSinaFinanceProvider()
@@ -120,9 +121,10 @@ func main() {
 	valuationService := service.NewValuationService(fundRepo, quoteProvider, cacheRepo)
 	valuationService.SetQuoteProvider(domain.QuoteSourceSina, quoteProvider)
 	valuationService.SetQuoteProvider(domain.QuoteSourceTencent, adapter.NewTencentQuoteProvider())
-	valuationService.SetOverseasQuoteProvider(adapter.NewTencentQuoteProvider())
+	valuationService.SetOverseasQuoteProvider(adapter.NewQuoteProviderForSource(overseasQuoteSource))
 	valuationService.SetDefaultQuoteSource(defaultQuoteSource)
 	valuationService.SetFundDataLoader(fundDataLoader)
+	log.Printf("🌎 QDII overseas quote source: %s", overseasQuoteSource)
 	authConfig := loadAuthConfig(fileCfg)
 	authConfig.DefaultQuoteSource = defaultQuoteSource
 	authService := service.NewAuthService(userRepo, sessionRepo, authConfig)

@@ -85,6 +85,9 @@ func TestFundAnalysisServiceBuildTrackedETFRecommendation(t *testing.T) {
 	if !analysis.IncreasePercent.GreaterThan(analysis.HoldPercent) {
 		t.Fatalf("increase = %s, hold = %s, want increase > hold", analysis.IncreasePercent, analysis.HoldPercent)
 	}
+	if DominantRecommendationFromAnalysis(analysis) != "increase" {
+		t.Fatalf("dominant recommendation should follow summary threshold for strong tracked ETF: increase=%s hold=%s decrease=%s", analysis.IncreasePercent, analysis.HoldPercent, analysis.DecreasePercent)
+	}
 	if analysis.RiskLevel == "" {
 		t.Fatal("risk level should not be empty")
 	}
@@ -94,8 +97,14 @@ func TestFundAnalysisServiceBuildTrackedETFRecommendation(t *testing.T) {
 	if len(analysis.EventImpacts) == 0 {
 		t.Fatal("event impacts should not be empty")
 	}
-	if !strings.Contains(analysis.Summary, "加仓") {
-		t.Fatalf("summary = %q, want add-position wording for strong tracked ETF", analysis.Summary)
+	if !strings.Contains(analysis.Summary, "结构偏积极") {
+		t.Fatalf("summary = %q, want weak positive-structure wording for strong tracked ETF", analysis.Summary)
+	}
+	if len(analysis.ConfidenceFactors) == 0 {
+		t.Fatal("confidence factors should be populated")
+	}
+	if len(analysis.PrimaryEvidence) == 0 {
+		t.Fatal("primary evidence should be populated")
 	}
 	driverEvent := findEventImpact(analysis.EventImpacts, "top_positive_driver")
 	if driverEvent == nil {
@@ -123,6 +132,46 @@ func TestFundAnalysisServiceBuildTrackedETFRecommendation(t *testing.T) {
 	}
 	if exposureShiftEvent.TargetScope != "exposure" {
 		t.Fatalf("exposure shift target scope = %q, want exposure", exposureShiftEvent.TargetScope)
+	}
+}
+
+func TestDominantRecommendationRequiresActionThresholds(t *testing.T) {
+	tests := []struct {
+		name     string
+		increase float64
+		hold     float64
+		decrease float64
+		want     string
+	}{
+		{
+			name:     "hold remains watch even when increase slightly leads",
+			increase: 46.5,
+			hold:     42.6,
+			decrease: 10.9,
+			want:     "hold",
+		},
+		{
+			name:     "increase requires structural threshold",
+			increase: 55,
+			hold:     35,
+			decrease: 10,
+			want:     "increase",
+		},
+		{
+			name:     "decrease requires high risk threshold",
+			increase: 18,
+			hold:     20,
+			decrease: 62,
+			want:     "decrease",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := DominantRecommendationFromPercents(tt.increase, tt.decrease); got != tt.want {
+				t.Fatalf("dominantRecommendation() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -479,7 +528,7 @@ func TestFundAnalysisServiceIncludesCurrentFundEvents(t *testing.T) {
 	}
 	foundWarning := false
 	for _, warning := range analysis.Warnings {
-		if strings.Contains(warning, "基金自身近期事件偏负向") {
+		if strings.Contains(warning, "基金产品层重要事件偏负向") {
 			foundWarning = true
 			break
 		}
@@ -705,10 +754,16 @@ func TestLoadMacroPolicyEventsMatchesActualThemeCodes(t *testing.T) {
 		&domain.FundSectorSnapshot{
 			PrimarySectorCode: "communications_equipment",
 			PrimarySectorName: "通信设备",
+			Breakdown: []domain.FundSectorBreakdown{
+				{SectorCode: "communications_equipment", SectorName: "通信设备", WeightPercent: decimal.RequireFromString("18.0000")},
+			},
 		},
 		&domain.FundThemeSnapshot{
 			PrimaryThemeCode: "computing_power",
 			PrimaryThemeName: "AI算力",
+			Breakdown: []domain.FundThemeBreakdown{
+				{ThemeCode: "computing_power", ThemeName: "AI算力", WeightPercent: decimal.RequireFromString("32.0000")},
+			},
 		},
 	)
 
@@ -730,10 +785,16 @@ func TestLoadMacroPolicyEventsSupportsLegacyThemeAlias(t *testing.T) {
 		&domain.FundSectorSnapshot{
 			PrimarySectorCode: "communications_equipment",
 			PrimarySectorName: "通信设备",
+			Breakdown: []domain.FundSectorBreakdown{
+				{SectorCode: "communications_equipment", SectorName: "通信设备", WeightPercent: decimal.RequireFromString("18.0000")},
+			},
 		},
 		&domain.FundThemeSnapshot{
 			PrimaryThemeCode: "ai_compute",
 			PrimaryThemeName: "AI算力",
+			Breakdown: []domain.FundThemeBreakdown{
+				{ThemeCode: "ai_compute", ThemeName: "AI算力", WeightPercent: decimal.RequireFromString("32.0000")},
+			},
 		},
 	)
 
@@ -755,10 +816,16 @@ func TestLoadMacroPolicyEventsIncludesHealthcareTheme(t *testing.T) {
 		&domain.FundSectorSnapshot{
 			PrimarySectorCode: "healthcare_service",
 			PrimarySectorName: "医疗服务",
+			Breakdown: []domain.FundSectorBreakdown{
+				{SectorCode: "healthcare_service", SectorName: "医疗服务", WeightPercent: decimal.RequireFromString("21.0000")},
+			},
 		},
 		&domain.FundThemeSnapshot{
 			PrimaryThemeCode: "innovative_medicine",
 			PrimaryThemeName: "创新药",
+			Breakdown: []domain.FundThemeBreakdown{
+				{ThemeCode: "innovative_medicine", ThemeName: "创新药", WeightPercent: decimal.RequireFromString("26.0000")},
+			},
 		},
 	)
 
@@ -780,10 +847,16 @@ func TestLoadMacroPolicyEventsAddsPrimaryThemeContextToSummary(t *testing.T) {
 		&domain.FundSectorSnapshot{
 			PrimarySectorCode: "semiconductor",
 			PrimarySectorName: "半导体",
+			Breakdown: []domain.FundSectorBreakdown{
+				{SectorCode: "semiconductor", SectorName: "半导体", WeightPercent: decimal.RequireFromString("53.3000")},
+			},
 		},
 		&domain.FundThemeSnapshot{
 			PrimaryThemeCode: "semiconductor_chip",
 			PrimaryThemeName: "半导体芯片",
+			Breakdown: []domain.FundThemeBreakdown{
+				{ThemeCode: "semiconductor_chip", ThemeName: "半导体芯片", WeightPercent: decimal.RequireFromString("53.3000")},
+			},
 		},
 	)
 
@@ -793,12 +866,40 @@ func TestLoadMacroPolicyEventsAddsPrimaryThemeContextToSummary(t *testing.T) {
 			if !strings.Contains(item.Summary, "当前主主题为半导体芯片") {
 				t.Fatalf("summary = %q, want primary theme context", item.Summary)
 			}
+			if item.WeightHint == nil || !item.WeightHint.GreaterThan(decimal.Zero) {
+				t.Fatal("macro event should carry exposure weight hint")
+			}
 			found = true
 			break
 		}
 	}
 	if !found {
 		t.Fatalf("events = %+v, want semiconductor macro event", events)
+	}
+}
+
+func TestLoadMacroPolicyEventsRequiresExposureWeight(t *testing.T) {
+	events := LoadMacroPolicyEvents(
+		time.Date(2026, time.April, 27, 9, 0, 0, 0, time.Local),
+		&domain.FundSectorSnapshot{
+			PrimarySectorCode: "semiconductor",
+			PrimarySectorName: "半导体",
+			Breakdown: []domain.FundSectorBreakdown{
+				{SectorCode: "semiconductor", SectorName: "半导体", WeightPercent: decimal.RequireFromString("3.0000")},
+			},
+		},
+		&domain.FundThemeSnapshot{
+			PrimaryThemeCode: "semiconductor_chip",
+			PrimaryThemeName: "半导体芯片",
+			Breakdown: []domain.FundThemeBreakdown{
+				{ThemeCode: "semiconductor_chip", ThemeName: "半导体芯片", WeightPercent: decimal.RequireFromString("3.0000")},
+			},
+		},
+	)
+	for _, item := range events {
+		if item.Code == "macro_ic_tax_support_2026" {
+			t.Fatalf("events = %+v, low exposure should not trigger macro hotspot", events)
+		}
 	}
 }
 
@@ -932,6 +1033,93 @@ func TestLoadIndexLayerEvents(t *testing.T) {
 	}
 	if events[0].TargetScope != "index" {
 		t.Fatalf("target_scope = %q, want index", events[0].TargetScope)
+	}
+}
+
+func TestFundAnalysisServiceBuildsCredibilityEvidenceBeforeAI(t *testing.T) {
+	service := NewFundAnalysisService()
+
+	analysis := service.Build(FundAnalysisInput{
+		Fund: &domain.Fund{ID: "159813", Name: "半导体ETF鹏华", Type: "index"},
+		Estimate: &domain.FundEstimate{
+			FundID:         "159813",
+			FundName:       "半导体ETF鹏华",
+			ChangePercent:  decimal.RequireFromString("0.9000"),
+			TotalHoldRatio: decimal.RequireFromString("52.0000"),
+			HoldingDetails: []domain.HoldingDetail{
+				{StockCode: "688041", StockName: "海光信息", HoldingRatio: decimal.RequireFromString("9.9900"), StockChange: decimal.RequireFromString("3.2000"), Contribution: decimal.RequireFromString("0.3190")},
+			},
+		},
+		TimeSeries: []domain.TimeSeriesPoint{
+			{Timestamp: time.Date(2026, time.April, 28, 10, 0, 0, 0, time.Local), ChangePercent: decimal.RequireFromString("0.1000")},
+			{Timestamp: time.Date(2026, time.April, 28, 14, 30, 0, 0, time.Local), ChangePercent: decimal.RequireFromString("0.9000")},
+		},
+		SectorSnapshot: &domain.FundSectorSnapshot{
+			PrimarySectorCode: "semiconductor",
+			PrimarySectorName: "半导体",
+			Confidence:        "high",
+			Breakdown: []domain.FundSectorBreakdown{
+				{SectorCode: "semiconductor", SectorName: "半导体", WeightPercent: decimal.RequireFromString("52.0000")},
+			},
+		},
+		ThemeSnapshot: &domain.FundThemeSnapshot{
+			PrimaryThemeCode: "semiconductor_chip",
+			PrimaryThemeName: "半导体芯片",
+			Confidence:       "high",
+			Breakdown: []domain.FundThemeBreakdown{
+				{ThemeCode: "semiconductor_chip", ThemeName: "半导体芯片", WeightPercent: decimal.RequireFromString("52.0000")},
+			},
+		},
+		Holdings: []domain.StockHolding{
+			{StockCode: "688041", StockName: "海光信息", HoldingRatio: decimal.RequireFromString("9.9900"), ReportingPeriod: "2026-03-31"},
+		},
+		CurrentHoldingEvents: []domain.FundAnalysisEventImpact{
+			{
+				Code:           "holding_current_notice_688041_test",
+				Title:          "海光信息发布一季报",
+				Impact:         "positive",
+				Summary:        "近期开启事件：2026-04-20 发布《海光信息技术股份有限公司2026年第一季度报告》。",
+				TargetScope:    "holding",
+				Strength:       "high",
+				Horizon:        "current",
+				RelatedSymbols: []string{"688041"},
+				WeightHint:     decimalPointerFromFloat(9.99),
+			},
+		},
+		CurrentFundEvents: []domain.FundAnalysisEventImpact{
+			{
+				Code:        "fund_notice_generic",
+				Title:       "基金普通公告",
+				Impact:      "positive",
+				Summary:     "基金普通公告不应抢占持仓与行业证据主位。",
+				TargetScope: "fund",
+				Strength:    "medium",
+				Horizon:     "current",
+			},
+		},
+		HoldingsSource: SectorSourceDirectHoldings,
+		Now:            time.Date(2026, time.April, 28, 15, 0, 0, 0, time.Local),
+	})
+
+	if analysis == nil {
+		t.Fatal("analysis = nil")
+	}
+	if len(analysis.ConfidenceFactors) < 6 {
+		t.Fatalf("confidence factors len = %d, want >= 6", len(analysis.ConfidenceFactors))
+	}
+	if len(analysis.PrimaryEvidence) == 0 {
+		t.Fatal("primary evidence should be populated")
+	}
+	if analysis.PrimaryEvidence[0].SourceScope != "holding" {
+		t.Fatalf("first primary evidence scope = %q, want holding", analysis.PrimaryEvidence[0].SourceScope)
+	}
+	if len(analysis.CounterEvidence) == 0 {
+		t.Fatal("counter evidence should be populated")
+	}
+	for _, reason := range analysis.Reasons {
+		if strings.Contains(reason, "基金产品层事件") || strings.Contains(reason, "基金普通公告") {
+			t.Fatalf("generic fund notice should not become main reason: %v", analysis.Reasons)
+		}
 	}
 }
 

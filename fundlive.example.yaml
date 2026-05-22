@@ -13,6 +13,9 @@ storage:
 
 quote:
   default_source: sina
+  # QDII / overseas holdings use a fixed source independent from user quote preference.
+  # Supported today: tencent, sina. Default is tencent to preserve existing behavior.
+  overseas_source: tencent
 
 database:
   host: 127.0.0.1

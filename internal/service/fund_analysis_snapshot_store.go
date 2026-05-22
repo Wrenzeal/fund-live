@@ -78,7 +78,7 @@ func (s *FundAnalysisSnapshotStore) Get(ctx context.Context, fundID string) (*do
 	return analysis, record.GeneratedAt, nil
 }
 
-func (s *FundAnalysisSnapshotStore) GetByFundIDs(ctx context.Context, fundIDs []string) (map[string]*domain.FundAnalysis, error) {
+func (s *FundAnalysisSnapshotStore) GetByFundIDs(ctx context.Context, fundIDs []string, now time.Time) (map[string]*domain.FundAnalysis, error) {
 	result := make(map[string]*domain.FundAnalysis)
 	if s == nil || s.db == nil || len(fundIDs) == 0 {
 		return result, nil
@@ -98,40 +98,62 @@ func (s *FundAnalysisSnapshotStore) GetByFundIDs(ctx context.Context, fundIDs []
 		if err != nil {
 			continue
 		}
+		if !IsFundAnalysisSnapshotFresh(analysis, record.GeneratedAt, now) {
+			continue
+		}
+		analysis.AIExplanation = MarkAIExplanationSnapshotHit(analysis.AIExplanation)
 		result[record.FundID] = analysis
 	}
 	return result, nil
 }
 
-func (s *FundAnalysisSnapshotStore) ListRankings(ctx context.Context, limit int) (increase, watch, risk []database.FundAnalysisSnapshot, err error) {
+func (s *FundAnalysisSnapshotStore) ListRankings(ctx context.Context, limit int, now time.Time) (increase, watch, risk []database.FundAnalysisSnapshot, err error) {
 	if s == nil || s.db == nil {
 		return nil, nil, nil, nil
 	}
 	if limit <= 0 {
 		limit = 12
 	}
-	if increase, err = s.queryRankings(ctx, "increase_percent DESC, total_score DESC", limit); err != nil {
+	if increase, err = s.queryRankings(ctx, "increase_percent DESC, total_score DESC", limit, now); err != nil {
 		return nil, nil, nil, err
 	}
-	if watch, err = s.queryRankings(ctx, "hold_percent DESC, total_score DESC", limit); err != nil {
+	if watch, err = s.queryRankings(ctx, "hold_percent DESC, total_score DESC", limit, now); err != nil {
 		return nil, nil, nil, err
 	}
-	if risk, err = s.queryRankings(ctx, "decrease_percent DESC, total_score ASC", limit); err != nil {
+	if risk, err = s.queryRankings(ctx, "decrease_percent DESC, total_score ASC", limit, now); err != nil {
 		return nil, nil, nil, err
 	}
 	return increase, watch, risk, nil
 }
 
-func (s *FundAnalysisSnapshotStore) queryRankings(ctx context.Context, order string, limit int) ([]database.FundAnalysisSnapshot, error) {
-	records := make([]database.FundAnalysisSnapshot, 0, limit)
+func (s *FundAnalysisSnapshotStore) queryRankings(ctx context.Context, order string, limit int, now time.Time) ([]database.FundAnalysisSnapshot, error) {
+	queryLimit := limit * 4
+	if queryLimit < limit {
+		queryLimit = limit
+	}
+	if queryLimit < 24 {
+		queryLimit = 24
+	}
+	records := make([]database.FundAnalysisSnapshot, 0, queryLimit)
 	if err := s.db.WithContext(ctx).
 		Order(order).
 		Order("generated_at DESC").
-		Limit(limit).
+		Limit(queryLimit).
 		Find(&records).Error; err != nil {
 		return nil, err
 	}
-	return records, nil
+	filtered := make([]database.FundAnalysisSnapshot, 0, limit)
+	for _, record := range records {
+		analysis, err := decodeAnalysisSnapshot(record.AnalysisJSON)
+		if err != nil || !IsFundAnalysisSnapshotFresh(analysis, record.GeneratedAt, now) {
+			continue
+		}
+		filtered = append(filtered, record)
+		if len(filtered) >= limit {
+			break
+		}
+	}
+	return filtered, nil
 }
 
 func decodeAnalysisSnapshot(payload []byte) (*domain.FundAnalysis, error) {

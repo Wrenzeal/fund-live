@@ -2,6 +2,7 @@
 
 import { Layers3 } from 'lucide-react'
 import type { Fund, FundSectorSnapshot, FundThemeSnapshot } from '@/hooks/use-fund-data'
+import { confidenceLevelLabel } from '@/lib/fund-analysis-display'
 
 interface FundSectorCardProps {
   fund?: Fund
@@ -31,19 +32,6 @@ function formatWeight(value?: string) {
   return `${parsed.toFixed(1)}%`
 }
 
-function confidenceLabel(confidence?: string) {
-  switch (confidence) {
-    case 'high':
-      return '识别覆盖较高'
-    case 'medium':
-      return '识别覆盖一般'
-    case 'low':
-      return '识别覆盖有限'
-    default:
-      return ''
-  }
-}
-
 function ClassificationModule({
   title,
   badge,
@@ -65,7 +53,7 @@ function ClassificationModule({
       }
 
   return (
-    <section className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/45 p-4">
+    <section className="flex h-full flex-col rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/45 p-4">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-theme-primary">{title}</div>
@@ -78,7 +66,7 @@ function ClassificationModule({
         <div className="mt-2 text-xl font-bold text-theme-primary">{primaryValue}</div>
       </div>
 
-      <div className="space-y-3">
+      <div className="flex flex-1 flex-col justify-center space-y-3">
         {items.map((item) => (
           <div
             key={item.code}
@@ -102,8 +90,9 @@ export function FundSectorCard({ fund, sectorSnapshot, themeSnapshot }: FundSect
   }
 
   const snapshotDate = sectorSnapshot?.as_of_date || themeSnapshot?.as_of_date || '--'
-  const sectorConfidence = confidenceLabel(sectorSnapshot?.confidence)
-  const themeConfidence = confidenceLabel(themeSnapshot?.confidence)
+  const confidenceLabels = { high: '识别覆盖较高', medium: '识别覆盖一般', low: '识别覆盖有限', unknown: '' }
+  const sectorConfidence = confidenceLevelLabel(sectorSnapshot?.confidence, confidenceLabels)
+  const themeConfidence = confidenceLevelLabel(themeSnapshot?.confidence, confidenceLabels)
   const showCoverageHint = sectorSnapshot?.confidence === 'low' || themeSnapshot?.confidence === 'low'
   const modules = [
     sectorSnapshot && sectorSnapshot.breakdown.length > 0
@@ -145,7 +134,7 @@ export function FundSectorCard({ fund, sectorSnapshot, themeSnapshot }: FundSect
   ].filter(Boolean)
 
   return (
-    <div className="glass rounded-2xl p-6">
+    <div className="glass flex h-full flex-col rounded-2xl p-6">
       <div className="mb-4 flex items-center gap-3">
         <div className="rounded-lg bg-cyan-500/20 p-2">
           <Layers3 className="h-5 w-5 text-cyan-300" />
@@ -170,7 +159,7 @@ export function FundSectorCard({ fund, sectorSnapshot, themeSnapshot }: FundSect
         </div>
       )}
 
-      <div className={`grid gap-4 ${modules.length > 1 ? 'xl:grid-cols-2' : ''}`}>
+      <div className={`grid flex-1 items-stretch gap-4 ${modules.length > 1 ? 'xl:grid-cols-2' : ''}`}>
         {modules}
       </div>
 

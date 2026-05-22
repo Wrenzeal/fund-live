@@ -131,7 +131,7 @@ export default function AnalysisRankingsPage() {
             <div>
               <div className="text-2xl font-bold text-theme-primary">量化排行榜</div>
               <p className="mt-2 text-sm text-theme-secondary">
-                统一复用独立 analysis 结果，先提供“最值得加仓 / 最值得观察 / 高风险减仓关注”三类榜单。
+                统一复用独立 analysis 结果，先提供“结构偏积极 / 最值得观察 / 高风险关注”三类榜单。
               </p>
             </div>
 
@@ -163,27 +163,27 @@ export default function AnalysisRankingsPage() {
         ) : (
           <div className="grid gap-6 xl:grid-cols-3">
             <RankingsSection
-              title="最值得加仓"
-              description="优先展示当前建议更偏加仓、且总分相对靠前的基金。"
+              title="结构偏积极"
+              description="优先展示当前持仓结构、行业主题和近期事件相对更积极的基金。"
               items={rankings?.increase_ideas || []}
               accent="rose"
-              metricLabel="加仓倾向"
+              metricLabel="积极倾向"
               metricValue={(item) => percentValue(item.analysis?.increase_percent)}
             />
             <RankingsSection
               title="最值得观察"
-              description="优先展示当前偏持有、但结构和事件层仍值得持续跟踪的基金。"
+              description="优先展示当前更适合观察、但结构和事件层仍值得持续跟踪的基金。"
               items={rankings?.watch_ideas || []}
               accent="slate"
               metricLabel="观察倾向"
               metricValue={(item) => percentValue(item.analysis?.hold_percent)}
             />
             <RankingsSection
-              title="高风险减仓关注"
-              description="优先展示当前风险较高、且建议更偏减仓或需谨慎对待的基金。"
+              title="高风险关注"
+              description="优先展示当前风险暴露较高、或需谨慎对待的基金。"
               items={rankings?.risk_alerts || []}
               accent="amber"
-              metricLabel="减仓倾向"
+              metricLabel="风险倾向"
               metricValue={(item) => percentValue(item.analysis?.decrease_percent)}
             />
           </div>

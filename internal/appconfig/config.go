@@ -29,7 +29,8 @@ type StorageConfig struct {
 }
 
 type QuoteConfig struct {
-	DefaultSource string `yaml:"default_source" json:"default_source"`
+	DefaultSource  string `yaml:"default_source" json:"default_source"`
+	OverseasSource string `yaml:"overseas_source" json:"overseas_source"`
 }
 
 type DatabaseConfig struct {

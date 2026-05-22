@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils'
 import type { FundAnalysis } from '@/hooks/use-fund-data'
+import { dominantAnalysisRecommendation, formatAnalysisScore } from '@/lib/fund-analysis-display'
 
 interface FundAnalysisBadgeProps {
   analysis?: FundAnalysis | null
@@ -9,40 +10,27 @@ interface FundAnalysisBadgeProps {
   showScore?: boolean
 }
 
-function parsePercent(value?: string) {
-  const parsed = Number.parseFloat(value || '')
-  return Number.isNaN(parsed) ? 0 : parsed
-}
-
-function parseScore(value?: string) {
-  const parsed = Number.parseFloat(value || '')
-  return Number.isNaN(parsed) ? '--' : parsed.toFixed(1)
-}
-
 function recommendationMeta(analysis?: FundAnalysis | null) {
   if (!analysis) {
     return null
   }
 
-  const increase = parsePercent(analysis.increase_percent)
-  const hold = parsePercent(analysis.hold_percent)
-  const decrease = parsePercent(analysis.decrease_percent)
-
-  if (increase >= hold && increase >= decrease) {
-    return {
-      label: '偏加仓',
-      tone: 'border-rose-400/35 bg-rose-500/12 text-rose-100',
-    }
-  }
-  if (decrease >= increase && decrease >= hold) {
-    return {
-      label: '偏减仓',
-      tone: 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100',
-    }
-  }
-  return {
-    label: '偏持有',
-    tone: 'border-slate-400/35 bg-slate-500/12 text-slate-100',
+  switch (dominantAnalysisRecommendation(analysis)) {
+    case 'increase':
+      return {
+        label: '结构偏积极',
+        tone: 'border-rose-400/35 bg-rose-500/12 text-rose-100',
+      }
+    case 'decrease':
+      return {
+        label: '风险偏高',
+        tone: 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100',
+      }
+    default:
+      return {
+        label: '适合观察',
+        tone: 'border-slate-400/35 bg-slate-500/12 text-slate-100',
+      }
   }
 }
 
@@ -73,7 +61,7 @@ export function FundAnalysisBadge({ analysis, compact = false, showScore = false
   }
 
   const risk = riskMeta(analysis.risk_level)
-  const score = parseScore(analysis.total_score)
+  const score = formatAnalysisScore(analysis.total_score)
 
   return (
     <div className={cn('flex flex-wrap items-center gap-2', compact && 'gap-1.5')}>

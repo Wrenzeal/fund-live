@@ -9,6 +9,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **QDII 海外固定行情源配置化与选型文档**
+  - 新增 `quote.overseas_source` / `QUOTE_OVERSEAS_SOURCE`，QDII / 海外持仓估值可在 `tencent` 与 `sina` 两个既有 provider 间切换。
+  - 默认海外固定源保持 `tencent`，避免影响现有 QDII 估值链路；用户级国内行情源偏好仍不影响海外估值。
+  - 新增 `docs/overseas-data-source-selection.md`，记录 Polygon / Alpaca / Twelve Data / Intrinio 的中期选型边界，并明确本轮不接 VIP / 付费官方 API。
+
+- **持仓页待补齐过滤与高频排序**
+  - 持仓页新增“只看待补齐”过滤器，支持在按基金聚合和分笔明细两种视图下快速定位未确认份额、官方净值未同步或真实口径未就绪的记录。
+  - 过滤开启后会显示当前筛选范围和命中数量；无命中时展示空态并可一键恢复全部持仓。
+  - 新增排序与筛选面板：支持仓位 / 金额、盈亏、涨跌幅、分笔数、最近录入、量化信号排序，以及盈利/亏损、就绪状态、单笔/多笔筛选；盈亏/涨跌幅跟随“官方口径 / 盘中预估”切换，缺失排序值统一后置。
+
+- **量化分析 P2a 可信度增强第一轮**
+  - `FundAnalysis` 新增 `confidence_factors`、`primary_evidence`、`counter_evidence` 与 `confidence_deductions`，用于展示可信度拆解、主证据、反方证据和扣分原因。
+  - 可信度现拆分为持仓覆盖、持仓新鲜度、行业/主题映射、事件来源强度、实时行情可用性和历史对比完整度。
+  - `cmd/audit-fund-analysis` 现在会输出核心样本的主证据、反方证据、数据缺口、可信度扣分和直觉复核结论。
+
+- **量化分析 P2b AI 解释层边界第一轮**
+  - 新增 `AIExplanationService` / `AIExplanationProvider` 边界；provider 输入限定为规则型分析、证据包、持仓、行业/主题快照与可引用来源。
+  - `FundAnalysis` 新增 `ai_explanation`，用于返回解释层状态、规则结论、边界声明、归因段落、风险段落、引用与降级限制。
+  - 未配置真实 AI provider、provider 超时或失败时，会返回非阻塞降级摘要；无证据包时解释层返回“证据不足 / 无法确认”。
+  - `cmd/audit-fund-analysis` 与前端量化卡片已展示 AI 解释层状态、边界、引用和限制。
+
+- **量化分析 P2c 缓存收口第一轮**
+  - `ai_explanation` 新增缓存元信息：`cache_key`、`cache_status`、`expires_at`、`invalidation_basis`。
+  - `fund_analysis_snapshots` 读取现会校验当前分析版本、同一上海自然日、解释层缓存有效期和 cache key，避免旧 JSON 快照绕过新规则。
+  - `/fund/:id/analysis` 改为 fresh snapshot-first；`/analysis/batch` 与 `/analysis/rankings` 会过滤过期快照。
+  - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
+
+### Changed
+- **量化规则结论阈值与审计收口**
+  - `analysis_version` 提升到 `baseline_v3`，使旧版量化快照自动失效。
+  - 规则主结论与前端标签统一使用阈值口径：`increase >= 55` 才显示“结构偏积极”，`decrease >= 60` 才显示“风险偏高”，否则统一为“适合观察”。
+  - 观察型结论下的反方证据不再把正向事件混入限制列表；审计命令会对低可信度因子给出更明确的人工复核提示。
+
+- **量化前端信息架构重构**
+  - 基金详情页量化模块改为摘要卡，只展示核心结论、总分、建议分布、少量主因/风险和完整看板入口。
+  - `/analysis/[fundId]` 量化详情页重排为结论总览、建议分布、六维模块可视化、主/反证据、事件信号链、风险/结构辅助信息。
+  - 新增环形总分、堆叠分布条、模块雷达/进度条、时间线节点等视觉元素，减少纯文字规则堆叠。
+
+- **量化事件权重口径收口**
+  - 当前持仓股票、持仓权重、行业/主题与近期有来源事件优先于基金自身普通公告。
+  - 基金自身事件默认作为辅助低权重信号，仅在基金经理变更、清盘/限购、费率、规模异常等直接影响产品的事件上提升权重。
+  - 行业/主题热点必须先匹配到基金当前行业/主题暴露，并达到最低暴露权重后才进入宏观/政策事件层。
+  - 前端量化标签和结论文案弱化投资建议口吻，从“偏加仓 / 偏减仓 / 偏持有”调整为“结构偏积极 / 风险偏高 / 适合观察”。
+
 ## [2026.4.27] - 2026-04-27
 
 ### Added

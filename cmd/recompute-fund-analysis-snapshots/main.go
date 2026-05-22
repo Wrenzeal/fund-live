@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/RomaticDOG/fund/internal/adapter"
+	"github.com/RomaticDOG/fund/internal/appconfig"
 	"github.com/RomaticDOG/fund/internal/database"
 	"github.com/RomaticDOG/fund/internal/domain"
 	"github.com/RomaticDOG/fund/internal/repository"
@@ -29,12 +30,13 @@ func main() {
 
 	fundRepo := repository.NewPostgresFundRepository(db)
 	defaultSource := domain.ResolveQuoteSource(domain.QuoteSource(""), domain.QuoteSourceSina)
+	overseasSource := appconfig.ResolveOverseasQuoteSource(nil)
 	cacheRepo := repository.NewMemoryCacheRepository(60*time.Second, 5*time.Minute)
 	quoteProvider := adapter.NewSinaFinanceProvider()
 	valuationService := service.NewValuationService(fundRepo, quoteProvider, cacheRepo)
 	valuationService.SetQuoteProvider(domain.QuoteSourceSina, quoteProvider)
 	valuationService.SetQuoteProvider(domain.QuoteSourceTencent, adapter.NewTencentQuoteProvider())
-	valuationService.SetOverseasQuoteProvider(adapter.NewTencentQuoteProvider())
+	valuationService.SetOverseasQuoteProvider(adapter.NewQuoteProviderForSource(overseasSource))
 	valuationService.SetDefaultQuoteSource(defaultSource)
 	fundDataLoader := service.NewFundDataLoader(fundRepo)
 	valuationService.SetFundDataLoader(fundDataLoader)

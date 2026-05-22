@@ -14,6 +14,10 @@ import (
 
 const (
 	FundAnalysisVersionV1 = "baseline_v1"
+	FundAnalysisVersionV2 = "baseline_v2"
+	FundAnalysisVersionV3 = "baseline_v3"
+
+	CurrentFundAnalysisVersion = FundAnalysisVersionV3
 
 	FundAnalysisTypeDirectHoldings = "direct_holdings"
 	FundAnalysisTypeTrackedETF     = "tracked_etf"
@@ -73,12 +77,12 @@ type exposureShiftInsight struct {
 }
 
 type currentExposureEventInsight struct {
-	Name     string
-	Scope    string
-	Count    int
-	Impact   string
-	Strength string
-	Summary  string
+	Name       string
+	Scope      string
+	Count      int
+	Impact     string
+	Strength   string
+	Summary    string
 	Highlights []string
 }
 
@@ -130,7 +134,7 @@ func (s *FundAnalysisService) Build(input FundAnalysisInput) *domain.FundAnalysi
 	classificationSignal := recognizedClassificationSignal(input.SectorSnapshot, input.ThemeSnapshot)
 	holdingChanges := analyzeHoldingChanges(input.Holdings, input.PreviousHoldings, input.PreviousHoldingPeriod)
 	exposureShift := analyzeExposureShift(input.SectorSnapshot, input.ThemeSnapshot, input.PreviousSectorSnapshot, input.PreviousThemeSnapshot)
-	currentFocusEvents := mergeCurrentEventImpacts(input.CurrentMacroEvents, input.CurrentIndexEvents, input.CurrentHoldingEvents, input.CurrentFundEvents, input.CurrentTargetEvents)
+	currentFocusEvents := mergeCurrentEventImpacts(input.CurrentHoldingEvents, input.CurrentMacroEvents, input.CurrentFundEvents, input.CurrentTargetEvents, input.CurrentIndexEvents)
 	currentExposureEvent := analyzeCurrentExposureEvent(input.CurrentHoldingEvents, input.SectorSnapshot, input.ThemeSnapshot)
 	exposureBreakdowns := analyzeExposureBreakdownChanges(input.SectorSnapshot, input.ThemeSnapshot, input.PreviousSectorSnapshot, input.PreviousThemeSnapshot)
 	coveragePenalty := lowCoveragePenalty(coveragePercent)
@@ -223,7 +227,20 @@ func (s *FundAnalysisService) Build(input FundAnalysisInput) *domain.FundAnalysi
 	totalScore := clamp(50+decisionBias, 5, 95)
 	increasePercent, holdPercent, decreasePercent := recommendationDistribution(decisionBias)
 
-	confidence := deriveAnalysisConfidence(coveragePercent, sectorConfidence(input.SectorSnapshot), themeConfidence(input.ThemeSnapshot), analysisType)
+	confidenceFactors := buildConfidenceFactors(
+		coveragePercent,
+		disclosureAgeDays,
+		latestPeriod,
+		input.SectorSnapshot,
+		input.ThemeSnapshot,
+		currentFocusEvents,
+		input.Estimate,
+		input.TimeSeries,
+		input.PreviousHoldings,
+		input.PreviousHoldingPeriod,
+	)
+	confidence := deriveAnalysisConfidenceFromFactors(confidenceFactors, analysisType, coveragePercent)
+	confidenceDeductions := buildConfidenceDeductions(confidenceFactors)
 	riskLevel := deriveRiskLevel(riskScore)
 
 	moduleScores := []domain.FundAnalysisModuleScore{
@@ -268,24 +285,30 @@ func (s *FundAnalysisService) Build(input FundAnalysisInput) *domain.FundAnalysi
 	reasons := buildAnalysisReasons(trendScore, structureScore, heatScore, allocationScore, eventScore, input.SectorSnapshot, input.ThemeSnapshot, analysisBasis, latestPeriod, currentFocusEvents, currentExposureEvent, exposureBreakdowns, holdingChanges, exposureShift)
 	warnings := buildAnalysisWarnings(riskScore, confidence, eventScore, latestPeriod, disclosureAgeDays, changePercent, concentrationWeight, currentFocusEvents, currentExposureEvent, exposureBreakdowns, holdingChanges, exposureShift)
 	eventImpacts := buildEventImpacts(analysisBasis, latestPeriod, disclosureAgeDays, confidence, concentrationWeight, currentFocusEvents, currentExposureEvent, exposureBreakdowns, holdingChanges, exposureShift, input.Estimate.HoldingDetails, input.SectorSnapshot, input.ThemeSnapshot)
+	primaryEvidence := buildPrimaryEvidenceItems(DominantRecommendationFromPercents(increasePercent, decreasePercent), eventImpacts, trendScore, structureScore, heatScore, input.SectorSnapshot, input.ThemeSnapshot)
+	counterEvidence := buildCounterEvidenceItems(DominantRecommendationFromPercents(increasePercent, decreasePercent), eventImpacts, confidenceFactors, riskScore, concentrationWeight, disclosureAgeDays)
 
 	return &domain.FundAnalysis{
-		AnalysisVersion:     FundAnalysisVersionV1,
-		AnalysisType:        analysisType,
-		AnalysisBasis:       analysisBasis,
-		AsOfTime:            now,
-		TotalScore:          scoreDecimal(totalScore),
-		Confidence:          confidence,
-		RiskLevel:           riskLevel,
-		IncreasePercent:     scoreDecimal(increasePercent),
-		HoldPercent:         scoreDecimal(holdPercent),
-		DecreasePercent:     scoreDecimal(decreasePercent),
-		LatestHoldingPeriod: latestPeriod,
-		Summary:             buildAnalysisSummary(increasePercent, holdPercent, decreasePercent, riskLevel),
-		Reasons:             reasons,
-		Warnings:            warnings,
-		EventImpacts:        eventImpacts,
-		ModuleScores:        moduleScores,
+		AnalysisVersion:      CurrentFundAnalysisVersion,
+		AnalysisType:         analysisType,
+		AnalysisBasis:        analysisBasis,
+		AsOfTime:             now,
+		TotalScore:           scoreDecimal(totalScore),
+		Confidence:           confidence,
+		RiskLevel:            riskLevel,
+		IncreasePercent:      scoreDecimal(increasePercent),
+		HoldPercent:          scoreDecimal(holdPercent),
+		DecreasePercent:      scoreDecimal(decreasePercent),
+		LatestHoldingPeriod:  latestPeriod,
+		Summary:              buildAnalysisSummary(increasePercent, holdPercent, decreasePercent, riskLevel),
+		Reasons:              reasons,
+		Warnings:             warnings,
+		EventImpacts:         eventImpacts,
+		ModuleScores:         moduleScores,
+		ConfidenceFactors:    confidenceFactors,
+		PrimaryEvidence:      primaryEvidence,
+		CounterEvidence:      counterEvidence,
+		ConfidenceDeductions: confidenceDeductions,
 	}
 }
 
@@ -748,12 +771,12 @@ func analyzeCurrentExposureEvent(
 	}
 
 	return &currentExposureEventInsight{
-		Name:     name,
-		Scope:    scope,
-		Count:    len(filtered),
-		Impact:   impact,
-		Strength: strength,
-		Summary:  summary,
+		Name:       name,
+		Scope:      scope,
+		Count:      len(filtered),
+		Impact:     impact,
+		Strength:   strength,
+		Summary:    summary,
 		Highlights: highlightTitles,
 	}
 }
@@ -1012,6 +1035,290 @@ func deriveAnalysisConfidence(coveragePercent float64, sectorConfidence string, 
 	}
 }
 
+func buildConfidenceFactors(
+	coveragePercent float64,
+	disclosureAgeDays float64,
+	latestPeriod string,
+	sectorSnapshot *domain.FundSectorSnapshot,
+	themeSnapshot *domain.FundThemeSnapshot,
+	currentEvents []domain.FundAnalysisEventImpact,
+	estimate *domain.FundEstimate,
+	timeSeries []domain.TimeSeriesPoint,
+	previousHoldings []domain.StockHolding,
+	previousHoldingPeriod string,
+) []domain.FundAnalysisConfidenceFactor {
+	factors := []domain.FundAnalysisConfidenceFactor{
+		{
+			Code:    "holding_coverage",
+			Name:    "持仓覆盖率",
+			Score:   scoreDecimal(clamp(coveragePercent, 0, 100)),
+			Level:   confidenceLevelFromScore(clamp(coveragePercent, 0, 100)),
+			Summary: "当前可解释持仓覆盖约 " + decimal.NewFromFloat(coveragePercent).Round(1).StringFixed(1) + "%，覆盖越高，重仓股与行业/主题判断越可靠。",
+		},
+		{
+			Code:    "disclosure_freshness",
+			Name:    "持仓新鲜度",
+			Score:   scoreDecimal(disclosureFreshnessScore(disclosureAgeDays, latestPeriod)),
+			Level:   confidenceLevelFromScore(disclosureFreshnessScore(disclosureAgeDays, latestPeriod)),
+			Summary: disclosureFreshnessSummary(disclosureAgeDays, latestPeriod),
+		},
+		{
+			Code:    "exposure_mapping",
+			Name:    "行业/主题映射",
+			Score:   scoreDecimal(exposureMappingScore(sectorSnapshot, themeSnapshot)),
+			Level:   confidenceLevelFromScore(exposureMappingScore(sectorSnapshot, themeSnapshot)),
+			Summary: exposureMappingSummary(sectorSnapshot, themeSnapshot),
+		},
+		{
+			Code:    "event_source_strength",
+			Name:    "事件来源强度",
+			Score:   scoreDecimal(eventSourceStrengthScore(currentEvents)),
+			Level:   confidenceLevelFromScore(eventSourceStrengthScore(currentEvents)),
+			Summary: eventSourceStrengthSummary(currentEvents),
+		},
+		{
+			Code:    "quote_availability",
+			Name:    "实时行情可用性",
+			Score:   scoreDecimal(quoteAvailabilityScore(estimate, timeSeries)),
+			Level:   confidenceLevelFromScore(quoteAvailabilityScore(estimate, timeSeries)),
+			Summary: quoteAvailabilitySummary(estimate, timeSeries),
+		},
+		{
+			Code:    "history_completeness",
+			Name:    "历史对比完整度",
+			Score:   scoreDecimal(historyCompletenessScore(previousHoldings, previousHoldingPeriod)),
+			Level:   confidenceLevelFromScore(historyCompletenessScore(previousHoldings, previousHoldingPeriod)),
+			Summary: historyCompletenessSummary(previousHoldings, previousHoldingPeriod),
+		},
+	}
+	return factors
+}
+
+func deriveAnalysisConfidenceFromFactors(factors []domain.FundAnalysisConfidenceFactor, analysisType string, coveragePercent float64) string {
+	if len(factors) == 0 {
+		return deriveAnalysisConfidence(coveragePercent, "low", "low", analysisType)
+	}
+	weights := map[string]float64{
+		"holding_coverage":      0.24,
+		"disclosure_freshness":  0.20,
+		"exposure_mapping":      0.20,
+		"event_source_strength": 0.16,
+		"quote_availability":    0.12,
+		"history_completeness":  0.08,
+	}
+	totalWeight := 0.0
+	totalScore := 0.0
+	for _, factor := range factors {
+		weight := weights[strings.TrimSpace(factor.Code)]
+		if weight <= 0 {
+			weight = 0.10
+		}
+		totalWeight += weight
+		totalScore += decimalToFloat(factor.Score) * weight
+	}
+	if totalWeight > 0 {
+		totalScore /= totalWeight
+	}
+	if analysisType == FundAnalysisTypeTrackedETF && coveragePercent >= 60 {
+		totalScore += 5
+	}
+	switch {
+	case totalScore >= 72:
+		return "high"
+	case totalScore >= 55:
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func confidenceLevelFromScore(score float64) string {
+	switch {
+	case score >= 72:
+		return "high"
+	case score >= 55:
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func buildConfidenceDeductions(factors []domain.FundAnalysisConfidenceFactor) []string {
+	deductions := make([]string, 0, 3)
+	for _, factor := range factors {
+		switch strings.TrimSpace(factor.Level) {
+		case "low":
+			deductions = append(deductions, factor.Name+"偏弱："+factor.Summary)
+		case "medium":
+			if len(deductions) < 2 {
+				deductions = append(deductions, factor.Name+"仍需观察："+factor.Summary)
+			}
+		}
+		if len(deductions) >= 3 {
+			break
+		}
+	}
+	return deductions
+}
+
+func disclosureFreshnessScore(disclosureAgeDays float64, latestPeriod string) float64 {
+	if strings.TrimSpace(latestPeriod) == "" {
+		return 25
+	}
+	switch {
+	case disclosureAgeDays <= 120:
+		return 86
+	case disclosureAgeDays <= 240:
+		return 62
+	default:
+		return 35
+	}
+}
+
+func disclosureFreshnessSummary(disclosureAgeDays float64, latestPeriod string) string {
+	if strings.TrimSpace(latestPeriod) == "" {
+		return "缺少可用持仓报告期，当前结构判断只能降级为弱参考。"
+	}
+	if disclosureAgeDays <= 120 {
+		return "最新持仓报告期为 " + latestPeriod + "，披露相对较新。"
+	}
+	if disclosureAgeDays <= 240 {
+		return "最新持仓报告期为 " + latestPeriod + "，仍可参考，但需警惕近一季调仓。"
+	}
+	return "最新持仓报告期为 " + latestPeriod + "，披露已经偏旧，结构判断可能落后。"
+}
+
+func exposureMappingScore(sectorSnapshot *domain.FundSectorSnapshot, themeSnapshot *domain.FundThemeSnapshot) float64 {
+	sectorScore := confidenceScore(sectorConfidence(sectorSnapshot))
+	themeScore := confidenceScore(themeConfidence(themeSnapshot))
+	if hasRecognizedTheme(themeSnapshot) {
+		themeScore += 8
+	}
+	if hasRecognizedSector(sectorSnapshot) {
+		sectorScore += 5
+	}
+	return clamp((sectorScore+themeScore)/2, 20, 95)
+}
+
+func exposureMappingSummary(sectorSnapshot *domain.FundSectorSnapshot, themeSnapshot *domain.FundThemeSnapshot) string {
+	parts := make([]string, 0, 2)
+	if hasRecognizedSector(sectorSnapshot) && strings.TrimSpace(sectorSnapshot.PrimarySectorName) != "" {
+		parts = append(parts, "行业："+strings.TrimSpace(sectorSnapshot.PrimarySectorName))
+	}
+	if hasRecognizedTheme(themeSnapshot) && strings.TrimSpace(themeSnapshot.PrimaryThemeName) != "" {
+		parts = append(parts, "主题："+strings.TrimSpace(themeSnapshot.PrimaryThemeName))
+	}
+	if len(parts) == 0 {
+		return "当前行业/主题映射偏弱，热点不能直接形成强结论。"
+	}
+	return "当前已识别" + strings.Join(parts, "，") + "，热点需先映射到这些暴露后再影响判断。"
+}
+
+func eventSourceStrengthScore(events []domain.FundAnalysisEventImpact) float64 {
+	if len(events) == 0 {
+		return 38
+	}
+	score := 35.0
+	for _, event := range events {
+		scope := strings.TrimSpace(event.TargetScope)
+		switch scope {
+		case "holding":
+			score += 14
+		case "exposure":
+			score += 10
+		case "macro":
+			score += 8
+		case "fund":
+			if isMaterialFundEvent(event) {
+				score += 6
+			} else {
+				score += 2
+			}
+		case "index":
+			score += 2
+		}
+		switch strings.TrimSpace(event.Strength) {
+		case "high":
+			score += 6
+		case "medium":
+			score += 3
+		}
+		if event.WeightHint != nil {
+			score += clamp(decimalToFloat(*event.WeightHint)/8, 0, 6)
+		}
+	}
+	return clamp(score, 25, 92)
+}
+
+func eventSourceStrengthSummary(events []domain.FundAnalysisEventImpact) string {
+	if len(events) == 0 {
+		return "当前缺少近期可引用事件，不能用热点包装强结论。"
+	}
+	holdingCount := 0
+	exposureCount := 0
+	fundCount := 0
+	for _, event := range events {
+		switch strings.TrimSpace(event.TargetScope) {
+		case "holding":
+			holdingCount++
+		case "exposure", "macro":
+			exposureCount++
+		case "fund":
+			if isMaterialFundEvent(event) {
+				fundCount++
+			}
+		}
+	}
+	return fmt.Sprintf("当前纳入 %d 条重仓股事件、%d 条行业/主题或宏观热点、%d 条重要基金产品事件。", holdingCount, exposureCount, fundCount)
+}
+
+func quoteAvailabilityScore(estimate *domain.FundEstimate, timeSeries []domain.TimeSeriesPoint) float64 {
+	if estimate == nil {
+		return 25
+	}
+	score := 58.0
+	if len(estimate.HoldingDetails) > 0 {
+		score += 16
+	}
+	if len(timeSeries) >= 2 {
+		score += 12
+	}
+	if strings.TrimSpace(estimate.DataSource) != "" {
+		score += 6
+	}
+	return clamp(score, 25, 90)
+}
+
+func quoteAvailabilitySummary(estimate *domain.FundEstimate, timeSeries []domain.TimeSeriesPoint) string {
+	if estimate == nil {
+		return "缺少实时估值快照，行情侧只能降级。"
+	}
+	if len(estimate.HoldingDetails) > 0 && len(timeSeries) >= 2 {
+		return "当前已有实时估值明细与分时序列，盘中驱动可解释性较好。"
+	}
+	if len(estimate.HoldingDetails) > 0 {
+		return "当前有实时估值明细，但分时序列不足。"
+	}
+	return "当前仅有基金级估值快照，重仓股实时归因较弱。"
+}
+
+func historyCompletenessScore(previousHoldings []domain.StockHolding, previousHoldingPeriod string) float64 {
+	if strings.TrimSpace(previousHoldingPeriod) == "" || len(previousHoldings) == 0 {
+		return 42
+	}
+	if len(previousHoldings) >= 8 {
+		return 82
+	}
+	return 64
+}
+
+func historyCompletenessSummary(previousHoldings []domain.StockHolding, previousHoldingPeriod string) string {
+	if strings.TrimSpace(previousHoldingPeriod) == "" || len(previousHoldings) == 0 {
+		return "缺少上一季可比持仓，季度变化只能作为弱辅助。"
+	}
+	return fmt.Sprintf("已读取 %s 的上一季持仓对比样本 %d 条，可辅助判断风格变化。", previousHoldingPeriod, len(previousHoldings))
+}
+
 func deriveRiskLevel(riskScore float64) string {
 	switch {
 	case riskScore >= 70:
@@ -1092,7 +1399,7 @@ func buildRiskSummary(intradayRange float64, concentrationWeight float64, riskLe
 func buildAllocationSummary(changePercent, allocationScore float64) string {
 	switch {
 	case allocationScore >= 65 && changePercent <= 1:
-		return "当前位置更适合分批观察或中等力度加仓"
+		return "当前位置更适合分批观察，结构性参与容错相对更高"
 	case allocationScore <= 42 && changePercent >= 1.8:
 		return "短线抬升较快，当前位置不宜追高"
 	default:
@@ -1139,14 +1446,19 @@ func currentHoldingEventAdjustment(events []domain.FundAnalysisEventImpact) floa
 		default:
 			delta = 0
 		}
-		if scope == "fund" {
-			delta *= 0.7
-		}
-		if scope == "macro" {
-			delta *= 0.9
-		}
-		if scope == "index" {
-			delta *= 0.8
+		switch scope {
+		case "holding":
+			delta *= 1.0
+		case "macro":
+			delta *= 0.65
+		case "fund":
+			if isMaterialFundEvent(event) {
+				delta *= 0.55
+			} else {
+				delta *= 0.22
+			}
+		case "index":
+			delta *= 0.25
 		}
 		switch strings.TrimSpace(event.Strength) {
 		case "high":
@@ -1156,9 +1468,31 @@ func currentHoldingEventAdjustment(events []domain.FundAnalysisEventImpact) floa
 		default:
 			delta *= 0.6
 		}
+		delta *= clamp(eventSignalWeight(event)/1.8, 0.65, 1.55)
 		adjustment += delta
 	}
 	return clamp(adjustment, -4, 4)
+}
+
+func isMaterialFundEvent(event domain.FundAnalysisEventImpact) bool {
+	if strings.TrimSpace(event.TargetScope) != "fund" {
+		return false
+	}
+	text := strings.TrimSpace(event.Title + " " + event.Summary)
+	if text == "" {
+		return false
+	}
+	materialKeywords := []string{
+		"基金经理", "经理变更", "变更基金经理", "清盘", "终止", "合同终止",
+		"限购", "暂停申购", "暂停大额申购", "恢复申购", "赎回", "巨额赎回",
+		"费率", "管理费", "托管费", "分红", "份额", "规模", "转型",
+	}
+	for _, keyword := range materialKeywords {
+		if strings.Contains(text, keyword) {
+			return true
+		}
+	}
+	return false
 }
 
 func currentExposureEventAdjustment(insight *currentExposureEventInsight) float64 {
@@ -1232,7 +1566,10 @@ func buildAnalysisReasons(trendScore, structureScore, heatScore, allocationScore
 			continue
 		}
 		if scope == "fund" {
-			reasons = append(reasons, "基金自身近期事件值得关注："+event.Title+"。")
+			if !isMaterialFundEvent(event) {
+				continue
+			}
+			reasons = append(reasons, "基金产品层事件提供辅助线索："+event.Title+"。")
 		} else if scope == "macro" {
 			reasons = append(reasons, "宏观/政策层面值得关注："+event.Title+"。")
 		} else {
@@ -1253,7 +1590,7 @@ func buildAnalysisReasons(trendScore, structureScore, heatScore, allocationScore
 		reasons = append(reasons, "盘中活跃度与正贡献广度尚可，热度模块对短线关注度给出正向判断。")
 	}
 	if allocationScore >= 60 {
-		reasons = append(reasons, "当前位置并未明显透支性价比，分批观察或加仓的容错更高。")
+		reasons = append(reasons, "当前位置并未明显透支性价比，分批观察的容错更高。")
 	}
 	if eventScore >= 60 && latestPeriod != "" {
 		reasons = append(reasons, "最新持仓披露相对较新，当前"+analysisBasis+"的解释稳定性更好。")
@@ -1281,7 +1618,10 @@ func buildAnalysisWarnings(riskScore float64, confidence string, eventScore floa
 			continue
 		}
 		if scope == "fund" {
-			warnings = append(warnings, "基金自身近期事件偏负向："+event.Title+"。")
+			if !isMaterialFundEvent(event) {
+				continue
+			}
+			warnings = append(warnings, "基金产品层重要事件偏负向："+event.Title+"。")
 		} else if scope == "macro" {
 			warnings = append(warnings, "宏观/政策层面需关注："+event.Title+"。")
 		} else {
@@ -1687,13 +2027,17 @@ func analysisEventPriority(event domain.FundAnalysisEventImpact) int {
 	score := 0
 	switch strings.TrimSpace(event.TargetScope) {
 	case "holding":
-		score += 50
+		score += 55
 	case "fund":
-		score += 42
+		if isMaterialFundEvent(event) {
+			score += 24
+		} else {
+			score += 14
+		}
 	case "exposure":
-		score += 34
+		score += 40
 	case "macro":
-		score += 26
+		score += 32
 	case "index":
 		score += 10
 	case "disclosure":
@@ -1916,15 +2260,203 @@ func decimalPointerFromFloat(value float64) *decimal.Decimal {
 
 func buildAnalysisSummary(increasePercent, holdPercent, decreasePercent float64, riskLevel string) string {
 	switch {
-	case increasePercent >= 55:
+	case increasePercent >= FundAnalysisIncreaseThreshold:
 		if riskLevel == "high" {
-			return "当前偏向加仓，但波动偏高，更适合小步分批而不是激进追涨。"
+			return "当前结构偏积极，但波动偏高，更适合小步观察而不是激进追涨。"
 		}
-		return "当前偏向加仓，趋势与结构端更占优，但仍建议分批而不是一次性重仓。"
-	case decreasePercent >= 60:
-		return "当前偏向减仓或控制仓位，先等风险与趋势信号重新收敛更稳妥。"
+		return "当前结构偏积极，趋势与持仓主线相对占优，但仍应结合证据强度分批观察。"
+	case decreasePercent >= FundAnalysisDecreaseThreshold:
+		return "当前风险暴露偏高，先等风险、趋势和事件信号重新收敛更稳妥。"
 	default:
-		return "当前更适合持有观察，等待趋势、事件和风险信号进一步拉开差距。"
+		return "当前更适合观察，等待趋势、事件和风险信号进一步拉开差距。"
+	}
+}
+
+func buildPrimaryEvidenceItems(
+	dominant string,
+	events []domain.FundAnalysisEventImpact,
+	trendScore float64,
+	structureScore float64,
+	heatScore float64,
+	sectorSnapshot *domain.FundSectorSnapshot,
+	themeSnapshot *domain.FundThemeSnapshot,
+) []domain.FundAnalysisEvidenceItem {
+	items := make([]domain.FundAnalysisEvidenceItem, 0, 3)
+	for _, event := range events {
+		if !eventSupportsDominant(event, dominant) {
+			continue
+		}
+		if strings.TrimSpace(event.TargetScope) == "methodology" {
+			continue
+		}
+		items = append(items, evidenceFromEvent(event, "event"))
+		if len(items) >= 3 {
+			return items
+		}
+	}
+	if structureScore >= 58 {
+		title := "持仓主线可识别"
+		summary := exposureMappingSummary(sectorSnapshot, themeSnapshot)
+		items = append(items, domain.FundAnalysisEvidenceItem{
+			Code:         "evidence_exposure_mapping",
+			Title:        title,
+			Summary:      summary,
+			EvidenceType: "exposure",
+			SourceScope:  "exposure",
+			Impact:       "positive",
+			Strength:     confidenceLevelFromScore(structureScore),
+			Horizon:      "current",
+		})
+	}
+	if len(items) < 3 && (trendScore >= 62 || trendScore <= 38) {
+		impact := "positive"
+		title := "盘中趋势提供支撑"
+		summary := "趋势模块得分 " + decimal.NewFromFloat(trendScore).Round(1).StringFixed(1) + "，说明实时行情对当前观察结论有直接贡献。"
+		if trendScore <= 38 {
+			impact = "negative"
+			title = "盘中趋势形成压力"
+			summary = "趋势模块得分 " + decimal.NewFromFloat(trendScore).Round(1).StringFixed(1) + "，说明实时行情对谨慎判断有直接贡献。"
+		}
+		items = append(items, domain.FundAnalysisEvidenceItem{
+			Code:         "evidence_intraday_trend",
+			Title:        title,
+			Summary:      summary,
+			EvidenceType: "market",
+			SourceScope:  "holding",
+			Impact:       impact,
+			Strength:     confidenceLevelFromScore(math.Abs(trendScore-50)*2 + 45),
+			Horizon:      "intraday",
+		})
+	}
+	if len(items) < 3 && heatScore >= 60 {
+		items = append(items, domain.FundAnalysisEvidenceItem{
+			Code:         "evidence_heat",
+			Title:        "持仓活跃度可观察",
+			Summary:      "热度模块得分 " + decimal.NewFromFloat(heatScore).Round(1).StringFixed(1) + "，说明重仓股行情广度或波动活跃度已进入观察范围。",
+			EvidenceType: "market",
+			SourceScope:  "holding",
+			Impact:       "positive",
+			Strength:     confidenceLevelFromScore(heatScore),
+			Horizon:      "intraday",
+		})
+	}
+	return items[:minAnalysisInt(len(items), 3)]
+}
+
+func buildCounterEvidenceItems(
+	dominant string,
+	events []domain.FundAnalysisEventImpact,
+	factors []domain.FundAnalysisConfidenceFactor,
+	riskScore float64,
+	concentrationWeight float64,
+	disclosureAgeDays float64,
+) []domain.FundAnalysisEvidenceItem {
+	items := make([]domain.FundAnalysisEvidenceItem, 0, 3)
+	for _, event := range events {
+		if !eventCountersDominant(event, dominant) {
+			continue
+		}
+		if strings.TrimSpace(event.TargetScope) == "methodology" {
+			continue
+		}
+		items = append(items, evidenceFromEvent(event, "counter_event"))
+		if len(items) >= 3 {
+			return items
+		}
+	}
+	for _, factor := range factors {
+		if strings.TrimSpace(factor.Level) == "high" {
+			continue
+		}
+		items = append(items, domain.FundAnalysisEvidenceItem{
+			Code:         "counter_" + strings.TrimSpace(factor.Code),
+			Title:        factor.Name + "限制结论强度",
+			Summary:      factor.Summary,
+			EvidenceType: "confidence",
+			SourceScope:  "methodology",
+			Impact:       "negative",
+			Strength:     factor.Level,
+			Horizon:      "current",
+		})
+		if len(items) >= 3 {
+			return items
+		}
+	}
+	if riskScore < 50 && len(items) < 3 {
+		items = append(items, domain.FundAnalysisEvidenceItem{
+			Code:         "counter_risk_score",
+			Title:        "风险模块压制结论",
+			Summary:      "风险模块得分 " + decimal.NewFromFloat(riskScore).Round(1).StringFixed(1) + "，说明波动或集中度仍在压制当前结论。",
+			EvidenceType: "risk",
+			SourceScope:  "exposure",
+			Impact:       "negative",
+			Strength:     confidenceLevelFromScore(100 - riskScore),
+			Horizon:      "current",
+		})
+	}
+	if concentrationWeight >= 45 && len(items) < 3 {
+		items = append(items, domain.FundAnalysisEvidenceItem{
+			Code:         "counter_concentration",
+			Title:        "主线暴露集中",
+			Summary:      "当前主暴露约 " + decimal.NewFromFloat(concentrationWeight).Round(1).StringFixed(1) + "%，单一行业/主题波动会放大净值弹性。",
+			EvidenceType: "exposure",
+			SourceScope:  "exposure",
+			Impact:       "negative",
+			Strength:     "medium",
+			Horizon:      "medium_term",
+		})
+	}
+	if disclosureAgeDays > 240 && len(items) < 3 {
+		items = append(items, domain.FundAnalysisEvidenceItem{
+			Code:         "counter_stale_disclosure",
+			Title:        "持仓披露偏旧",
+			Summary:      "持仓披露已经偏旧，当前结构与热点映射可能落后于最新调仓。",
+			EvidenceType: "disclosure",
+			SourceScope:  "disclosure",
+			Impact:       "negative",
+			Strength:     "high",
+			Horizon:      "quarterly",
+		})
+	}
+	return items[:minAnalysisInt(len(items), 3)]
+}
+
+func eventSupportsDominant(event domain.FundAnalysisEventImpact, dominant string) bool {
+	impact := strings.TrimSpace(event.Impact)
+	switch dominant {
+	case "increase":
+		return impact == "positive"
+	case "decrease":
+		return impact == "negative"
+	default:
+		return impact == "neutral" || strings.TrimSpace(event.Strength) == "high"
+	}
+}
+
+func eventCountersDominant(event domain.FundAnalysisEventImpact, dominant string) bool {
+	impact := strings.TrimSpace(event.Impact)
+	switch dominant {
+	case "increase":
+		return impact == "negative"
+	case "decrease":
+		return impact == "positive"
+	default:
+		return impact == "negative"
+	}
+}
+
+func evidenceFromEvent(event domain.FundAnalysisEventImpact, evidenceType string) domain.FundAnalysisEvidenceItem {
+	return domain.FundAnalysisEvidenceItem{
+		Code:           strings.TrimSpace(event.Code),
+		Title:          strings.TrimSpace(event.Title),
+		Summary:        strings.TrimSpace(event.Summary),
+		EvidenceType:   evidenceType,
+		SourceScope:    strings.TrimSpace(event.TargetScope),
+		Impact:         strings.TrimSpace(event.Impact),
+		Strength:       strings.TrimSpace(event.Strength),
+		Horizon:        strings.TrimSpace(event.Horizon),
+		RelatedSymbols: event.RelatedSymbols,
+		WeightHint:     event.WeightHint,
 	}
 }
 

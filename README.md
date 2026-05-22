@@ -8,6 +8,37 @@
 
 当前文档对应版本：`2026.4.27`
 
+## 开发中更新摘要
+
+- 量化分析 P2a 可信度增强第一轮已落地：
+  - `FundAnalysis` 现会返回可信度拆解、主证据、反方证据和可信度扣分原因
+  - 可信度拆分为持仓覆盖、持仓新鲜度、行业/主题映射、事件来源强度、实时行情可用性和历史对比完整度
+  - 分析权重进一步强调“当前持仓股票 + 行业/主题 + 近期有来源事件”，基金自身普通公告默认只作为辅助低权重信号
+  - 行业/主题热点必须先匹配到当前暴露并达到最低权重，不能只因基金名称或宽泛关键词给强判断
+  - 核心样本审计命令会输出主证据、反方证据、数据缺口、可信度扣分和直觉复核结论
+  - 前端结论文案弱化投资建议口吻，使用“结构偏积极 / 适合观察 / 风险偏高”等观察型表达
+- 量化分析 P2b AI 解释层边界第一轮已落地（当前不接真实 LLM SDK）：
+  - 新增 `AIExplanationService` / provider 边界，provider 只能读取规则型 `FundAnalysis` 与可引用证据包
+  - `FundAnalysis.ai_explanation` 只包含解释、归因、风险提示、引用和降级说明，不包含任何评分写回字段
+  - 未配置 AI、AI 超时或 provider 失败时，会降级为规则证据摘要，不阻塞量化评分和事件展示
+  - provider 输出必须带有效 `citation_codes`，无来源段落会被移除；无证据包时解释层返回“证据不足 / 无法确认”
+  - 前端量化卡片已展示 AI 解释层状态、边界声明、引用来源和降级限制；审计命令也会输出 AI 解释层字段
+- 量化分析 P2c 缓存收口第一轮已落地：
+  - 解释层新增 `cache_key / cache_status / expires_at / invalidation_basis`，可按证据签名、交易日、持仓期和分析版本判断是否复用
+  - `/fund/:id/analysis` 现优先读取当日 fresh `fund_analysis_snapshots`，batch/rankings 也会过滤旧版本或过期快照
+  - 前端 dashboard 请求已使用 `include_analysis=false`，避免详情/首页在已有独立 analysis 请求时重复触发分析构建
+  - 当前事件缓存继续遵守“不引入 Redis”：持仓公告/基金公告用进程短 TTL，历史持仓用 PostgreSQL 快照，宏观/政策/指数为本地轻量规则生成
+- 量化规则结论已收口到 `baseline_v3`：
+  - 只有 `increase >= 55` 才展示“结构偏积极”，只有 `decrease >= 60` 才展示“风险偏高”，其余情况统一为“适合观察”
+  - 审计命令会对低可信度因子输出人工复核提示，避免 QDII / 低事件覆盖样本被误读成强结论
+- 量化分析前端信息架构已重构：
+  - 基金详情页的量化模块改为轻量摘要，只展示总分、观察方向、建议分布、1-2 条核心依据/限制和完整看板入口
+  - 完整规则、证据包、AI 边界、事件链和可信度拆解集中到 `/analysis/[fundId]`
+  - 量化详情页新增总分环形图、建议分布堆叠条、六维模块雷达/进度条、主/反证据卡片和事件信号链，减少长文本堆叠
+- 持仓页体验增强：
+  - 新增“只看待补齐”过滤器，可在聚合视图和分笔视图中快速定位未确认份额、官方净值未同步或真实口径未就绪的持仓
+  - 新增排序与筛选面板：支持仓位 / 金额、盈亏、涨跌幅、分笔数、最近录入、量化信号排序，以及盈利/亏损、就绪状态、单笔/多笔筛选；盈亏/涨跌幅跟随“官方口径 / 盘中预估”切换，缺失值自动后置
+
 ## 2026.4.27 更新摘要
 
 - 基金量化分析基础版量化看板已可用：
@@ -376,6 +407,7 @@ storage:
 
 quote:
   default_source: sina
+  overseas_source: tencent
 
 database:
   host: 127.0.0.1
@@ -414,6 +446,7 @@ payment:
 - 推荐通过 `fundlive.yaml` 启动项目，不要在命令行临时拼接环境变量
 - 环境变量仍然可以覆盖配置文件
 - `quote.default_source` 用于指定未登录用户和未设置偏好的用户默认使用的行情源，当前支持 `sina` / `tencent`
+- `quote.overseas_source` 用于指定 QDII / 海外持仓估值的固定行情源，当前支持 `tencent` / `sina`，默认 `tencent`；也可用环境变量 `QUOTE_OVERSEAS_SOURCE` 临时覆盖
 - 登录用户可通过前端账户菜单切换自己的行情源偏好，后端会将偏好持久化到用户账号并在后续请求中优先生效
 - 如果前端需要以独立域名或端口直接访问后端，请在 `server.allowed_origins` 或环境变量 `CORS_ALLOWED_ORIGINS` 中显式配置允许的来源
 - `database.log_level` 支持 `silent/error/warn/info`，建议日常运行使用 `warn`
@@ -568,6 +601,8 @@ echo 'NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.
 
 ### QDII / 海外基金
 - 持仓解析器现已支持美股 / 海外 ticker（如 `NVDA`、`AAPL`、`GOOG`）
+- 海外持仓实时估值使用独立固定行情源，不跟随用户级国内行情偏好切换；可通过 `quote.overseas_source` / `QUOTE_OVERSEAS_SOURCE` 在 `tencent` 和 `sina` 之间切换，默认保持 `tencent`
+- 正式海外数据源选型见 [`docs/overseas-data-source-selection.md`](docs/overseas-data-source-selection.md)；当前暂不接 VIP / 付费官方 API
 - 对已拿到海外持仓、但当前仍无稳定海外实时行情 provider 的基金，首页估值会返回降级结果：
   - 持仓详情可展示
   - 最新已知净值可展示

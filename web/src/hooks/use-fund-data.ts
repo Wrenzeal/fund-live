@@ -280,6 +280,59 @@ export interface FundAnalysisEventImpact {
     weight_hint?: string
 }
 
+export interface FundAnalysisConfidenceFactor {
+    code: string
+    name: string
+    level: 'high' | 'medium' | 'low'
+    score: string
+    summary: string
+}
+
+export interface FundAnalysisEvidenceItem {
+    code: string
+    title: string
+    summary: string
+    evidence_type: string
+    source_scope?: 'disclosure' | 'methodology' | 'holding' | 'exposure' | 'fund' | 'macro' | 'index'
+    impact?: 'positive' | 'neutral' | 'negative'
+    strength?: 'low' | 'medium' | 'high'
+    horizon?: 'intraday' | 'current' | 'quarterly' | 'medium_term'
+    related_symbols?: string[]
+    weight_hint?: string
+}
+
+export interface FundAnalysisAIExplanationCitation {
+    code: string
+    source_type: string
+    source_scope?: 'disclosure' | 'methodology' | 'holding' | 'exposure' | 'fund' | 'macro' | 'index'
+    title: string
+    summary?: string
+}
+
+export interface FundAnalysisAIExplanationSection {
+    title: string
+    summary: string
+    citation_codes?: string[]
+}
+
+export interface FundAnalysisAIExplanation {
+    status: 'ready' | 'disabled' | 'fallback' | 'rejected' | 'failed'
+    provider: string
+    model?: string
+    generated_at?: string
+    cache_key?: string
+    cache_status?: 'generated' | 'snapshot_hit' | 'not_cacheable'
+    expires_at?: string
+    invalidation_basis?: string[]
+    rule_recommendation?: 'increase' | 'hold' | 'decrease'
+    boundary_notice: string
+    summary: string
+    attribution?: FundAnalysisAIExplanationSection[]
+    risk_notes?: FundAnalysisAIExplanationSection[]
+    citations?: FundAnalysisAIExplanationCitation[]
+    limitations?: string[]
+}
+
 export interface FundAnalysis {
     analysis_version: string
     analysis_type: 'direct_holdings' | 'tracked_etf' | 'qdii_holdings'
@@ -297,6 +350,11 @@ export interface FundAnalysis {
     warnings: string[]
     event_impacts: FundAnalysisEventImpact[]
     module_scores: FundAnalysisModuleScore[]
+    confidence_factors?: FundAnalysisConfidenceFactor[]
+    primary_evidence?: FundAnalysisEvidenceItem[]
+    counter_evidence?: FundAnalysisEvidenceItem[]
+    confidence_deductions?: string[]
+    ai_explanation?: FundAnalysisAIExplanation
 }
 
 // 默认 SWR 配置
@@ -595,7 +653,7 @@ function useFundDashboardPayload(fundId: string | null, options?: SWRConfigurati
         ...restOptions
     } = options ?? {}
 
-    const swrKey = fundId ? `${API_BASE_URL}/api/v1/fund/${fundId}/dashboard` : null
+    const swrKey = fundId ? `${API_BASE_URL}/api/v1/fund/${fundId}/dashboard?include_analysis=false` : null
 
     const { data, error, isLoading, isValidating, mutate } = useSWR<{ data: FundDashboardPayload; meta?: ResponseMeta }>(
         swrKey,

@@ -22,7 +22,13 @@ type macroPolicySeed struct {
 type macroMatchContext struct {
 	matchedPrimaryTheme  string
 	matchedPrimarySector string
+	matchedName          string
+	matchedScope         string
+	matchedWeight        float64
+	matchedPrimary       bool
 }
+
+const macroPolicyMinimumExposureWeight = 8.0
 
 var macroPolicySeeds = []macroPolicySeed{
 	{
@@ -98,25 +104,19 @@ func LoadMacroPolicyEvents(now time.Time, sectorSnapshot *domain.FundSectorSnaps
 		now = time.Now()
 	}
 
-	activeSectorCodes := make(map[string]struct{})
-	activeThemeCodes := make(map[string]struct{})
+	activeSectorCodes := make(map[string]float64)
+	activeThemeCodes := make(map[string]float64)
 	if sectorSnapshot != nil {
-		if code := strings.TrimSpace(sectorSnapshot.PrimarySectorCode); code != "" {
-			activeSectorCodes[normalizeMacroCode(code)] = struct{}{}
-		}
 		for _, item := range sectorSnapshot.Breakdown {
 			if code := strings.TrimSpace(item.SectorCode); code != "" {
-				activeSectorCodes[normalizeMacroCode(code)] = struct{}{}
+				activeSectorCodes[normalizeMacroCode(code)] = decimalToFloat(item.WeightPercent)
 			}
 		}
 	}
 	if themeSnapshot != nil {
-		if code := strings.TrimSpace(themeSnapshot.PrimaryThemeCode); code != "" {
-			activeThemeCodes[normalizeMacroCode(code)] = struct{}{}
-		}
 		for _, item := range themeSnapshot.Breakdown {
 			if code := strings.TrimSpace(item.ThemeCode); code != "" {
-				activeThemeCodes[normalizeMacroCode(code)] = struct{}{}
+				activeThemeCodes[normalizeMacroCode(code)] = decimalToFloat(item.WeightPercent)
 			}
 		}
 	}
@@ -136,8 +136,9 @@ func LoadMacroPolicyEvents(now time.Time, sectorSnapshot *domain.FundSectorSnaps
 			Impact:      item.Impact,
 			Summary:     contextualizeMacroSummary(item, match),
 			TargetScope: "macro",
-			Strength:    item.Strength,
+			Strength:    macroEventStrength(item.Strength, match.matchedWeight),
 			Horizon:     "current",
+			WeightHint:  decimalPointerFromFloat(match.matchedWeight),
 		})
 	}
 	return results
@@ -159,12 +160,11 @@ func macroPolicySeedActive(item macroPolicySeed, now time.Time) bool {
 
 func matchMacroSeed(
 	item macroPolicySeed,
-	sectorCodes map[string]struct{},
-	themeCodes map[string]struct{},
+	sectorCodes map[string]float64,
+	themeCodes map[string]float64,
 	sectorSnapshot *domain.FundSectorSnapshot,
 	themeSnapshot *domain.FundThemeSnapshot,
 ) *macroMatchContext {
-	context := &macroMatchContext{}
 	primaryThemeCode := ""
 	primarySectorCode := ""
 	if themeSnapshot != nil {
@@ -175,8 +175,14 @@ func matchMacroSeed(
 	}
 	for _, code := range item.ThemeCodes {
 		normalized := normalizeMacroCode(strings.TrimSpace(code))
-		if _, ok := themeCodes[normalized]; ok {
-			if normalized == primaryThemeCode && themeSnapshot != nil {
+		if weight, ok := themeCodes[normalized]; ok && weight >= macroPolicyMinimumExposureWeight {
+			context := &macroMatchContext{
+				matchedName:    macroThemeName(themeSnapshot, normalized),
+				matchedScope:   "theme",
+				matchedWeight:  weight,
+				matchedPrimary: normalized == primaryThemeCode,
+			}
+			if context.matchedPrimary && themeSnapshot != nil {
 				context.matchedPrimaryTheme = strings.TrimSpace(themeSnapshot.PrimaryThemeName)
 			}
 			return context
@@ -184,8 +190,14 @@ func matchMacroSeed(
 	}
 	for _, code := range item.SectorCodes {
 		normalized := normalizeMacroCode(strings.TrimSpace(code))
-		if _, ok := sectorCodes[normalized]; ok {
-			if normalized == primarySectorCode && sectorSnapshot != nil {
+		if weight, ok := sectorCodes[normalized]; ok && weight >= macroPolicyMinimumExposureWeight {
+			context := &macroMatchContext{
+				matchedName:    macroSectorName(sectorSnapshot, normalized),
+				matchedScope:   "sector",
+				matchedWeight:  weight,
+				matchedPrimary: normalized == primarySectorCode,
+			}
+			if context.matchedPrimary && sectorSnapshot != nil {
 				context.matchedPrimarySector = strings.TrimSpace(sectorSnapshot.PrimarySectorName)
 			}
 			return context
@@ -199,12 +211,15 @@ func contextualizeMacroSummary(item macroPolicySeed, match *macroMatchContext) s
 		return item.Summary
 	}
 	if match.matchedPrimaryTheme != "" {
-		return item.Summary + " 当前主主题为" + match.matchedPrimaryTheme + "，这类政策/产业信号与基金当前主线贴合度更高。"
+		return item.Summary + " 当前主主题为" + match.matchedPrimaryTheme + "，匹配暴露约 " + macroWeightText(match.matchedWeight) + "，这类政策/产业信号与基金当前主线贴合度更高。"
 	}
 	if match.matchedPrimarySector != "" {
-		return item.Summary + " 当前主行业为" + match.matchedPrimarySector + "，这类政策/产业信号对组合解释更直接。"
+		return item.Summary + " 当前主行业为" + match.matchedPrimarySector + "，匹配暴露约 " + macroWeightText(match.matchedWeight) + "，这类政策/产业信号对组合解释更直接。"
 	}
-	return item.Summary
+	if match.matchedName != "" {
+		return item.Summary + " 当前组合中可映射到" + match.matchedName + "，匹配暴露约 " + macroWeightText(match.matchedWeight) + "；该热点仅按实际暴露权重参与解释。"
+	}
+	return item.Summary + " 当前组合中存在可映射暴露，匹配暴露约 " + macroWeightText(match.matchedWeight) + "；该热点仅按实际暴露权重参与解释。"
 }
 
 func normalizeMacroCode(code string) string {
@@ -215,4 +230,49 @@ func normalizeMacroCode(code string) string {
 	default:
 		return code
 	}
+}
+
+func macroEventStrength(seedStrength string, matchedWeight float64) string {
+	switch {
+	case matchedWeight >= 35:
+		return "high"
+	case matchedWeight < 15:
+		return "low"
+	default:
+		return strings.TrimSpace(seedStrength)
+	}
+}
+
+func macroThemeName(snapshot *domain.FundThemeSnapshot, normalizedCode string) string {
+	if snapshot == nil {
+		return ""
+	}
+	if normalizeMacroCode(snapshot.PrimaryThemeCode) == normalizedCode {
+		return strings.TrimSpace(snapshot.PrimaryThemeName)
+	}
+	for _, item := range snapshot.Breakdown {
+		if normalizeMacroCode(item.ThemeCode) == normalizedCode {
+			return strings.TrimSpace(item.ThemeName)
+		}
+	}
+	return ""
+}
+
+func macroSectorName(snapshot *domain.FundSectorSnapshot, normalizedCode string) string {
+	if snapshot == nil {
+		return ""
+	}
+	if normalizeMacroCode(snapshot.PrimarySectorCode) == normalizedCode {
+		return strings.TrimSpace(snapshot.PrimarySectorName)
+	}
+	for _, item := range snapshot.Breakdown {
+		if normalizeMacroCode(item.SectorCode) == normalizedCode {
+			return strings.TrimSpace(item.SectorName)
+		}
+	}
+	return ""
+}
+
+func macroWeightText(weight float64) string {
+	return decimalPointerFromFloat(weight).Round(1).StringFixed(1) + "%"
 }

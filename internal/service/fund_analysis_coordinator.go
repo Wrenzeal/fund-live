@@ -30,11 +30,12 @@ type analysisSectorStore interface {
 }
 
 type FundAnalysisCoordinator struct {
-	valuationService domain.ValuationService
-	fundRepo         analysisFundRepository
-	holdingsResolver analysisHoldingsResolver
-	sectorStore      analysisSectorStore
-	analysisService  *FundAnalysisService
+	valuationService   domain.ValuationService
+	fundRepo           analysisFundRepository
+	holdingsResolver   analysisHoldingsResolver
+	sectorStore        analysisSectorStore
+	analysisService    *FundAnalysisService
+	explanationService *AIExplanationService
 }
 
 func NewFundAnalysisCoordinator(
@@ -44,11 +45,18 @@ func NewFundAnalysisCoordinator(
 	sectorStore analysisSectorStore,
 ) *FundAnalysisCoordinator {
 	return &FundAnalysisCoordinator{
-		valuationService: valuationService,
-		fundRepo:         fundRepo,
-		holdingsResolver: holdingsResolver,
-		sectorStore:      sectorStore,
-		analysisService:  NewFundAnalysisService(),
+		valuationService:   valuationService,
+		fundRepo:           fundRepo,
+		holdingsResolver:   holdingsResolver,
+		sectorStore:        sectorStore,
+		analysisService:    NewFundAnalysisService(),
+		explanationService: NewAIExplanationService(nil),
+	}
+}
+
+func (c *FundAnalysisCoordinator) SetAIExplanationService(service *AIExplanationService) {
+	if c != nil && service != nil {
+		c.explanationService = service
 	}
 }
 
@@ -94,7 +102,15 @@ func (c *FundAnalysisCoordinator) BuildForFund(ctx context.Context, fundID strin
 	input.SectorSnapshot = sectorSnapshot
 	input.ThemeSnapshot = themeSnapshot
 
-	return fund, c.analysisService.Build(input), nil
+	analysis := c.analysisService.Build(input)
+	return fund, AttachAIExplanation(ctx, c.explanationService, AIExplanationInput{
+		Fund:           fund,
+		Analysis:       analysis,
+		Holdings:       input.Holdings,
+		SectorSnapshot: sectorSnapshot,
+		ThemeSnapshot:  themeSnapshot,
+		Now:            now,
+	}), nil
 }
 
 func (c *FundAnalysisCoordinator) buildInput(
@@ -106,10 +122,10 @@ func (c *FundAnalysisCoordinator) buildInput(
 	now time.Time,
 ) (*domain.FundSectorSnapshot, *domain.FundThemeSnapshot, FundAnalysisInput, error) {
 	input := FundAnalysisInput{
-		Fund:      fund,
-		Estimate:  estimate,
+		Fund:       fund,
+		Estimate:   estimate,
 		TimeSeries: timeSeries,
-		Now:       now,
+		Now:        now,
 	}
 	if fund == nil {
 		return nil, nil, input, nil
@@ -241,7 +257,6 @@ func hasEffectiveAnalysisHoldings(holdings []domain.StockHolding) bool {
 	}
 	return false
 }
-
 
 func deriveTimeSeriesDisplayContextForAnalysis(points []domain.TimeSeriesPoint, marketStatus trading.MarketStatus) (string, bool) {
 	if len(points) == 0 {
