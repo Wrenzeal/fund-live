@@ -3,19 +3,31 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, BarChart4, CalendarDays, CheckCircle2, Clock3, FileStack, LoaderCircle, Plus, Wallet } from 'lucide-react'
+import { AlertTriangle, BarChart4, CheckCircle2, FileStack, LoaderCircle, Wallet } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
 import { HoldingFeedbackBanner, type HoldingFeedbackMessage } from '@/components/holding-feedback-banner'
+import { HoldingActivityTimeline } from '@/components/holding-activity-timeline'
+import { HoldingImportPanel } from '@/components/holding-import-panel'
+import { HoldingPortfolioHealthPanel } from '@/components/holding-portfolio-health-panel'
+import { HoldingReconciliationPanel } from '@/components/holding-reconciliation-panel'
+import { HoldingRecordComposer } from '@/components/holding-record-composer'
+import { HoldingReminderPanel } from '@/components/holding-reminder-panel'
 import { HoldingsViewControls } from '@/components/holdings-view-controls'
 import { HoldingsList } from '@/components/holdings-list'
 import { HoldingsSummaryMetrics } from '@/components/holdings-summary-metrics'
 import { VIPAnalysisEntry } from '@/components/vip-analysis-entry'
 import { useCurrentUser } from '@/hooks/use-auth'
-import { useFundAnalyses, useFundSearch } from '@/hooks/use-fund-data'
+import { useFundAnalyses, useFundExposureSnapshots, useFundSearch, useFundTopHoldings } from '@/hooks/use-fund-data'
 import { useMarketStatus, usePricingDatePreview } from '@/hooks/use-market-status'
-import { useHoldingEstimateMetrics, useUserPortfolio } from '@/hooks/use-user-portfolio'
+import {
+  useHoldingEstimateMetrics,
+  useUserPortfolio,
+  type HoldingTransactionStatusFilter,
+  type HoldingTransactionType,
+} from '@/hooks/use-user-portfolio'
 import { useVIPPreview } from '@/hooks/use-vip-preview'
 import { VIP_SAMPLE_REPORT_IDS } from '@/mocks/vip'
+import type { HoldingSourceFilter } from '@/lib/holding-sources'
 import { cn } from '@/lib/utils'
 import {
   aggregateChangeValue,
@@ -49,7 +61,43 @@ export default function HoldingsPage() {
   const router = useRouter()
   const { user, isLoading } = useCurrentUser()
   const marketStatus = useMarketStatus()
-  const { holdings, holdingAggregates, holdingSummary, seedDemoData, addHolding, removeHolding } = useUserPortfolio(user?.id ?? null)
+  const [transactionFundFilter, setTransactionFundFilter] = useState('all')
+  const [transactionTypeFilter, setTransactionTypeFilter] = useState<HoldingTransactionType | 'all'>('all')
+  const [transactionStatusFilter, setTransactionStatusFilter] = useState<HoldingTransactionStatusFilter>('all')
+  const [transactionSourceFilter, setTransactionSourceFilter] = useState<HoldingSourceFilter>('all')
+  const [transactionKeywordFilter, setTransactionKeywordFilter] = useState('')
+  const [transactionStartDateFilter, setTransactionStartDateFilter] = useState('')
+  const [transactionEndDateFilter, setTransactionEndDateFilter] = useState('')
+  const [transactionPage, setTransactionPage] = useState(1)
+  const transactionPageSize = 10
+  const transactionVisibleLimit = transactionPage * transactionPageSize
+  const {
+    holdings,
+    holdingAggregates,
+    holdingTransactions,
+    holdingSummary,
+    seedDemoData,
+    addHolding,
+    updateHolding,
+    sellHolding,
+    recordHoldingDividend,
+    adjustHoldingShares,
+    removeHolding,
+    voidHoldingTransaction,
+    previewHoldingTransactionRollback,
+    applyHoldingTransactionRollback,
+    addHoldingsBatch,
+  } = useUserPortfolio(user?.id ?? null, {
+    fundID: transactionFundFilter,
+    type: transactionTypeFilter,
+    status: transactionStatusFilter,
+    sourcePlatform: transactionSourceFilter,
+    keyword: transactionKeywordFilter,
+    startDate: transactionStartDateFilter,
+    endDate: transactionEndDateFilter,
+    offset: 0,
+    limit: transactionVisibleLimit,
+  })
   const [query, setQuery] = useState('')
   const [selectedFundID, setSelectedFundID] = useState('')
   const [selectedFundName, setSelectedFundName] = useState('')
@@ -73,6 +121,8 @@ export default function HoldingsPage() {
     [holdings]
   )
   const { analysesByFundID } = useFundAnalyses(fundIDsForAnalysis)
+  const { exposureSnapshotsByFundID } = useFundExposureSnapshots(fundIDsForAnalysis)
+  const { topHoldingsByFundID } = useFundTopHoldings(fundIDsForAnalysis)
   const { isAdmin: canAccessVIP, membership, remainingQuota, createTask, latestCompletedTask } = useVIPPreview()
   const normalizedQuery = query.trim()
 
@@ -102,6 +152,18 @@ export default function HoldingsPage() {
     setTradeTiming(resolveTradeTimingFromServerClock(marketStatus.currentTime))
     defaultsInitializedRef.current = true
   }, [marketStatus.currentDate, marketStatus.currentTime])
+
+  useEffect(() => {
+    setTransactionPage(1)
+  }, [
+    transactionFundFilter,
+    transactionTypeFilter,
+    transactionStatusFilter,
+    transactionSourceFilter,
+    transactionKeywordFilter,
+    transactionStartDateFilter,
+    transactionEndDateFilter,
+  ])
 
   const resolvedFundID = selectedFundID || autoMatchedFund?.id || ''
   const resolvedFundName = selectedFundName || autoMatchedFund?.name || ''
@@ -143,6 +205,22 @@ export default function HoldingsPage() {
       return groups
     }, {})
   }, [holdings])
+  const transactionFundOptions = useMemo(() => {
+    const options = holdingAggregates.map((aggregate) => ({
+      fund_id: aggregate.fund_id,
+      name: aggregate.fund?.name || aggregate.fund_id,
+    }))
+    return options.sort((left, right) => left.name.localeCompare(right.name, 'zh-Hans-CN'))
+  }, [holdingAggregates])
+  const recentHoldingAggregates = useMemo(() => {
+    return holdingAggregates.slice().sort((left, right) => (
+      compareOptionalNumbers(
+        aggregateLatestUpdatedAt(holdingsByFundID[left.fund_id] ?? []),
+        aggregateLatestUpdatedAt(holdingsByFundID[right.fund_id] ?? []),
+        'desc'
+      )
+    ))
+  }, [holdingAggregates, holdingsByFundID])
   const incompleteHoldingCount = useMemo(
     () => holdings.filter(isHoldingIncomplete).length,
     [holdings]
@@ -251,6 +329,7 @@ export default function HoldingsPage() {
   }, [analysesByFundID, estimatesByFundID, filteredHoldings, holdingsByFundID, metricScope, sortMode])
   const shouldUseOfficialSummary = metricScope === 'official' && holdingSummary.real_metrics_ready
   const activeDisplayCount = viewMode === 'aggregate' ? sortedHoldingAggregates.length : sortedHoldings.length
+  const canLoadMoreTransactions = holdingTransactions.length >= transactionVisibleLimit && transactionVisibleLimit < 50
   const hasActiveFilter = showIncompleteOnly || filterMode !== 'all'
   const activeFilterDescription = viewMode === 'aggregate'
     ? `当前筛选后显示 ${activeDisplayCount}/${holdingAggregates.length} 只基金。`
@@ -290,7 +369,9 @@ export default function HoldingsPage() {
       return
     }
 
-    if (!amount.trim()) {
+    const normalizedAmount = amount.replace(/,/g, '').trim()
+    const parsedAmount = Number.parseFloat(normalizedAmount)
+    if (!normalizedAmount || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       setFeedback({
         type: 'error',
         message: '请输入有效的持仓金额。',
@@ -309,7 +390,7 @@ export default function HoldingsPage() {
     setIsAddingHolding(true)
 
     try {
-      await addHolding(resolvedFundID, amount, tradeAtPayload, note)
+      await addHolding(resolvedFundID, normalizedAmount, tradeAtPayload, note)
       setSelectedFundID('')
       setSelectedFundName('')
       setQuery('')
@@ -419,7 +500,7 @@ export default function HoldingsPage() {
   }
 
   return (
-    <AccountAreaShell title="持仓明细" description="记录你的持仓本金、日期与备注，并在官方净值同步后查看每只基金和总仓的真实市值与今日盈亏。">
+    <AccountAreaShell title="我的持仓账本" description="用 30 秒记录一笔仓位，后续自动补齐确认净值、真实盈亏、量化风险与组合分析入口。">
       <div className="space-y-8">
         {feedback && <HoldingFeedbackBanner feedback={feedback} />}
         {vipFeedback && <HoldingFeedbackBanner feedback={vipFeedback} showIcon={false} />}
@@ -501,271 +582,174 @@ export default function HoldingsPage() {
               </div>
             )}
 
-            <HoldingsSummaryMetrics
-              holdingSummary={holdingSummary}
-              previewSummary={previewSummary}
-              metricScope={metricScope}
-              shouldUseOfficialSummary={shouldUseOfficialSummary}
-              hasOfficialSummaryMetrics={hasOfficialSummaryMetrics}
-              hasPreviewSummaryMetrics={hasPreviewSummaryMetrics}
-              officialReadyPrincipalText={officialReadyPrincipalText}
-              previewReadyPrincipalText={previewReadyPrincipalText}
+            <HoldingRecordComposer
+              holdingsCount={holdings.length}
               totalPrincipalText={totalPrincipalText}
-              officialSummaryCoverage={officialSummaryCoverage}
+              query={query}
+              results={results}
+              recentAggregates={recentHoldingAggregates}
+              resolvedFundID={resolvedFundID}
+              resolvedFundName={resolvedFundName}
+              amount={amount}
+              note={note}
+              tradeDate={tradeDate}
+              tradeTiming={tradeTiming}
+              tradeDateLabel={tradeDateLabel}
+              tradeTimingLabel={tradeTimingLabel}
+              todayTradeDate={todayTradeDate}
+              previousTradeDate={previousTradeDate}
+              nextTradeDate={nextTradeDate}
+              pricingDatePreview={pricingDatePreview}
+              pricingRuleLabel={pricingRuleLabel}
+              isAddingHolding={isAddingHolding}
+              onQueryChange={(value) => {
+                setQuery(value)
+                setSelectedFundID('')
+                setSelectedFundName('')
+              }}
+              onSelectFund={(fund) => {
+                setSelectedFundID(fund.id)
+                setSelectedFundName(fund.name)
+                setQuery(fund.name)
+                setFeedback(null)
+              }}
+              onSelectAggregate={(aggregate) => {
+                setSelectedFundID(aggregate.fund_id)
+                setSelectedFundName(aggregate.fund?.name || '')
+                setQuery(aggregate.fund?.name || aggregate.fund_id)
+                setFeedback(null)
+              }}
+              onAmountChange={setAmount}
+              onNoteChange={setNote}
+              onTradeDateChange={setTradeDate}
+              onTradeTimingChange={setTradeTiming}
+              onAddHolding={() => void handleAddHolding()}
             />
 
-            <div className="space-y-5">
-              <div className="grid gap-4 lg:grid-cols-3">
-                <div className="space-y-2">
-                  <div className="text-sm text-theme-secondary">选择基金</div>
-                  <input
-                    value={query}
-                    onChange={(event) => {
-                      setQuery(event.target.value)
-                      setSelectedFundID('')
-                      setSelectedFundName('')
-                    }}
-                    placeholder="搜索基金代码或名称"
-                    className="auth-input w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-theme-primary outline-none placeholder:text-theme-muted"
-                  />
-                  <div className="truncate text-xs text-theme-muted">
-                    {resolvedFundID ? `${resolvedFundName || resolvedFundID} · ${resolvedFundID}` : '先选择或唯一匹配一只基金'}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="text-sm text-theme-secondary">持仓金额</div>
-                  <input
-                    value={amount}
-                    onChange={(event) => setAmount(event.target.value)}
-                    placeholder="例如 30000"
-                    className="auth-input w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-theme-primary outline-none placeholder:text-theme-muted"
-                  />
-                  <div className="text-xs text-theme-muted">录入基金申购或持仓金额，单位为人民币。</div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="text-sm text-theme-secondary">备注</div>
-                  <input
-                    value={note}
-                    onChange={(event) => setNote(event.target.value)}
-                    placeholder="例如：长期底仓"
-                    className="auth-input w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-theme-primary outline-none placeholder:text-theme-muted"
-                  />
-                  <div className="text-xs text-theme-muted">可选，用于标记策略、来源或补仓背景。</div>
-                </div>
-              </div>
-
-              <div className="grid gap-5 lg:grid-cols-[0.96fr_1.04fr]">
-                <div className="space-y-4">
-                  <div className="rounded-[28px] border border-[var(--card-border)] bg-[var(--card-bg)]/76 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-medium text-theme-primary">基金搜索结果</div>
-                        <div className="mt-1 text-xs leading-5 text-theme-muted">
-                          选择后会自动填入右侧确认信息和新增卡片。
-                        </div>
-                      </div>
-                      <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] tracking-[0.18em] text-cyan-200">
-                        TOP 5
-                      </div>
-                    </div>
-
-                    <div className="mt-4 space-y-2">
-                      {results.slice(0, 5).map((fund) => (
-                        <button
-                          key={fund.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedFundID(fund.id)
-                            setSelectedFundName(fund.name)
-                            setQuery(fund.name)
-                            setFeedback(null)
-                          }}
-                          className="flex w-full items-center justify-between rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-left transition-colors hover:border-cyan-500/40"
-                        >
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-medium text-theme-primary">{fund.name}</div>
-                            <div className="mt-1 text-xs text-theme-muted">{fund.id}</div>
-                          </div>
-                          <Plus className="h-4 w-4 shrink-0 text-cyan-300" />
-                        </button>
-                      ))}
-
-                      {results.length === 0 && (
-                        <div className="rounded-2xl border border-dashed border-[var(--card-border)] px-4 py-8 text-center text-sm text-theme-secondary">
-                          输入基金代码或名称后，这里会展示可选结果。
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="rounded-[28px] border border-[var(--card-border)] bg-[var(--input-bg)]/70 p-5">
-                    <div className="text-sm text-theme-muted">准备新增</div>
-                    <div className="mt-2 text-lg font-bold text-theme-primary">{resolvedFundID || '未选择基金'}</div>
-                    <div className="mt-1 text-xs text-theme-muted">
-                      {resolvedFundName || (resolvedFundID ? '已解析到基金代码' : '请先选择或唯一匹配一只基金')}
-                    </div>
-                    <div className="mt-3 rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/70 px-4 py-3">
-                      <div className="text-xs text-theme-muted">将按以下净值日确认</div>
-                      <div className="mt-1 text-base font-semibold text-theme-primary">{pricingDatePreview || '--'}</div>
-                      <div className="mt-1 text-xs text-theme-secondary">{pricingRuleLabel}</div>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-theme-secondary">
-                      系统会一并记录交易日期和提交时段，自动计算确认净值日，并在同步到对应官方净值后补齐份额与真实口径。
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => void handleAddHolding()}
-                      disabled={isAddingHolding}
-                      className={cn(
-                        'group relative mt-5 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-4 py-3 text-sm font-medium text-white transition-all duration-200',
-                        'hover:-translate-y-0.5 hover:shadow-[0_18px_35px_rgba(14,165,233,0.28)]',
-                        'active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-85',
-                        isAddingHolding && 'holding-action-button'
-                      )}
-                      aria-busy={isAddingHolding}
-                    >
-                      <span className="holding-action-shine" />
-                      {isAddingHolding ? (
-                        <LoaderCircle className="relative z-10 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Wallet className="relative z-10 h-4 w-4 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110" />
-                      )}
-                      <span className="relative z-10">{isAddingHolding ? '提交中...' : '加入持仓'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="rounded-[30px] border border-[var(--card-border)] bg-[var(--card-bg)]/88 p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-medium text-theme-primary">交易时间</div>
-                      <div className="mt-1 text-xs leading-5 text-theme-muted">
-                        按北京时间 15:00 截止规则自动推导确认净值日。
-                      </div>
-                    </div>
-                    <div className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-[11px] font-medium tracking-[0.18em] text-cyan-200">
-                      T+1
-                    </div>
-                  </div>
-
-                  <div className="mt-5 grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
-                    <label className="holding-picker-shell relative overflow-hidden rounded-[24px] border border-[var(--input-border)] bg-[var(--input-bg)]/85 px-4 py-4 transition-all duration-200 hover:border-cyan-400/40 hover:bg-[var(--input-bg)] focus-within:border-cyan-400/60 focus-within:bg-[var(--input-bg)] focus-within:shadow-[0_14px_30px_rgba(34,211,238,0.12)]">
-                      <span className="holding-picker-shine" />
-                      <span className="relative z-10 flex items-center gap-2 text-xs font-medium text-theme-secondary">
-                        <CalendarDays className="h-3.5 w-3.5 text-cyan-300" />
-                        交易日期
-                      </span>
-                      <div className="relative z-10 mt-4 rounded-[20px] border border-[var(--input-border)] bg-[var(--card-bg)]/85 px-4 py-3">
-                        <input
-                          type="date"
-                          value={tradeDate}
-                          onChange={(event) => setTradeDate(event.target.value)}
-                          className="holding-datetime-input w-full text-sm font-medium text-theme-primary outline-none"
-                        />
-                      </div>
-                      <div className="relative z-10 mt-3 text-xs text-theme-secondary">
-                        当前选择：<span className="font-medium text-theme-primary">{tradeDateLabel}</span>
-                      </div>
-                    </label>
-
-                    <div className="rounded-[24px] border border-[var(--input-border)] bg-[var(--input-bg)]/78 px-4 py-4">
-                      <div className="flex items-center gap-2 text-xs font-medium text-theme-secondary">
-                        <Clock3 className="h-3.5 w-3.5 text-cyan-300" />
-                        提交时段
-                      </div>
-                      <div className="mt-4 grid gap-3">
-                        {([
-                          {
-                            id: 'before_close',
-                            title: '15:00 前',
-                            description: '按当日收盘净值确认，适合当日交易提交',
-                          },
-                          {
-                            id: 'after_close',
-                            title: '15:00 后',
-                            description: '顺延至下个交易日确认，适合收盘后录入',
-                          },
-                        ] as const).map((option) => (
-                          <button
-                            key={option.id}
-                            type="button"
-                            onClick={() => setTradeTiming(option.id)}
-                            className={cn(
-                              'rounded-[20px] border px-4 py-3 text-left transition-all duration-200',
-                              tradeTiming === option.id
-                                ? 'border-cyan-400/55 bg-cyan-400/14 text-cyan-100 shadow-[0_12px_26px_rgba(34,211,238,0.12)]'
-                                : 'border-[var(--input-border)] bg-[var(--card-bg)]/72 text-theme-secondary hover:border-cyan-400/35 hover:text-theme-primary'
-                            )}
-                            aria-pressed={tradeTiming === option.id}
-                          >
-                            <div className="text-sm font-semibold">{option.title}</div>
-                            <div className="mt-1 text-xs leading-5 text-theme-muted">{option.description}</div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {['今天', '上个交易日', '下个交易日'].map((shortcut) => (
-                      <button
-                        key={shortcut}
-                        type="button"
-                        onClick={() => {
-                          if (shortcut === '今天') {
-                            setTradeDate(todayTradeDate)
-                            return
-                          }
-
-                          if (shortcut === '上个交易日') {
-                            setTradeDate(previousTradeDate)
-                            return
-                          }
-
-                          setTradeDate(nextTradeDate)
-                        }}
-                        className={cn(
-                          'rounded-full border px-3 py-1.5 text-xs transition-all duration-200',
-                          (shortcut === '今天' && tradeDate === todayTradeDate) ||
-                          (shortcut === '上个交易日' && tradeDate === previousTradeDate) ||
-                          (shortcut === '下个交易日' && tradeDate === nextTradeDate)
-                            ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100 shadow-[0_10px_22px_rgba(34,211,238,0.12)]'
-                            : 'border-[var(--input-border)] bg-[var(--input-bg)]/70 text-theme-secondary hover:border-cyan-400/35 hover:text-theme-primary'
-                        )}
-                      >
-                        {shortcut}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="mt-4 rounded-[22px] border border-cyan-400/18 bg-cyan-400/8 px-4 py-4">
-                      <div className="text-[11px] font-medium tracking-[0.18em] text-cyan-200">净值确认提示</div>
-                      <div className="mt-3 flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                        <div className="text-sm font-medium text-theme-primary">{tradeDate ? `${tradeDate} · ${tradeTimingLabel}` : '请选择交易日期'}</div>
-                        <div className="mt-1 text-xs leading-5 text-theme-secondary">{pricingRuleLabel}</div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <div className="text-xs text-theme-muted">确认净值日</div>
-                        <div className="mt-1 text-lg font-semibold text-cyan-100">{pricingDatePreview || '--'}</div>
-                        </div>
-                      </div>
-                    </div>
-                </div>
-              </div>
-            </div>
+            {holdings.length > 0 && (
+              <>
+                <HoldingsSummaryMetrics
+                  holdingSummary={holdingSummary}
+                  previewSummary={previewSummary}
+                  metricScope={metricScope}
+                  shouldUseOfficialSummary={shouldUseOfficialSummary}
+                  hasOfficialSummaryMetrics={hasOfficialSummaryMetrics}
+                  hasPreviewSummaryMetrics={hasPreviewSummaryMetrics}
+                  officialReadyPrincipalText={officialReadyPrincipalText}
+                  previewReadyPrincipalText={previewReadyPrincipalText}
+                  totalPrincipalText={totalPrincipalText}
+                  officialSummaryCoverage={officialSummaryCoverage}
+                />
+                <HoldingReconciliationPanel holdings={holdings} transactions={holdingTransactions} />
+                <HoldingActivityTimeline
+                  transactions={holdingTransactions}
+                  onVoidTransaction={voidHoldingTransaction}
+                  fundOptions={transactionFundOptions}
+                  fundFilter={transactionFundFilter}
+                  typeFilter={transactionTypeFilter}
+                  statusFilter={transactionStatusFilter}
+                  sourceFilter={transactionSourceFilter}
+                  keywordFilter={transactionKeywordFilter}
+                  startDateFilter={transactionStartDateFilter}
+                  endDateFilter={transactionEndDateFilter}
+                  visibleLimit={transactionVisibleLimit}
+                  canLoadMore={canLoadMoreTransactions}
+                  onFundFilterChange={setTransactionFundFilter}
+                  onTypeFilterChange={setTransactionTypeFilter}
+                  onStatusFilterChange={setTransactionStatusFilter}
+                  onSourceFilterChange={setTransactionSourceFilter}
+                  onKeywordFilterChange={setTransactionKeywordFilter}
+                  onStartDateFilterChange={setTransactionStartDateFilter}
+                  onEndDateFilterChange={setTransactionEndDateFilter}
+                  onPreviewRollback={previewHoldingTransactionRollback}
+                  onApplyRollback={applyHoldingTransactionRollback}
+                  onLoadMore={() => setTransactionPage((page) => page + 1)}
+                  onClearFilters={() => {
+                    setTransactionFundFilter('all')
+                    setTransactionTypeFilter('all')
+                    setTransactionStatusFilter('all')
+                    setTransactionSourceFilter('all')
+                    setTransactionKeywordFilter('')
+                    setTransactionStartDateFilter('')
+                    setTransactionEndDateFilter('')
+                    setTransactionPage(1)
+                  }}
+                />
+                <HoldingPortfolioHealthPanel
+                  holdings={holdings}
+                  aggregates={holdingAggregates}
+                  analysesByFundID={analysesByFundID}
+                  aggregateMetrics={aggregateMetrics}
+                  metricScope={metricScope}
+                  exposureSnapshots={exposureSnapshotsByFundID}
+                  topHoldingsByFundID={topHoldingsByFundID}
+                />
+                <HoldingReminderPanel
+                  holdings={holdings}
+                  aggregates={holdingAggregates}
+                  analysesByFundID={analysesByFundID}
+                  aggregateMetrics={aggregateMetrics}
+                  metricScope={metricScope}
+                  exposureSnapshots={exposureSnapshotsByFundID}
+                />
+                <HoldingImportPanel
+                  recentAggregates={recentHoldingAggregates}
+                  onImportBatch={async (items) => {
+                    setFeedback(null)
+                    try {
+                      const result = await addHoldingsBatch(items)
+                      setFeedback({
+                        type: 'success',
+                        message: result
+                          ? `已导入 ${result.created_count}/${result.total} 行${result.failed_count ? `，${result.failed_count} 行需修正。` : '。'}`
+                          : '导入完成。',
+                      })
+                      return result
+                    } catch (error) {
+                      setFeedback({
+                        type: 'error',
+                        message: error instanceof Error ? error.message : '批量导入失败，请检查数据后重试。',
+                      })
+                      throw error
+                    }
+                  }}
+                  onSelectDraft={(draft) => {
+                    const matchedAggregate = holdingAggregates.find((aggregate) => aggregate.fund_id === draft.fundID)
+                    setSelectedFundID(draft.fundID)
+                    setSelectedFundName(matchedAggregate?.fund?.name || '')
+                    setQuery(matchedAggregate?.fund?.name || draft.fundID)
+                    setAmount(draft.amount)
+                    setNote(draft.note)
+                    setFeedback({
+                      type: 'success',
+                      message: '已把导入预览行带入上方记录入口，请核对交易日期和金额后再提交。',
+                    })
+                  }}
+                />
+              </>
+            )}
           </section>
         </div>
 
         {holdings.length === 0 ? (
           <div className="rounded-[32px] border border-dashed border-[var(--card-border)] p-10 text-center glass">
             <Wallet className="mx-auto h-10 w-10 text-theme-muted" />
-            <div className="mt-4 text-xl font-semibold text-theme-primary">还没有持仓记录</div>
+            <div className="mt-4 text-xl font-semibold text-theme-primary">记录第一笔后，这里会变成你的持仓驾驶舱</div>
             <p className="mt-2 text-sm leading-6 text-theme-secondary">
-              你可以在上方选择基金、录入持仓金额和日期；保存后会在官方净值同步后展示真实市值与盈亏。
+              不是为了填表，而是为了让系统帮你持续追踪真实盈亏、风险暴露和组合结构。
             </p>
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
+              {[
+                { title: '自动补齐', description: '确认净值、份额、真实市值会在数据同步后补上' },
+                { title: '看见风险', description: '每只基金自动关联量化建议、事件与风险标签' },
+                { title: '形成组合', description: '后续可以直接发起持仓组合分析，不用重新整理' },
+              ].map((item) => (
+                <div key={item.title} className="rounded-[22px] border border-[var(--card-border)] bg-[var(--input-bg)]/66 px-4 py-4 text-left">
+                  <div className="text-sm font-semibold text-theme-primary">{item.title}</div>
+                  <div className="mt-2 text-xs leading-5 text-theme-secondary">{item.description}</div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : hasActiveFilter && activeDisplayCount === 0 ? (
           <div className="rounded-[32px] border border-dashed border-[var(--card-border)] p-10 text-center glass">
@@ -801,6 +785,10 @@ export default function HoldingsPage() {
             analysesByFundID={analysesByFundID}
             showIncompleteOnly={showIncompleteOnly}
             onRemoveHolding={removeHolding}
+            onUpdateHolding={updateHolding}
+            onSellHolding={sellHolding}
+            onRecordHoldingDividend={recordHoldingDividend}
+            onAdjustHoldingShares={adjustHoldingShares}
           />
         )}
 

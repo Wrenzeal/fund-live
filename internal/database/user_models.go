@@ -103,22 +103,53 @@ func (UserHoldingOverride) TableName() string {
 
 // UserFundHolding is the GORM model for user fund-level positions.
 type UserFundHolding struct {
-	ID               string           `gorm:"primaryKey;type:varchar(40)" json:"id"`
-	UserID           string           `gorm:"type:varchar(40);index:idx_user_fund_holding_user_created,priority:1;not null" json:"user_id"`
-	FundID           string           `gorm:"type:varchar(10);index;not null" json:"fund_id"`
-	Amount           decimal.Decimal  `gorm:"type:decimal(18,2);not null" json:"amount"`
-	Shares           *decimal.Decimal `gorm:"type:decimal(18,6)" json:"shares,omitempty"`
-	ConfirmedNav     *decimal.Decimal `gorm:"type:decimal(18,6)" json:"confirmed_nav,omitempty"`
-	ConfirmedNavDate *time.Time       `gorm:"type:date" json:"confirmed_nav_date,omitempty"`
-	TradeAt          *time.Time       `gorm:"type:timestamptz;index" json:"trade_at,omitempty"`
-	AsOfDate         time.Time        `gorm:"type:date;not null" json:"as_of_date"`
-	Note             string           `gorm:"type:text" json:"note"`
-	CreatedAt        time.Time        `gorm:"autoCreateTime;index:idx_user_fund_holding_user_created,priority:2" json:"created_at"`
-	UpdatedAt        time.Time        `gorm:"autoUpdateTime" json:"updated_at"`
+	ID                 string           `gorm:"primaryKey;type:varchar(40)" json:"id"`
+	UserID             string           `gorm:"type:varchar(40);index:idx_user_fund_holding_user_created,priority:1;not null" json:"user_id"`
+	FundID             string           `gorm:"type:varchar(10);index;not null" json:"fund_id"`
+	Amount             decimal.Decimal  `gorm:"type:decimal(18,2);not null" json:"amount"`
+	Shares             *decimal.Decimal `gorm:"type:decimal(18,6)" json:"shares,omitempty"`
+	ConfirmedNav       *decimal.Decimal `gorm:"type:decimal(18,6)" json:"confirmed_nav,omitempty"`
+	ConfirmedNavDate   *time.Time       `gorm:"type:date" json:"confirmed_nav_date,omitempty"`
+	ManualConfirmation bool             `gorm:"not null;default:false" json:"manual_confirmation,omitempty"`
+	TradeAt            *time.Time       `gorm:"type:timestamptz;index" json:"trade_at,omitempty"`
+	AsOfDate           time.Time        `gorm:"type:date;not null" json:"as_of_date"`
+	Note               string           `gorm:"type:text" json:"note"`
+	SourcePlatform     string           `gorm:"type:varchar(32);index" json:"source_platform,omitempty"`
+	SourceLabel        string           `gorm:"type:varchar(64)" json:"source_label,omitempty"`
+	CreatedAt          time.Time        `gorm:"autoCreateTime;index:idx_user_fund_holding_user_created,priority:2" json:"created_at"`
+	UpdatedAt          time.Time        `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 func (UserFundHolding) TableName() string {
 	return "tb_user_fund_holding"
+}
+
+// UserFundHoldingTransaction is the GORM model for user-visible fund holding activity.
+type UserFundHoldingTransaction struct {
+	ID                 string           `gorm:"primaryKey;type:varchar(40)" json:"id"`
+	UserID             string           `gorm:"type:varchar(40);index:idx_user_fund_holding_tx_user_created,priority:1;not null" json:"user_id"`
+	HoldingID          string           `gorm:"type:varchar(40);index" json:"holding_id,omitempty"`
+	FundID             string           `gorm:"type:varchar(10);index;not null" json:"fund_id"`
+	Type               string           `gorm:"type:varchar(24);index;not null" json:"type"`
+	Amount             decimal.Decimal  `gorm:"type:decimal(18,2);not null" json:"amount"`
+	Shares             *decimal.Decimal `gorm:"type:decimal(18,6)" json:"shares,omitempty"`
+	ConfirmedNav       *decimal.Decimal `gorm:"type:decimal(18,6)" json:"confirmed_nav,omitempty"`
+	ConfirmedNavDate   *time.Time       `gorm:"type:date" json:"confirmed_nav_date,omitempty"`
+	ManualConfirmation bool             `gorm:"not null;default:false" json:"manual_confirmation,omitempty"`
+	TradeAt            *time.Time       `gorm:"type:timestamptz;index" json:"trade_at,omitempty"`
+	AsOfDate           *time.Time       `gorm:"type:date" json:"as_of_date,omitempty"`
+	Note               string           `gorm:"type:text" json:"note"`
+	SourcePlatform     string           `gorm:"type:varchar(32);index" json:"source_platform,omitempty"`
+	SourceLabel        string           `gorm:"type:varchar(64)" json:"source_label,omitempty"`
+	Metadata           string           `gorm:"type:text;not null;default:'{}'" json:"metadata,omitempty"`
+	Voided             bool             `gorm:"not null;default:false;index" json:"voided"`
+	VoidedAt           *time.Time       `gorm:"type:timestamptz" json:"voided_at,omitempty"`
+	VoidReason         string           `gorm:"type:text" json:"void_reason,omitempty"`
+	CreatedAt          time.Time        `gorm:"autoCreateTime;index:idx_user_fund_holding_tx_user_created,priority:2" json:"created_at"`
+}
+
+func (UserFundHoldingTransaction) TableName() string {
+	return "tb_user_fund_holding_transaction"
 }
 
 // UserModels returns all user-related models.
@@ -131,6 +162,7 @@ func UserModels() []interface{} {
 		&UserWatchlistFund{},
 		&UserHoldingOverride{},
 		&UserFundHolding{},
+		&UserFundHoldingTransaction{},
 		&UserMembership{},
 		&VIPUsageDaily{},
 		&AnalysisTask{},

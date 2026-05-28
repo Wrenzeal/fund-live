@@ -3,7 +3,9 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/RomaticDOG/fund/internal/domain"
 	"github.com/RomaticDOG/fund/internal/middleware"
@@ -56,11 +58,65 @@ type watchlistFundRequest struct {
 }
 
 type createFundHoldingRequest struct {
-	FundID   string `json:"fund_id"`
-	Amount   string `json:"amount"`
-	AsOfDate string `json:"as_of_date"`
-	TradeAt  string `json:"trade_at"`
-	Note     string `json:"note"`
+	FundID         string `json:"fund_id"`
+	Amount         string `json:"amount"`
+	AsOfDate       string `json:"as_of_date"`
+	TradeAt        string `json:"trade_at"`
+	Note           string `json:"note"`
+	SourcePlatform string `json:"source_platform"`
+	SourceLabel    string `json:"source_label"`
+}
+
+type createFundHoldingsBatchRequest struct {
+	Items []createFundHoldingRequest `json:"items"`
+}
+
+type updateFundHoldingRequest struct {
+	Amount           string `json:"amount"`
+	Shares           string `json:"shares"`
+	ConfirmedNav     string `json:"confirmed_nav"`
+	ConfirmedNavDate string `json:"confirmed_nav_date"`
+	TradeAt          string `json:"trade_at"`
+	Note             string `json:"note"`
+	SourcePlatform   string `json:"source_platform"`
+	SourceLabel      string `json:"source_label"`
+}
+
+type sellFundHoldingRequest struct {
+	Amount  string `json:"amount"`
+	Shares  string `json:"shares"`
+	TradeAt string `json:"trade_at"`
+	Note    string `json:"note"`
+	SellAll bool   `json:"sell_all"`
+}
+
+type dividendFundHoldingRequest struct {
+	Amount         string `json:"amount"`
+	Shares         string `json:"shares"`
+	TradeAt        string `json:"trade_at"`
+	Note           string `json:"note"`
+	Reinvest       bool   `json:"reinvest"`
+	SourcePlatform string `json:"source_platform"`
+	SourceLabel    string `json:"source_label"`
+}
+
+type adjustFundHoldingSharesRequest struct {
+	SharesDelta      string `json:"shares_delta"`
+	TargetShares     string `json:"target_shares"`
+	ConfirmedNav     string `json:"confirmed_nav"`
+	ConfirmedNavDate string `json:"confirmed_nav_date"`
+	TradeAt          string `json:"trade_at"`
+	Note             string `json:"note"`
+	SourcePlatform   string `json:"source_platform"`
+	SourceLabel      string `json:"source_label"`
+}
+
+type voidFundHoldingTransactionRequest struct {
+	Reason string `json:"reason"`
+}
+
+type applyFundHoldingTransactionRollbackRequest struct {
+	Reason string `json:"reason"`
 }
 
 type holdingOverrideRequest struct {
@@ -424,6 +480,255 @@ func (h *UserHandler) ListFundHoldings(c *gin.Context) {
 	c.JSON(http.StatusOK, APIResponse{Success: true, Data: holdings})
 }
 
+// ListFundHoldingTransactions returns the authenticated user's recent holding activity.
+func (h *UserHandler) ListFundHoldingTransactions(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"},
+		})
+		return
+	}
+
+	limit := 0
+	if rawLimit := strings.TrimSpace(c.Query("limit")); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil || parsedLimit < 0 {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Error:   &APIError{Code: "INVALID_LIMIT", Message: "Invalid transaction limit"},
+			})
+			return
+		}
+		limit = parsedLimit
+	}
+
+	offset := 0
+	if rawOffset := strings.TrimSpace(c.Query("offset")); rawOffset != "" {
+		parsedOffset, err := strconv.Atoi(rawOffset)
+		if err != nil || parsedOffset < 0 {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Error:   &APIError{Code: "INVALID_OFFSET", Message: "Invalid transaction offset"},
+			})
+			return
+		}
+		offset = parsedOffset
+	}
+
+	filter := domain.UserFundHoldingTransactionFilter{
+		Limit:          limit,
+		Offset:         offset,
+		FundID:         strings.TrimSpace(c.Query("fund_id")),
+		SourcePlatform: strings.TrimSpace(c.Query("source_platform")),
+		Keyword:        strings.TrimSpace(c.Query("keyword")),
+	}
+	if rawTypes := strings.TrimSpace(c.Query("type")); rawTypes != "" && rawTypes != "all" {
+		for _, item := range strings.Split(rawTypes, ",") {
+			txType := strings.TrimSpace(item)
+			if txType == "" {
+				continue
+			}
+			filter.Types = append(filter.Types, domain.UserFundHoldingTransactionType(txType))
+		}
+	}
+	if rawVoided := strings.TrimSpace(c.Query("voided")); rawVoided != "" && rawVoided != "all" {
+		parsedVoided, err := strconv.ParseBool(rawVoided)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Error:   &APIError{Code: "INVALID_VOIDED_FILTER", Message: "Invalid transaction voided filter"},
+			})
+			return
+		}
+		filter.Voided = &parsedVoided
+	}
+	if rawStart := strings.TrimSpace(c.Query("start_date")); rawStart != "" {
+		createdFrom, err := parseHoldingTransactionBoundary(rawStart, false)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Error:   &APIError{Code: "INVALID_DATE_RANGE", Message: "Invalid transaction start date"},
+			})
+			return
+		}
+		filter.CreatedFrom = &createdFrom
+	}
+	if rawEnd := strings.TrimSpace(c.Query("end_date")); rawEnd != "" {
+		createdBefore, err := parseHoldingTransactionBoundary(rawEnd, true)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, APIResponse{
+				Success: false,
+				Error:   &APIError{Code: "INVALID_DATE_RANGE", Message: "Invalid transaction end date"},
+			})
+			return
+		}
+		filter.CreatedBefore = &createdBefore
+	}
+
+	transactions, err := h.userPreferenceService.ListFundHoldingTransactionsFiltered(c.Request.Context(), user.ID, filter)
+	if err != nil {
+		statusCode, apiErr := mapUserPreferenceError(err)
+		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: transactions})
+}
+
+func parseHoldingTransactionBoundary(raw string, endExclusive bool) (time.Time, error) {
+	if parsed, err := time.Parse(time.RFC3339, raw); err == nil {
+		return parsed, nil
+	}
+	parsedDate, err := time.ParseInLocation("2006-01-02", raw, time.Local)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if endExclusive {
+		return parsedDate.AddDate(0, 0, 1), nil
+	}
+	return parsedDate, nil
+}
+
+// GetFundHoldingTransactionDetail returns a single holding activity with context for drill-down review.
+func (h *UserHandler) GetFundHoldingTransactionDetail(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"},
+		})
+		return
+	}
+
+	transactionID := strings.TrimSpace(c.Param("transactionId"))
+	if transactionID == "" {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_TRANSACTION_ID", Message: "Transaction ID is required"},
+		})
+		return
+	}
+
+	detail, err := h.userPreferenceService.GetFundHoldingTransactionDetail(c.Request.Context(), user.ID, transactionID)
+	if err != nil {
+		statusCode, apiErr := mapUserPreferenceError(err)
+		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: detail})
+}
+
+// VoidFundHoldingTransaction marks a historical holding activity as ignored without changing current holdings.
+func (h *UserHandler) VoidFundHoldingTransaction(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"},
+		})
+		return
+	}
+
+	transactionID := strings.TrimSpace(c.Param("transactionId"))
+	if transactionID == "" {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_TRANSACTION_ID", Message: "Transaction ID is required"},
+		})
+		return
+	}
+
+	var req voidFundHoldingTransactionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_REQUEST", Message: "Invalid fund holding transaction payload"},
+		})
+		return
+	}
+
+	transaction, err := h.userPreferenceService.VoidFundHoldingTransaction(c.Request.Context(), user.ID, transactionID, req.Reason)
+	if err != nil {
+		statusCode, apiErr := mapUserPreferenceError(err)
+		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: transaction})
+}
+
+// PreviewFundHoldingTransactionRollback returns a read-only manual rollback impact preview.
+func (h *UserHandler) PreviewFundHoldingTransactionRollback(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"},
+		})
+		return
+	}
+
+	transactionID := strings.TrimSpace(c.Param("transactionId"))
+	if transactionID == "" {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_TRANSACTION_ID", Message: "Transaction ID is required"},
+		})
+		return
+	}
+
+	preview, err := h.userPreferenceService.PreviewFundHoldingTransactionRollback(c.Request.Context(), user.ID, transactionID)
+	if err != nil {
+		statusCode, apiErr := mapUserPreferenceError(err)
+		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: preview})
+}
+
+// ApplyFundHoldingTransactionRollback applies a user-confirmed safe rollback.
+func (h *UserHandler) ApplyFundHoldingTransactionRollback(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"},
+		})
+		return
+	}
+
+	transactionID := strings.TrimSpace(c.Param("transactionId"))
+	if transactionID == "" {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_TRANSACTION_ID", Message: "Transaction ID is required"},
+		})
+		return
+	}
+
+	var req applyFundHoldingTransactionRollbackRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_REQUEST", Message: "Invalid fund holding rollback payload"},
+		})
+		return
+	}
+
+	result, err := h.userPreferenceService.ApplyFundHoldingTransactionRollback(c.Request.Context(), user.ID, transactionID, req.Reason)
+	if err != nil {
+		statusCode, apiErr := mapUserPreferenceError(err)
+		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: result})
+}
+
 // CreateFundHolding creates a user fund-level position record.
 func (h *UserHandler) CreateFundHolding(c *gin.Context) {
 	user, ok := middleware.CurrentUser(c)
@@ -457,6 +762,240 @@ func (h *UserHandler) CreateFundHolding(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, APIResponse{Success: true, Data: holding})
+}
+
+// CreateFundHoldingsBatch safely creates multiple fund-level holding records.
+func (h *UserHandler) CreateFundHoldingsBatch(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"},
+		})
+		return
+	}
+
+	var req createFundHoldingsBatchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_REQUEST", Message: "Invalid fund holding batch payload"},
+		})
+		return
+	}
+
+	inputs := make([]domain.CreateFundHoldingInput, 0, len(req.Items))
+	for _, item := range req.Items {
+		tradeAt := strings.TrimSpace(item.TradeAt)
+		if tradeAt == "" {
+			tradeAt = strings.TrimSpace(item.AsOfDate)
+		}
+		inputs = append(inputs, domain.CreateFundHoldingInput{
+			FundID:         item.FundID,
+			Amount:         item.Amount,
+			TradeAt:        tradeAt,
+			Note:           item.Note,
+			SourcePlatform: item.SourcePlatform,
+			SourceLabel:    item.SourceLabel,
+		})
+	}
+
+	result, err := h.userPreferenceService.CreateFundHoldingsBatch(c.Request.Context(), user.ID, inputs)
+	if err != nil {
+		statusCode, apiErr := mapUserPreferenceError(err)
+		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+
+	c.JSON(http.StatusCreated, APIResponse{Success: true, Data: result})
+}
+
+// UpdateFundHolding corrects a fund-level position record without recording a buy/sell transaction.
+func (h *UserHandler) UpdateFundHolding(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"},
+		})
+		return
+	}
+
+	holdingID := c.Param("holdingId")
+	if strings.TrimSpace(holdingID) == "" {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_HOLDING_ID", Message: "Holding ID is required"},
+		})
+		return
+	}
+
+	var req updateFundHoldingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_REQUEST", Message: "Invalid fund holding payload"},
+		})
+		return
+	}
+
+	holding, err := h.userPreferenceService.UpdateFundHolding(c.Request.Context(), user.ID, holdingID, domain.UpdateFundHoldingInput{
+		Amount:           req.Amount,
+		Shares:           req.Shares,
+		ConfirmedNav:     req.ConfirmedNav,
+		ConfirmedNavDate: req.ConfirmedNavDate,
+		TradeAt:          req.TradeAt,
+		Note:             req.Note,
+		SourcePlatform:   req.SourcePlatform,
+		SourceLabel:      req.SourceLabel,
+	})
+	if err != nil {
+		statusCode, apiErr := mapUserPreferenceError(err)
+		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: holding})
+}
+
+// SellFundHolding records a redemption/decrease for a fund-level position.
+func (h *UserHandler) SellFundHolding(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"},
+		})
+		return
+	}
+
+	holdingID := c.Param("holdingId")
+	if strings.TrimSpace(holdingID) == "" {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_HOLDING_ID", Message: "Holding ID is required"},
+		})
+		return
+	}
+
+	var req sellFundHoldingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_REQUEST", Message: "Invalid fund holding sell payload"},
+		})
+		return
+	}
+
+	holding, err := h.userPreferenceService.SellFundHolding(c.Request.Context(), user.ID, holdingID, domain.SellFundHoldingInput{
+		Amount:  req.Amount,
+		Shares:  req.Shares,
+		TradeAt: req.TradeAt,
+		Note:    req.Note,
+		SellAll: req.SellAll,
+	})
+	if err != nil {
+		statusCode, apiErr := mapUserPreferenceError(err)
+		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: holding})
+}
+
+// RecordFundHoldingDividend records a cash dividend or dividend reinvestment for a fund-level position.
+func (h *UserHandler) RecordFundHoldingDividend(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"},
+		})
+		return
+	}
+
+	holdingID := c.Param("holdingId")
+	if strings.TrimSpace(holdingID) == "" {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_HOLDING_ID", Message: "Holding ID is required"},
+		})
+		return
+	}
+
+	var req dividendFundHoldingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_REQUEST", Message: "Invalid fund holding dividend payload"},
+		})
+		return
+	}
+
+	holding, err := h.userPreferenceService.RecordFundHoldingDividend(c.Request.Context(), user.ID, holdingID, domain.DividendFundHoldingInput{
+		Amount:         req.Amount,
+		Shares:         req.Shares,
+		TradeAt:        req.TradeAt,
+		Note:           req.Note,
+		Reinvest:       req.Reinvest,
+		SourcePlatform: req.SourcePlatform,
+		SourceLabel:    req.SourceLabel,
+	})
+	if err != nil {
+		statusCode, apiErr := mapUserPreferenceError(err)
+		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: holding})
+}
+
+// AdjustFundHoldingShares records a non-trade share adjustment for a fund-level position.
+func (h *UserHandler) AdjustFundHoldingShares(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"},
+		})
+		return
+	}
+
+	holdingID := c.Param("holdingId")
+	if strings.TrimSpace(holdingID) == "" {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_HOLDING_ID", Message: "Holding ID is required"},
+		})
+		return
+	}
+
+	var req adjustFundHoldingSharesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_REQUEST", Message: "Invalid fund holding adjustment payload"},
+		})
+		return
+	}
+
+	holding, err := h.userPreferenceService.AdjustFundHoldingShares(c.Request.Context(), user.ID, holdingID, domain.AdjustFundHoldingSharesInput{
+		SharesDelta:      req.SharesDelta,
+		TargetShares:     req.TargetShares,
+		ConfirmedNav:     req.ConfirmedNav,
+		ConfirmedNavDate: req.ConfirmedNavDate,
+		TradeAt:          req.TradeAt,
+		Note:             req.Note,
+		SourcePlatform:   req.SourcePlatform,
+		SourceLabel:      req.SourceLabel,
+	})
+	if err != nil {
+		statusCode, apiErr := mapUserPreferenceError(err)
+		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: holding})
 }
 
 // DeleteFundHolding removes a fund-level position record.
@@ -757,6 +1296,10 @@ func mapUserPreferenceError(err error) (int, *APIError) {
 		return http.StatusNotFound, &APIError{Code: "FUND_NOT_FOUND", Message: err.Error()}
 	case errors.Is(err, service.ErrWatchlistGroupNotFound):
 		return http.StatusNotFound, &APIError{Code: "WATCHLIST_GROUP_NOT_FOUND", Message: err.Error()}
+	case errors.Is(err, service.ErrFundHoldingNotFound):
+		return http.StatusNotFound, &APIError{Code: "FUND_HOLDING_NOT_FOUND", Message: err.Error()}
+	case errors.Is(err, service.ErrFundHoldingTransactionNotFound):
+		return http.StatusNotFound, &APIError{Code: "FUND_HOLDING_TRANSACTION_NOT_FOUND", Message: err.Error()}
 	case errors.Is(err, service.ErrInvalidWatchlistGroup):
 		return http.StatusBadRequest, &APIError{Code: "INVALID_WATCHLIST_GROUP", Message: err.Error()}
 	case errors.Is(err, service.ErrInvalidWatchlistOrder):
@@ -767,6 +1310,20 @@ func mapUserPreferenceError(err error) (int, *APIError) {
 		return http.StatusBadRequest, &APIError{Code: "INVALID_HOLDING_DATE", Message: err.Error()}
 	case errors.Is(err, service.ErrInvalidHoldingTime):
 		return http.StatusBadRequest, &APIError{Code: "INVALID_HOLDING_TIME", Message: err.Error()}
+	case errors.Is(err, service.ErrInvalidHoldingSell):
+		return http.StatusBadRequest, &APIError{Code: "INVALID_HOLDING_SELL", Message: err.Error()}
+	case errors.Is(err, service.ErrInvalidHoldingDividend):
+		return http.StatusBadRequest, &APIError{Code: "INVALID_HOLDING_DIVIDEND", Message: err.Error()}
+	case errors.Is(err, service.ErrInvalidHoldingAdjustment):
+		return http.StatusBadRequest, &APIError{Code: "INVALID_HOLDING_ADJUSTMENT", Message: err.Error()}
+	case errors.Is(err, service.ErrInvalidHoldingTransactionFilter):
+		return http.StatusBadRequest, &APIError{Code: "INVALID_HOLDING_TRANSACTION_FILTER", Message: err.Error()}
+	case errors.Is(err, service.ErrInvalidHoldingSource):
+		return http.StatusBadRequest, &APIError{Code: "INVALID_HOLDING_SOURCE", Message: err.Error()}
+	case errors.Is(err, service.ErrFundHoldingTransactionVoided):
+		return http.StatusConflict, &APIError{Code: "FUND_HOLDING_TRANSACTION_VOIDED", Message: err.Error()}
+	case errors.Is(err, service.ErrUnsafeHoldingRollback):
+		return http.StatusConflict, &APIError{Code: "UNSAFE_HOLDING_ROLLBACK", Message: err.Error()}
 	case errors.Is(err, service.ErrInvalidHoldingOverride):
 		return http.StatusBadRequest, &APIError{Code: "INVALID_OVERRIDE", Message: err.Error()}
 	default:

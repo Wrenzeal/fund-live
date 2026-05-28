@@ -270,6 +270,905 @@ func TestUserPreferenceServiceCreatesFundHolding(t *testing.T) {
 	}
 }
 
+func TestUserPreferenceServiceSellsFundHoldingAndRecordsTransaction(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	holding, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓")
+	if err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+	updated, err := service.UpdateFundHolding(context.Background(), "user-1", holding.ID, domain.UpdateFundHoldingInput{
+		Amount:           "50000",
+		Shares:           "40000",
+		ConfirmedNav:     "1.25",
+		ConfirmedNavDate: "2026-03-30",
+		TradeAt:          "2026-03-30T14:30:00+08:00",
+		Note:             "确认份额",
+	})
+	if err != nil {
+		t.Fatalf("UpdateFundHolding() error = %v", err)
+	}
+
+	remaining, err := service.SellFundHolding(context.Background(), "user-1", updated.ID, domain.SellFundHoldingInput{
+		Amount:  "12500",
+		TradeAt: "2026-04-01T14:50:00+08:00",
+		Note:    "减仓四分之一",
+	})
+	if err != nil {
+		t.Fatalf("SellFundHolding() error = %v", err)
+	}
+	if remaining.Amount.String() != "37500" {
+		t.Fatalf("remaining amount = %s, want 37500", remaining.Amount.String())
+	}
+	if remaining.Shares != "30000" {
+		t.Fatalf("remaining shares = %q, want 30000", remaining.Shares)
+	}
+	if remaining.Note != "减仓四分之一" {
+		t.Fatalf("remaining note = %q", remaining.Note)
+	}
+
+	transactions, err := service.ListFundHoldingTransactions(context.Background(), "user-1", 10)
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactions() error = %v", err)
+	}
+	var sellTx *domain.UserFundHoldingTransaction
+	for i := range transactions {
+		if transactions[i].Type == domain.UserFundHoldingTransactionSell {
+			sellTx = &transactions[i]
+			break
+		}
+	}
+	if sellTx == nil {
+		t.Fatalf("sell transaction not found: %+v", transactions)
+	}
+	if !sellTx.Amount.Equal(decimal.RequireFromString("12500")) {
+		t.Fatalf("sell amount = %s, want 12500", sellTx.Amount.String())
+	}
+	if !sellTx.Shares.Equal(decimal.RequireFromString("10000")) {
+		t.Fatalf("sell shares = %s, want 10000", sellTx.Shares.String())
+	}
+	if sellTx.Metadata["remaining_amount"] != "37500" {
+		t.Fatalf("remaining_amount metadata = %q", sellTx.Metadata["remaining_amount"])
+	}
+}
+
+func TestUserPreferenceServiceSellsAllFundHoldingAndRemovesSnapshot(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	holding, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓")
+	if err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+	updated, err := service.UpdateFundHolding(context.Background(), "user-1", holding.ID, domain.UpdateFundHoldingInput{
+		Amount:           "50000",
+		Shares:           "40000",
+		ConfirmedNav:     "1.25",
+		ConfirmedNavDate: "2026-03-30",
+		TradeAt:          "2026-03-30T14:30:00+08:00",
+		Note:             "确认份额",
+	})
+	if err != nil {
+		t.Fatalf("UpdateFundHolding() error = %v", err)
+	}
+
+	remaining, err := service.SellFundHolding(context.Background(), "user-1", updated.ID, domain.SellFundHoldingInput{
+		TradeAt: "2026-04-01T14:50:00+08:00",
+		Note:    "全部赎回",
+		SellAll: true,
+	})
+	if err != nil {
+		t.Fatalf("SellFundHolding(sell all) error = %v", err)
+	}
+	if remaining != nil {
+		t.Fatalf("remaining = %+v, want nil for closed snapshot", remaining)
+	}
+
+	holdings, err := service.ListFundHoldings(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("ListFundHoldings() error = %v", err)
+	}
+	if len(holdings.Items) != 0 {
+		t.Fatalf("holdings len = %d, want 0 after sell all", len(holdings.Items))
+	}
+
+	transactions, err := service.ListFundHoldingTransactions(context.Background(), "user-1", 10)
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactions() error = %v", err)
+	}
+	var sellTx *domain.UserFundHoldingTransaction
+	for i := range transactions {
+		if transactions[i].Type == domain.UserFundHoldingTransactionSell && transactions[i].Metadata["sell_all"] == "true" {
+			sellTx = &transactions[i]
+			break
+		}
+	}
+	if sellTx == nil {
+		t.Fatalf("sell-all transaction not found: %+v", transactions)
+	}
+	if !sellTx.Amount.Equal(decimal.RequireFromString("50000")) {
+		t.Fatalf("sell-all amount = %s, want 50000", sellTx.Amount.String())
+	}
+	if !sellTx.Shares.Equal(decimal.RequireFromString("40000")) {
+		t.Fatalf("sell-all shares = %s, want 40000", sellTx.Shares.String())
+	}
+}
+
+func TestUserPreferenceServiceRecordsFundHoldingDividend(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	holding, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓")
+	if err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+	updated, err := service.UpdateFundHolding(context.Background(), "user-1", holding.ID, domain.UpdateFundHoldingInput{
+		Amount:           "50000",
+		Shares:           "40000",
+		ConfirmedNav:     "1.25",
+		ConfirmedNavDate: "2026-03-30",
+		TradeAt:          "2026-03-30T14:30:00+08:00",
+		Note:             "确认份额",
+	})
+	if err != nil {
+		t.Fatalf("UpdateFundHolding() error = %v", err)
+	}
+
+	cash, err := service.RecordFundHoldingDividend(context.Background(), "user-1", updated.ID, domain.DividendFundHoldingInput{
+		Amount:         "320.50",
+		TradeAt:        "2026-04-02T14:30:00+08:00",
+		Note:           "现金分红",
+		SourcePlatform: "alipay",
+	})
+	if err != nil {
+		t.Fatalf("RecordFundHoldingDividend(cash) error = %v", err)
+	}
+	if cash.Amount.String() != "50000" || cash.Shares != "40000" {
+		t.Fatalf("cash dividend changed snapshot = amount %s shares %s, want unchanged", cash.Amount.String(), cash.Shares)
+	}
+
+	reinvested, err := service.RecordFundHoldingDividend(context.Background(), "user-1", updated.ID, domain.DividendFundHoldingInput{
+		Amount:         "125",
+		Shares:         "100",
+		TradeAt:        "2026-04-03T14:30:00+08:00",
+		Note:           "红利再投",
+		Reinvest:       true,
+		SourcePlatform: "wechat",
+	})
+	if err != nil {
+		t.Fatalf("RecordFundHoldingDividend(reinvest) error = %v", err)
+	}
+	if reinvested.Amount.String() != "50000" {
+		t.Fatalf("reinvest amount = %s, want 50000", reinvested.Amount.String())
+	}
+	if reinvested.Shares != "40100" {
+		t.Fatalf("reinvested shares = %s, want 40100", reinvested.Shares)
+	}
+	if reinvested.ConfirmedNav != "1.25" || reinvested.ConfirmedNavDate != "2026-04-03" {
+		t.Fatalf("reinvested nav/date = %s/%s, want 1.25/2026-04-03", reinvested.ConfirmedNav, reinvested.ConfirmedNavDate)
+	}
+	if reinvested.SourcePlatform != "wechat" || reinvested.SourceLabel != "微信" {
+		t.Fatalf("reinvested source = %s/%s, want wechat/微信", reinvested.SourcePlatform, reinvested.SourceLabel)
+	}
+
+	transactions, err := service.ListFundHoldingTransactions(context.Background(), "user-1", 10)
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactions() error = %v", err)
+	}
+	var cashTx, reinvestTx *domain.UserFundHoldingTransaction
+	for i := range transactions {
+		if transactions[i].Type != domain.UserFundHoldingTransactionDividend {
+			continue
+		}
+		if transactions[i].Metadata["reinvest"] == "true" {
+			reinvestTx = &transactions[i]
+		} else {
+			cashTx = &transactions[i]
+		}
+	}
+	if cashTx == nil || reinvestTx == nil {
+		t.Fatalf("dividend transactions not found: %+v", transactions)
+	}
+	if !cashTx.Amount.Equal(decimal.RequireFromString("320.50")) || cashTx.SourcePlatform != "alipay" {
+		t.Fatalf("cash dividend tx = %+v, want amount 320.50 source alipay", cashTx)
+	}
+	if !reinvestTx.Amount.Equal(decimal.RequireFromString("125")) || !reinvestTx.Shares.Equal(decimal.RequireFromString("100")) {
+		t.Fatalf("reinvest tx amount/shares = %s/%s, want 125/100", reinvestTx.Amount.String(), reinvestTx.Shares.String())
+	}
+}
+
+func TestUserPreferenceServiceAdjustsFundHoldingShares(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	holding, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓")
+	if err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+	updated, err := service.UpdateFundHolding(context.Background(), "user-1", holding.ID, domain.UpdateFundHoldingInput{
+		Amount:           "50000",
+		Shares:           "40000",
+		ConfirmedNav:     "1.25",
+		ConfirmedNavDate: "2026-03-30",
+		TradeAt:          "2026-03-30T14:30:00+08:00",
+		Note:             "确认份额",
+	})
+	if err != nil {
+		t.Fatalf("UpdateFundHolding() error = %v", err)
+	}
+
+	adjusted, err := service.AdjustFundHoldingShares(context.Background(), "user-1", updated.ID, domain.AdjustFundHoldingSharesInput{
+		TargetShares:     "41000",
+		ConfirmedNav:     "1.22",
+		ConfirmedNavDate: "2026-04-03",
+		TradeAt:          "2026-04-03T14:30:00+08:00",
+		Note:             "平台迁移份额调整",
+		SourcePlatform:   "eastmoney",
+	})
+	if err != nil {
+		t.Fatalf("AdjustFundHoldingShares(target) error = %v", err)
+	}
+	if adjusted.Shares != "41000" {
+		t.Fatalf("adjusted shares = %s, want 41000", adjusted.Shares)
+	}
+	if adjusted.ConfirmedNav != "1.22" || adjusted.ConfirmedNavDate != "2026-04-03" {
+		t.Fatalf("adjusted nav/date = %s/%s, want 1.22/2026-04-03", adjusted.ConfirmedNav, adjusted.ConfirmedNavDate)
+	}
+	if !adjusted.ManualConfirmation {
+		t.Fatalf("adjusted manual_confirmation = false, want true")
+	}
+	if adjusted.SourcePlatform != "eastmoney" || adjusted.SourceLabel != "天天基金" {
+		t.Fatalf("adjusted source = %s/%s, want eastmoney/天天基金", adjusted.SourcePlatform, adjusted.SourceLabel)
+	}
+
+	adjusted, err = service.AdjustFundHoldingShares(context.Background(), "user-1", updated.ID, domain.AdjustFundHoldingSharesInput{
+		SharesDelta:    "-500",
+		TradeAt:        "2026-04-04T14:30:00+08:00",
+		Note:           "手续费/份额修正",
+		SourcePlatform: "bank",
+	})
+	if err != nil {
+		t.Fatalf("AdjustFundHoldingShares(delta) error = %v", err)
+	}
+	if adjusted.Shares != "40500" {
+		t.Fatalf("delta adjusted shares = %s, want 40500", adjusted.Shares)
+	}
+
+	transactions, err := service.ListFundHoldingTransactionsFiltered(context.Background(), "user-1", domain.UserFundHoldingTransactionFilter{
+		Types: []domain.UserFundHoldingTransactionType{domain.UserFundHoldingTransactionAdjustment},
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactionsFiltered(adjustment) error = %v", err)
+	}
+	if len(transactions) != 2 {
+		t.Fatalf("adjustment transactions len = %d, want 2; all=%+v", len(transactions), transactions)
+	}
+	var targetTx *domain.UserFundHoldingTransaction
+	for i := range transactions {
+		if transactions[i].Metadata["shares_delta"] == "1000" {
+			targetTx = &transactions[i]
+			break
+		}
+	}
+	if targetTx == nil || targetTx.SourcePlatform != "eastmoney" {
+		t.Fatalf("target adjustment tx = %+v, want source eastmoney and shares_delta 1000", targetTx)
+	}
+}
+
+func TestUserPreferenceServiceRejectsInvalidDividendAndAdjustment(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	holding, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓")
+	if err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+
+	if _, err := service.RecordFundHoldingDividend(context.Background(), "user-1", holding.ID, domain.DividendFundHoldingInput{
+		Amount:   "100",
+		Reinvest: true,
+	}); !errors.Is(err, ErrInvalidHoldingDividend) {
+		t.Fatalf("reinvest without shares error = %v, want %v", err, ErrInvalidHoldingDividend)
+	}
+
+	if _, err := service.RecordFundHoldingDividend(context.Background(), "user-1", holding.ID, domain.DividendFundHoldingInput{
+		Amount: "-1",
+	}); !errors.Is(err, ErrInvalidHoldingDividend) {
+		t.Fatalf("negative dividend error = %v, want %v", err, ErrInvalidHoldingDividend)
+	}
+
+	if _, err := service.AdjustFundHoldingShares(context.Background(), "user-1", holding.ID, domain.AdjustFundHoldingSharesInput{
+		TargetShares: "41000",
+		SharesDelta:  "100",
+	}); !errors.Is(err, ErrInvalidHoldingAdjustment) {
+		t.Fatalf("target and delta adjustment error = %v, want %v", err, ErrInvalidHoldingAdjustment)
+	}
+
+	if _, err := service.AdjustFundHoldingShares(context.Background(), "user-1", holding.ID, domain.AdjustFundHoldingSharesInput{
+		SharesDelta: "-999999",
+	}); !errors.Is(err, ErrInvalidHoldingAdjustment) {
+		t.Fatalf("negative resulting shares error = %v, want %v", err, ErrInvalidHoldingAdjustment)
+	}
+}
+
+func TestUserPreferenceServiceRejectsOversellFundHolding(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	holding, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓")
+	if err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+
+	_, err = service.SellFundHolding(context.Background(), "user-1", holding.ID, domain.SellFundHoldingInput{
+		Amount:  "50000",
+		TradeAt: "2026-04-01T14:50:00+08:00",
+	})
+	if !errors.Is(err, ErrInvalidHoldingSell) {
+		t.Fatalf("SellFundHolding() error = %v, want %v", err, ErrInvalidHoldingSell)
+	}
+}
+
+func TestUserPreferenceServiceRecordsFundHoldingTransactions(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	holding, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓")
+	if err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+
+	transactions, err := service.ListFundHoldingTransactions(context.Background(), "user-1", 10)
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactions() after create error = %v", err)
+	}
+	if len(transactions) != 1 {
+		t.Fatalf("transactions len after create = %d, want 1", len(transactions))
+	}
+	if transactions[0].Type != domain.UserFundHoldingTransactionBuy {
+		t.Fatalf("transaction type after create = %s, want buy", transactions[0].Type)
+	}
+	if transactions[0].Fund == nil || transactions[0].Fund.ID != "005827" {
+		t.Fatalf("transaction fund not enriched: %+v", transactions[0].Fund)
+	}
+	if !transactions[0].Amount.Equal(decimal.NewFromInt(50000)) {
+		t.Fatalf("transaction amount = %s, want 50000", transactions[0].Amount.String())
+	}
+
+	if _, err := service.UpdateFundHolding(context.Background(), "user-1", holding.ID, domain.UpdateFundHoldingInput{
+		Amount:           "52000",
+		Shares:           "41000.123456",
+		ConfirmedNav:     "1.2683",
+		ConfirmedNavDate: "2026-03-30",
+		TradeAt:          "2026-03-30T14:59:00+08:00",
+		Note:             "按支付宝校正",
+	}); err != nil {
+		t.Fatalf("UpdateFundHolding() error = %v", err)
+	}
+
+	if err := service.DeleteFundHolding(context.Background(), "user-1", holding.ID); err != nil {
+		t.Fatalf("DeleteFundHolding() error = %v", err)
+	}
+
+	transactions, err = service.ListFundHoldingTransactions(context.Background(), "user-1", 10)
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactions() after update/delete error = %v", err)
+	}
+	if len(transactions) != 3 {
+		t.Fatalf("transactions len after update/delete = %d, want 3", len(transactions))
+	}
+
+	counts := map[domain.UserFundHoldingTransactionType]int{}
+	for _, transaction := range transactions {
+		counts[transaction.Type]++
+		if transaction.HoldingID != holding.ID {
+			t.Fatalf("transaction holding id = %s, want %s", transaction.HoldingID, holding.ID)
+		}
+	}
+	for _, txType := range []domain.UserFundHoldingTransactionType{
+		domain.UserFundHoldingTransactionBuy,
+		domain.UserFundHoldingTransactionCorrection,
+		domain.UserFundHoldingTransactionDelete,
+	} {
+		if counts[txType] != 1 {
+			t.Fatalf("transaction count for %s = %d, want 1; all=%+v", txType, counts[txType], transactions)
+		}
+	}
+}
+
+func TestUserPreferenceServiceVoidsFundHoldingTransactionWithoutChangingSnapshot(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	holding, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓")
+	if err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+
+	transactions, err := service.ListFundHoldingTransactions(context.Background(), "user-1", 10)
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactions() error = %v", err)
+	}
+	if len(transactions) != 1 {
+		t.Fatalf("transactions len = %d, want 1", len(transactions))
+	}
+
+	voided, err := service.VoidFundHoldingTransaction(context.Background(), "user-1", transactions[0].ID, "录入重复，保留痕迹")
+	if err != nil {
+		t.Fatalf("VoidFundHoldingTransaction() error = %v", err)
+	}
+	if !voided.Voided {
+		t.Fatalf("voided transaction Voided = false, want true")
+	}
+	if voided.VoidedAt == nil {
+		t.Fatalf("voided_at is nil")
+	}
+	if voided.VoidReason != "录入重复，保留痕迹" {
+		t.Fatalf("void reason = %q", voided.VoidReason)
+	}
+	if voided.Fund == nil || voided.Fund.ID != "005827" {
+		t.Fatalf("voided transaction fund not enriched: %+v", voided.Fund)
+	}
+
+	holdings, err := service.ListFundHoldings(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("ListFundHoldings() error = %v", err)
+	}
+	if len(holdings.Items) != 1 || holdings.Items[0].ID != holding.ID || holdings.Items[0].Amount.String() != "50000" {
+		t.Fatalf("holding snapshot changed after void: %+v", holdings.Items)
+	}
+
+	transactions, err = service.ListFundHoldingTransactions(context.Background(), "user-1", 10)
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactions() after void error = %v", err)
+	}
+	if len(transactions) != 1 || !transactions[0].Voided || transactions[0].VoidReason != "录入重复，保留痕迹" {
+		t.Fatalf("listed transactions after void = %+v", transactions)
+	}
+
+	if _, err := service.VoidFundHoldingTransaction(context.Background(), "user-1", transactions[0].ID, "再次作废"); !errors.Is(err, ErrFundHoldingTransactionVoided) {
+		t.Fatalf("repeat VoidFundHoldingTransaction() error = %v, want %v", err, ErrFundHoldingTransactionVoided)
+	}
+	if _, err := service.VoidFundHoldingTransaction(context.Background(), "user-2", transactions[0].ID, "越权"); !errors.Is(err, ErrFundHoldingTransactionNotFound) {
+		t.Fatalf("other user VoidFundHoldingTransaction() error = %v, want %v", err, ErrFundHoldingTransactionNotFound)
+	}
+}
+
+func TestUserPreferenceServicePreviewFundHoldingTransactionRollback(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	holding, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓")
+	if err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+	if _, err := service.UpdateFundHolding(context.Background(), "user-1", holding.ID, domain.UpdateFundHoldingInput{
+		Amount:           "52000",
+		Shares:           "41000.123456",
+		ConfirmedNav:     "1.2683",
+		ConfirmedNavDate: "2026-03-30",
+		TradeAt:          "2026-03-30T14:59:00+08:00",
+		Note:             "按平台校正",
+		SourcePlatform:   "alipay",
+	}); err != nil {
+		t.Fatalf("UpdateFundHolding() error = %v", err)
+	}
+
+	transactions, err := service.ListFundHoldingTransactionsFiltered(context.Background(), "user-1", domain.UserFundHoldingTransactionFilter{
+		Types: []domain.UserFundHoldingTransactionType{domain.UserFundHoldingTransactionCorrection},
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactionsFiltered() error = %v", err)
+	}
+	if len(transactions) != 1 {
+		t.Fatalf("correction transactions len = %d, want 1; all=%+v", len(transactions), transactions)
+	}
+
+	preview, err := service.PreviewFundHoldingTransactionRollback(context.Background(), "user-1", transactions[0].ID)
+	if err != nil {
+		t.Fatalf("PreviewFundHoldingTransactionRollback() error = %v", err)
+	}
+	if preview == nil {
+		t.Fatalf("preview is nil")
+	}
+	if !preview.PreviewOnly || !preview.CanApplyAutomatically || preview.State != "preview" {
+		t.Fatalf("preview flags = %+v, want preview with safe automatic apply enabled", preview)
+	}
+	if preview.Transaction.ID != transactions[0].ID || preview.Transaction.Fund == nil || preview.Transaction.Fund.ID != "005827" {
+		t.Fatalf("preview transaction not enriched: %+v", preview.Transaction)
+	}
+	if preview.CurrentHolding == nil || preview.CurrentHolding.Amount.String() != "52000" {
+		t.Fatalf("current holding = %+v, want unchanged 52000 snapshot", preview.CurrentHolding)
+	}
+
+	fields := make(map[string]domain.UserFundHoldingTransactionRollbackField, len(preview.AffectedFields))
+	for _, field := range preview.AffectedFields {
+		fields[field.Field] = field
+	}
+	amountField, ok := fields["amount"]
+	if !ok {
+		t.Fatalf("amount field missing: %+v", preview.AffectedFields)
+	}
+	if amountField.CurrentValue != "52000.00" || amountField.RollbackValue != "50000" {
+		t.Fatalf("amount field = %+v, want current 52000.00 rollback 50000", amountField)
+	}
+	if fields["shares"].RollbackValue != "" {
+		t.Fatalf("shares rollback = %+v, want empty previous shares for first correction", fields["shares"])
+	}
+
+	holdings, err := service.ListFundHoldings(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("ListFundHoldings() error = %v", err)
+	}
+	if len(holdings.Items) != 1 || holdings.Items[0].Amount.String() != "52000" {
+		t.Fatalf("holding snapshot changed after preview: %+v", holdings.Items)
+	}
+
+	if _, err := service.PreviewFundHoldingTransactionRollback(context.Background(), "user-2", transactions[0].ID); !errors.Is(err, ErrFundHoldingTransactionNotFound) {
+		t.Fatalf("other user preview error = %v, want %v", err, ErrFundHoldingTransactionNotFound)
+	}
+
+	applied, err := service.ApplyFundHoldingTransactionRollback(context.Background(), "user-1", transactions[0].ID, "校正录错，自动冲正")
+	if err != nil {
+		t.Fatalf("ApplyFundHoldingTransactionRollback() error = %v", err)
+	}
+	if !applied.Applied || applied.CurrentHolding == nil {
+		t.Fatalf("applied result = %+v, want applied with current holding", applied)
+	}
+	if !applied.Transaction.Voided || !strings.Contains(applied.Transaction.VoidReason, "自动冲正") {
+		t.Fatalf("applied transaction = %+v, want voided rollback transaction", applied.Transaction)
+	}
+
+	holdings, err = service.ListFundHoldings(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("ListFundHoldings() after apply error = %v", err)
+	}
+	if len(holdings.Items) != 1 || holdings.Items[0].Amount.String() != "50000" {
+		t.Fatalf("holding snapshot after apply = %+v, want amount 50000", holdings.Items)
+	}
+	if holdings.Items[0].ManualConfirmation {
+		t.Fatalf("holding manual confirmation after apply = true, want false")
+	}
+
+	if _, err := service.ApplyFundHoldingTransactionRollback(context.Background(), "user-1", transactions[0].ID, "重复冲正"); !errors.Is(err, ErrFundHoldingTransactionVoided) {
+		t.Fatalf("repeat apply error = %v, want %v", err, ErrFundHoldingTransactionVoided)
+	}
+}
+
+func TestUserPreferenceServiceCreateFundHoldingsBatch(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	result, err := service.CreateFundHoldingsBatch(context.Background(), "user-1", []domain.CreateFundHoldingInput{
+		{
+			FundID:         "005827",
+			Amount:         "50000",
+			TradeAt:        "2026-03-30T14:30:00+08:00",
+			Note:           "支付宝迁移",
+			SourcePlatform: "alipay",
+		},
+		{
+			FundID:  "bad",
+			Amount:  "100",
+			TradeAt: "2026-03-30T14:30:00+08:00",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateFundHoldingsBatch() error = %v", err)
+	}
+	if result.Total != 2 || result.CreatedCount != 1 || result.FailedCount != 1 {
+		t.Fatalf("batch result = %+v, want 1 created and 1 failed", result)
+	}
+	if len(result.Created) != 1 || result.Created[0].FundID != "005827" || result.Created[0].SourcePlatform != "alipay" {
+		t.Fatalf("created rows = %+v, want 005827 with alipay source", result.Created)
+	}
+	if len(result.Failed) != 1 || result.Failed[0].Code != "FUND_NOT_FOUND" {
+		t.Fatalf("failed rows = %+v, want fund not found", result.Failed)
+	}
+
+	holdings, err := service.ListFundHoldings(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("ListFundHoldings() error = %v", err)
+	}
+	if len(holdings.Items) != 1 {
+		t.Fatalf("holdings len = %d, want 1", len(holdings.Items))
+	}
+}
+
+func TestUserPreferenceServiceGetFundHoldingTransactionDetail(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	holding, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓")
+	if err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+	if _, err := service.SellFundHolding(context.Background(), "user-1", holding.ID, domain.SellFundHoldingInput{
+		Amount:  "10000",
+		TradeAt: "2026-04-01T14:30:00+08:00",
+		Note:    "阶段减仓",
+	}); err != nil {
+		t.Fatalf("SellFundHolding() error = %v", err)
+	}
+
+	transactions, err := service.ListFundHoldingTransactionsFiltered(context.Background(), "user-1", domain.UserFundHoldingTransactionFilter{
+		Types: []domain.UserFundHoldingTransactionType{domain.UserFundHoldingTransactionSell},
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactionsFiltered() error = %v", err)
+	}
+	if len(transactions) != 1 {
+		t.Fatalf("sell transactions len = %d, want 1; all=%+v", len(transactions), transactions)
+	}
+
+	detail, err := service.GetFundHoldingTransactionDetail(context.Background(), "user-1", transactions[0].ID)
+	if err != nil {
+		t.Fatalf("GetFundHoldingTransactionDetail() error = %v", err)
+	}
+	if detail.Transaction.ID != transactions[0].ID {
+		t.Fatalf("detail transaction id = %s, want %s", detail.Transaction.ID, transactions[0].ID)
+	}
+	if detail.RollbackPreview == nil || len(detail.RollbackPreview.AffectedFields) == 0 {
+		t.Fatalf("rollback preview missing in detail: %+v", detail)
+	}
+	if detail.CurrentHolding == nil || detail.CurrentHolding.Amount.String() != "40000" {
+		t.Fatalf("current holding = %+v, want remaining 40000", detail.CurrentHolding)
+	}
+	if len(detail.RelatedTransactions) == 0 {
+		t.Fatalf("related transactions empty: %+v", detail)
+	}
+	if len(detail.ImpactChain) == 0 {
+		t.Fatalf("impact chain empty: %+v", detail)
+	}
+	if _, err := service.GetFundHoldingTransactionDetail(context.Background(), "user-2", transactions[0].ID); !errors.Is(err, ErrFundHoldingTransactionNotFound) {
+		t.Fatalf("other user detail error = %v, want %v", err, ErrFundHoldingTransactionNotFound)
+	}
+}
+
+func TestUserPreferenceServiceFiltersFundHoldingTransactions(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	holding, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓")
+	if err != nil {
+		t.Fatalf("CreateFundHolding(005827) error = %v", err)
+	}
+	if _, err := service.CreateFundHolding(context.Background(), "user-1", "003095", "12000", "2026-03-30T14:30:00+08:00", "医疗仓"); err != nil {
+		t.Fatalf("CreateFundHolding(003095) error = %v", err)
+	}
+	if _, err := service.UpdateFundHolding(context.Background(), "user-1", holding.ID, domain.UpdateFundHoldingInput{
+		Amount:           "52000",
+		Shares:           "41000.123456",
+		ConfirmedNav:     "1.2683",
+		ConfirmedNavDate: "2026-03-30",
+		TradeAt:          "2026-03-30T14:59:00+08:00",
+		Note:             "按平台校正",
+		SourcePlatform:   "支付宝",
+	}); err != nil {
+		t.Fatalf("UpdateFundHolding() error = %v", err)
+	}
+
+	transactions, err := service.ListFundHoldingTransactions(context.Background(), "user-1", 10)
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactions() error = %v", err)
+	}
+	var medicalBuyID string
+	for _, transaction := range transactions {
+		if transaction.FundID == "003095" && transaction.Type == domain.UserFundHoldingTransactionBuy {
+			medicalBuyID = transaction.ID
+			break
+		}
+	}
+	if medicalBuyID == "" {
+		t.Fatalf("003095 buy transaction not found: %+v", transactions)
+	}
+	if _, err := service.VoidFundHoldingTransaction(context.Background(), "user-1", medicalBuyID, "测试作废"); err != nil {
+		t.Fatalf("VoidFundHoldingTransaction() error = %v", err)
+	}
+
+	byFund, err := service.ListFundHoldingTransactionsFiltered(context.Background(), "user-1", domain.UserFundHoldingTransactionFilter{
+		FundID: "005827",
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactionsFiltered(by fund) error = %v", err)
+	}
+	if len(byFund) != 2 {
+		t.Fatalf("by fund len = %d, want 2; all=%+v", len(byFund), byFund)
+	}
+	for _, transaction := range byFund {
+		if transaction.FundID != "005827" {
+			t.Fatalf("filtered fund id = %s, want 005827", transaction.FundID)
+		}
+		if transaction.Fund == nil || transaction.Fund.ID != "005827" {
+			t.Fatalf("filtered transaction fund not enriched: %+v", transaction.Fund)
+		}
+	}
+
+	byType, err := service.ListFundHoldingTransactionsFiltered(context.Background(), "user-1", domain.UserFundHoldingTransactionFilter{
+		Types: []domain.UserFundHoldingTransactionType{domain.UserFundHoldingTransactionCorrection},
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactionsFiltered(by type) error = %v", err)
+	}
+	if len(byType) != 1 || byType[0].Type != domain.UserFundHoldingTransactionCorrection {
+		t.Fatalf("by type = %+v, want one correction", byType)
+	}
+	if byType[0].SourcePlatform != "alipay" || byType[0].SourceLabel != "支付宝" {
+		t.Fatalf("correction source = %s/%s, want alipay/支付宝", byType[0].SourcePlatform, byType[0].SourceLabel)
+	}
+
+	bySource, err := service.ListFundHoldingTransactionsFiltered(context.Background(), "user-1", domain.UserFundHoldingTransactionFilter{
+		SourcePlatform: "alipay",
+		Limit:          10,
+	})
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactionsFiltered(by source) error = %v", err)
+	}
+	if len(bySource) != 1 || bySource[0].SourcePlatform != "alipay" || bySource[0].Type != domain.UserFundHoldingTransactionCorrection {
+		t.Fatalf("by source = %+v, want one alipay correction", bySource)
+	}
+
+	voidedOnly := true
+	byVoided, err := service.ListFundHoldingTransactionsFiltered(context.Background(), "user-1", domain.UserFundHoldingTransactionFilter{
+		Voided: &voidedOnly,
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactionsFiltered(voided) error = %v", err)
+	}
+	if len(byVoided) != 1 || !byVoided[0].Voided || byVoided[0].FundID != "003095" {
+		t.Fatalf("voided transactions = %+v, want one voided 003095 transaction", byVoided)
+	}
+
+	activeOnly := false
+	byActive, err := service.ListFundHoldingTransactionsFiltered(context.Background(), "user-1", domain.UserFundHoldingTransactionFilter{
+		Voided: &activeOnly,
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactionsFiltered(active) error = %v", err)
+	}
+	if len(byActive) != 2 {
+		t.Fatalf("active transactions len = %d, want 2; all=%+v", len(byActive), byActive)
+	}
+	for _, transaction := range byActive {
+		if transaction.Voided {
+			t.Fatalf("active filter returned voided transaction: %+v", transaction)
+		}
+	}
+
+	byKeyword, err := service.ListFundHoldingTransactionsFiltered(context.Background(), "user-1", domain.UserFundHoldingTransactionFilter{
+		Keyword: "005827",
+		Limit:   10,
+	})
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactionsFiltered(keyword) error = %v", err)
+	}
+	if len(byKeyword) != 2 {
+		t.Fatalf("keyword transactions len = %d, want 2; all=%+v", len(byKeyword), byKeyword)
+	}
+
+	createdFrom := time.Now().Add(-time.Hour)
+	createdBefore := time.Now().Add(time.Hour)
+	byDate, err := service.ListFundHoldingTransactionsFiltered(context.Background(), "user-1", domain.UserFundHoldingTransactionFilter{
+		CreatedFrom:   &createdFrom,
+		CreatedBefore: &createdBefore,
+		Limit:         10,
+	})
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactionsFiltered(date range) error = %v", err)
+	}
+	if len(byDate) != 3 {
+		t.Fatalf("date range transactions len = %d, want 3; all=%+v", len(byDate), byDate)
+	}
+
+	byOffset, err := service.ListFundHoldingTransactionsFiltered(context.Background(), "user-1", domain.UserFundHoldingTransactionFilter{
+		Voided: &activeOnly,
+		Offset: 1,
+		Limit:  1,
+	})
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactionsFiltered(offset) error = %v", err)
+	}
+	if len(byOffset) != 1 || byOffset[0].ID == byActive[0].ID {
+		t.Fatalf("offset transactions = %+v, want second active transaction", byOffset)
+	}
+
+	if _, err := service.ListFundHoldingTransactionsFiltered(context.Background(), "user-1", domain.UserFundHoldingTransactionFilter{
+		Types: []domain.UserFundHoldingTransactionType{"unknown"},
+	}); !errors.Is(err, ErrInvalidHoldingTransactionFilter) {
+		t.Fatalf("invalid type filter error = %v, want %v", err, ErrInvalidHoldingTransactionFilter)
+	}
+	if _, err := service.ListFundHoldingTransactionsFiltered(context.Background(), "user-1", domain.UserFundHoldingTransactionFilter{
+		SourcePlatform: "unsupported-platform",
+	}); !errors.Is(err, ErrInvalidHoldingTransactionFilter) {
+		t.Fatalf("invalid source filter error = %v, want %v", err, ErrInvalidHoldingTransactionFilter)
+	}
+}
+
+func TestUserPreferenceServiceUpdateFundHoldingRecordsSource(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	holding, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓")
+	if err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+
+	updated, err := service.UpdateFundHolding(context.Background(), "user-1", holding.ID, domain.UpdateFundHoldingInput{
+		Amount:           "52000",
+		Shares:           "41000.123456",
+		ConfirmedNav:     "1.2683",
+		ConfirmedNavDate: "2026-03-30",
+		TradeAt:          "2026-03-30T14:59:00+08:00",
+		Note:             "按微信校正",
+		SourcePlatform:   "wechat",
+	})
+	if err != nil {
+		t.Fatalf("UpdateFundHolding() error = %v", err)
+	}
+	if updated.SourcePlatform != "wechat" || updated.SourceLabel != "微信" {
+		t.Fatalf("updated source = %s/%s, want wechat/微信", updated.SourcePlatform, updated.SourceLabel)
+	}
+
+	transactions, err := service.ListFundHoldingTransactionsFiltered(context.Background(), "user-1", domain.UserFundHoldingTransactionFilter{
+		SourcePlatform: "微信",
+		Limit:          10,
+	})
+	if err != nil {
+		t.Fatalf("ListFundHoldingTransactionsFiltered(source) error = %v", err)
+	}
+	if len(transactions) != 1 || transactions[0].Type != domain.UserFundHoldingTransactionCorrection {
+		t.Fatalf("source transactions = %+v, want one correction", transactions)
+	}
+	if transactions[0].SourcePlatform != "wechat" || transactions[0].SourceLabel != "微信" {
+		t.Fatalf("transaction source = %s/%s, want wechat/微信", transactions[0].SourcePlatform, transactions[0].SourceLabel)
+	}
+
+	if _, err := service.UpdateFundHolding(context.Background(), "user-1", holding.ID, domain.UpdateFundHoldingInput{
+		Amount:           "52000",
+		Shares:           "41000.123456",
+		ConfirmedNav:     "1.2683",
+		ConfirmedNavDate: "2026-03-30",
+		TradeAt:          "2026-03-30T14:59:00+08:00",
+		Note:             "非法来源",
+		SourcePlatform:   "unsupported-platform",
+	}); !errors.Is(err, ErrInvalidHoldingSource) {
+		t.Fatalf("invalid source error = %v, want %v", err, ErrInvalidHoldingSource)
+	}
+
+	if _, err := service.UpdateFundHolding(context.Background(), "user-1", holding.ID, domain.UpdateFundHoldingInput{
+		Amount:           "52000",
+		Shares:           "41000.123456",
+		ConfirmedNav:     "1.2683",
+		ConfirmedNavDate: "2026-03-30",
+		TradeAt:          "2026-03-30T14:59:00+08:00",
+		Note:             "只有来源标签",
+		SourceLabel:      "支付宝截图",
+	}); !errors.Is(err, ErrInvalidHoldingSource) {
+		t.Fatalf("source label without platform error = %v, want %v", err, ErrInvalidHoldingSource)
+	}
+}
+
 func TestUserPreferenceServiceDelaysHoldingPricingDateAfterCutoff(t *testing.T) {
 	fundRepo := repository.NewMemoryFundRepository()
 	userRepo := repository.NewMemoryUserRepository()
@@ -295,6 +1194,110 @@ func TestUserPreferenceServiceMovesWeekendHoldingToNextTradingDay(t *testing.T) 
 	}
 	if holding.AsOfDate != "2026-03-30" {
 		t.Fatalf("holding as_of_date = %s, want 2026-03-30", holding.AsOfDate)
+	}
+}
+
+func TestUserPreferenceServiceUpdatesFundHoldingWithManualConfirmation(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	holding, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓")
+	if err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+
+	updated, err := service.UpdateFundHolding(context.Background(), "user-1", holding.ID, domain.UpdateFundHoldingInput{
+		Amount:           "52000",
+		Shares:           "41000.123456",
+		ConfirmedNav:     "1.2683",
+		ConfirmedNavDate: "2026-03-30",
+		TradeAt:          "2026-03-30T14:59:00+08:00",
+		Note:             "按支付宝校正",
+	})
+	if err != nil {
+		t.Fatalf("UpdateFundHolding() error = %v", err)
+	}
+
+	if updated.Amount.String() != "52000" {
+		t.Fatalf("updated amount = %s, want 52000", updated.Amount.String())
+	}
+	if updated.Shares != "41000.123456" {
+		t.Fatalf("updated shares = %q, want 41000.123456", updated.Shares)
+	}
+	if updated.ConfirmedNav != "1.2683" {
+		t.Fatalf("updated nav = %q, want 1.2683", updated.ConfirmedNav)
+	}
+	if updated.ConfirmedNavDate != "2026-03-30" {
+		t.Fatalf("updated nav date = %q, want 2026-03-30", updated.ConfirmedNavDate)
+	}
+	if !updated.ManualConfirmation {
+		t.Fatalf("updated manual_confirmation = false, want true")
+	}
+	if updated.Note != "按支付宝校正" {
+		t.Fatalf("updated note = %q", updated.Note)
+	}
+
+	missing, err := userRepo.ListFundHoldingsMissingConfirmation(context.Background())
+	if err != nil {
+		t.Fatalf("ListFundHoldingsMissingConfirmation() error = %v", err)
+	}
+	for _, item := range missing {
+		if item.ID == holding.ID {
+			t.Fatalf("manual correction should not be treated as missing confirmation: %+v", item)
+		}
+	}
+}
+
+func TestUserPreferenceServiceUpdateFundHoldingClearsManualConfirmation(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewUserPreferenceService(fundRepo, userRepo, userRepo, userRepo, userRepo)
+
+	if err := fundRepo.SaveFundHistory(context.Background(), &domain.FundHistory{
+		FundID:      "005827",
+		Date:        "2026-03-30",
+		NetAssetVal: decimal.RequireFromString("1.2500"),
+		DailyReturn: decimal.RequireFromString("0.50"),
+	}); err != nil {
+		t.Fatalf("SaveFundHistory() error = %v", err)
+	}
+
+	holding, err := service.CreateFundHolding(context.Background(), "user-1", "005827", "50000", "2026-03-30T14:30:00+08:00", "长期底仓")
+	if err != nil {
+		t.Fatalf("CreateFundHolding() error = %v", err)
+	}
+
+	if _, err := service.UpdateFundHolding(context.Background(), "user-1", holding.ID, domain.UpdateFundHoldingInput{
+		Amount:           "52000",
+		Shares:           "41000.123456",
+		ConfirmedNav:     "1.2683",
+		ConfirmedNavDate: "2026-03-30",
+		TradeAt:          "2026-03-30T14:59:00+08:00",
+	}); err != nil {
+		t.Fatalf("manual UpdateFundHolding() error = %v", err)
+	}
+
+	updated, err := service.UpdateFundHolding(context.Background(), "user-1", holding.ID, domain.UpdateFundHoldingInput{
+		Amount:  "52000",
+		TradeAt: "2026-03-30T14:59:00+08:00",
+		Note:    "恢复自动确认",
+	})
+	if err != nil {
+		t.Fatalf("clear UpdateFundHolding() error = %v", err)
+	}
+
+	if updated.ManualConfirmation {
+		t.Fatalf("updated manual_confirmation = true, want false")
+	}
+	if updated.Shares != "41600" {
+		t.Fatalf("updated shares = %q, want 41600", updated.Shares)
+	}
+	if updated.ConfirmedNav != "1.25" {
+		t.Fatalf("updated nav = %q, want 1.25", updated.ConfirmedNav)
+	}
+	if updated.ConfirmedNavDate != "2026-03-30" {
+		t.Fatalf("updated nav date = %q, want 2026-03-30", updated.ConfirmedNavDate)
 	}
 }
 

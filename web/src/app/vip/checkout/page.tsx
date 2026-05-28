@@ -276,13 +276,13 @@ export default function VIPCheckoutPage() {
           </div>
 
           <div className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6">
-          <div className="flex items-center gap-3 text-theme-primary">
-            <ShieldAlert className="h-5 w-5" />
-            <div className="text-lg font-bold">风险与服务提示</div>
+            <div className="flex items-center gap-3 text-theme-primary">
+              <ShieldAlert className="h-5 w-5" />
+              <div className="text-lg font-bold">风险与服务提示</div>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-theme-secondary">{plan.disclaimer}</p>
           </div>
-          <p className="mt-4 text-sm leading-6 text-theme-secondary">{plan.disclaimer}</p>
-        </div>
-      </section>
+        </section>
       </div>
     </AccountAreaShell>
   )

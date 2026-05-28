@@ -126,7 +126,7 @@ export default function VIPPage() {
               </div>
 
               <div className="vip-benefit-panel rounded-[28px] border p-6">
-              <div className="text-xs tracking-[0.2em] text-amber-200/90">权益摘要</div>
+                <div className="text-xs tracking-[0.2em] text-amber-200/90">权益摘要</div>
                 <div className="mt-3 space-y-3 text-sm text-theme-secondary">
                   <div>每交易日 2 次板块分析</div>
                   <div>每交易日 2 次组合分析</div>

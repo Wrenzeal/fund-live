@@ -3,7 +3,15 @@
 import { HoldingAggregateRow } from '@/components/holding-aggregate-row'
 import { HoldingFundRow } from '@/components/holding-fund-row'
 import type { FundAnalysis, FundEstimate } from '@/hooks/use-fund-data'
-import type { HoldingAggregateEntry, HoldingEntry, HoldingEstimateAggregateMetrics } from '@/hooks/use-user-portfolio'
+import type {
+  AdjustHoldingSharesPayload,
+  DividendHoldingPayload,
+  HoldingAggregateEntry,
+  HoldingEntry,
+  HoldingEstimateAggregateMetrics,
+  SellHoldingPayload,
+  UpdateHoldingPayload,
+} from '@/hooks/use-user-portfolio'
 import { incompleteAggregateChildren, type HoldingMetricScope } from '@/lib/holding-display'
 
 type HoldingViewMode = 'aggregate' | 'detail'
@@ -19,6 +27,10 @@ interface HoldingsListProps {
   analysesByFundID: Record<string, FundAnalysis | null>
   showIncompleteOnly: boolean
   onRemoveHolding: (holdingID: string) => void
+  onUpdateHolding: (holdingID: string, payload: UpdateHoldingPayload) => Promise<void> | void
+  onSellHolding: (holdingID: string, payload: SellHoldingPayload) => Promise<void> | void
+  onRecordHoldingDividend: (holdingID: string, payload: DividendHoldingPayload) => Promise<void> | void
+  onAdjustHoldingShares: (holdingID: string, payload: AdjustHoldingSharesPayload) => Promise<void> | void
 }
 
 export function HoldingsList({
@@ -32,6 +44,10 @@ export function HoldingsList({
   analysesByFundID,
   showIncompleteOnly,
   onRemoveHolding,
+  onUpdateHolding,
+  onSellHolding,
+  onRecordHoldingDividend,
+  onAdjustHoldingShares,
 }: HoldingsListProps) {
   return (
     <div className="space-y-4">
@@ -52,6 +68,10 @@ export function HoldingsList({
                   estimate={estimatesByFundID[holding.fund_id]}
                   analysis={analysesByFundID[holding.fund_id]}
                   onRemove={() => onRemoveHolding(holding.id)}
+                  onUpdate={(payload) => onUpdateHolding(holding.id, payload)}
+                  onSell={(payload) => onSellHolding(holding.id, payload)}
+                  onRecordDividend={(payload) => onRecordHoldingDividend(holding.id, payload)}
+                  onAdjustShares={(payload) => onAdjustHoldingShares(holding.id, payload)}
                 />
               ))}
             </HoldingAggregateRow>
@@ -64,6 +84,10 @@ export function HoldingsList({
               estimate={estimatesByFundID[holding.fund_id]}
               analysis={analysesByFundID[holding.fund_id]}
               onRemove={() => onRemoveHolding(holding.id)}
+              onUpdate={(payload) => onUpdateHolding(holding.id, payload)}
+              onSell={(payload) => onSellHolding(holding.id, payload)}
+              onRecordDividend={(payload) => onRecordHoldingDividend(holding.id, payload)}
+              onAdjustShares={(payload) => onAdjustHoldingShares(holding.id, payload)}
             />
           ))}
     </div>

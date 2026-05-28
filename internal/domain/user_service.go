@@ -16,7 +16,18 @@ type UserPreferenceService interface {
 	RemoveWatchlistFund(ctx context.Context, userID, groupID, fundID string) error
 	ListFundHoldings(ctx context.Context, userID string) (*UserFundHoldingList, error)
 	CreateFundHolding(ctx context.Context, userID, fundID, amount, tradeAt, note string) (*UserFundHoldingDetail, error)
+	CreateFundHoldingsBatch(ctx context.Context, userID string, inputs []CreateFundHoldingInput) (*UserFundHoldingBatchCreateResult, error)
+	UpdateFundHolding(ctx context.Context, userID, holdingID string, input UpdateFundHoldingInput) (*UserFundHoldingDetail, error)
+	SellFundHolding(ctx context.Context, userID, holdingID string, input SellFundHoldingInput) (*UserFundHoldingDetail, error)
+	RecordFundHoldingDividend(ctx context.Context, userID, holdingID string, input DividendFundHoldingInput) (*UserFundHoldingDetail, error)
+	AdjustFundHoldingShares(ctx context.Context, userID, holdingID string, input AdjustFundHoldingSharesInput) (*UserFundHoldingDetail, error)
 	DeleteFundHolding(ctx context.Context, userID, holdingID string) error
+	ListFundHoldingTransactions(ctx context.Context, userID string, limit int) ([]UserFundHoldingTransaction, error)
+	ListFundHoldingTransactionsFiltered(ctx context.Context, userID string, filter UserFundHoldingTransactionFilter) ([]UserFundHoldingTransaction, error)
+	GetFundHoldingTransactionDetail(ctx context.Context, userID, transactionID string) (*UserFundHoldingTransactionDetail, error)
+	VoidFundHoldingTransaction(ctx context.Context, userID, transactionID, reason string) (*UserFundHoldingTransaction, error)
+	PreviewFundHoldingTransactionRollback(ctx context.Context, userID, transactionID string) (*UserFundHoldingTransactionRollbackPreview, error)
+	ApplyFundHoldingTransactionRollback(ctx context.Context, userID, transactionID, reason string) (*UserFundHoldingTransactionRollbackApplyResult, error)
 	GetHoldingOverrideSet(ctx context.Context, userID, fundID string) (*UserHoldingOverrideSet, error)
 	ReplaceHoldingOverrides(ctx context.Context, userID, fundID string, overrides []UserHoldingOverride) error
 }

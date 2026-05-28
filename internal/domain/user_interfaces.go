@@ -50,8 +50,14 @@ type UserWatchlistRepository interface {
 // UserFundHoldingRepository defines persistence operations for user fund-level positions.
 type UserFundHoldingRepository interface {
 	ListFundHoldings(ctx context.Context, userID string) ([]UserFundHolding, error)
+	GetFundHolding(ctx context.Context, userID, holdingID string) (*UserFundHolding, error)
 	ListFundHoldingsMissingConfirmation(ctx context.Context) ([]UserFundHolding, error)
 	ListDistinctFundIDs(ctx context.Context) ([]string, error)
 	SaveFundHolding(ctx context.Context, holding *UserFundHolding) error
 	DeleteFundHolding(ctx context.Context, userID, holdingID string) error
+	ListFundHoldingTransactions(ctx context.Context, userID string, limit int) ([]UserFundHoldingTransaction, error)
+	ListFundHoldingTransactionsFiltered(ctx context.Context, userID string, filter UserFundHoldingTransactionFilter) ([]UserFundHoldingTransaction, error)
+	GetFundHoldingTransaction(ctx context.Context, userID, transactionID string) (*UserFundHoldingTransaction, error)
+	SaveFundHoldingTransaction(ctx context.Context, tx *UserFundHoldingTransaction) error
+	VoidFundHoldingTransaction(ctx context.Context, userID, transactionID, reason string, voidedAt time.Time) (*UserFundHoldingTransaction, error)
 }

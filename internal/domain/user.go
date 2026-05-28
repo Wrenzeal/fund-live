@@ -118,18 +118,21 @@ type UserHoldingOverrideSet struct {
 
 // UserFundHolding stores a user's fund-level position record.
 type UserFundHolding struct {
-	ID               string          `json:"id"`
-	UserID           string          `json:"user_id"`
-	FundID           string          `json:"fund_id"`
-	Amount           decimal.Decimal `json:"amount"`
-	Shares           decimal.Decimal `json:"shares"`
-	ConfirmedNav     decimal.Decimal `json:"confirmed_nav"`
-	ConfirmedNavDate string          `json:"confirmed_nav_date,omitempty"`
-	TradeAt          string          `json:"trade_at,omitempty"`
-	AsOfDate         string          `json:"as_of_date"`
-	Note             string          `json:"note"`
-	CreatedAt        time.Time       `json:"created_at"`
-	UpdatedAt        time.Time       `json:"updated_at"`
+	ID                 string          `json:"id"`
+	UserID             string          `json:"user_id"`
+	FundID             string          `json:"fund_id"`
+	Amount             decimal.Decimal `json:"amount"`
+	Shares             decimal.Decimal `json:"shares"`
+	ConfirmedNav       decimal.Decimal `json:"confirmed_nav"`
+	ConfirmedNavDate   string          `json:"confirmed_nav_date,omitempty"`
+	ManualConfirmation bool            `json:"manual_confirmation,omitempty"`
+	TradeAt            string          `json:"trade_at,omitempty"`
+	AsOfDate           string          `json:"as_of_date"`
+	Note               string          `json:"note"`
+	SourcePlatform     string          `json:"source_platform,omitempty"`
+	SourceLabel        string          `json:"source_label,omitempty"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
 }
 
 // UserFundHoldingDetail enriches a fund holding with current fund profile data.
@@ -140,6 +143,7 @@ type UserFundHoldingDetail struct {
 	Shares             string          `json:"shares,omitempty"`
 	ConfirmedNav       string          `json:"confirmed_nav,omitempty"`
 	ConfirmedNavDate   string          `json:"confirmed_nav_date,omitempty"`
+	ManualConfirmation bool            `json:"manual_confirmation,omitempty"`
 	TradeAt            string          `json:"trade_at,omitempty"`
 	AsOfDate           string          `json:"as_of_date"`
 	ActualDate         string          `json:"actual_date,omitempty"`
@@ -151,9 +155,177 @@ type UserFundHoldingDetail struct {
 	RealMetricsReady   bool            `json:"real_metrics_ready"`
 	RealMetricsMessage string          `json:"real_metrics_message,omitempty"`
 	Note               string          `json:"note"`
+	SourcePlatform     string          `json:"source_platform,omitempty"`
+	SourceLabel        string          `json:"source_label,omitempty"`
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`
 	Fund               *Fund           `json:"fund,omitempty"`
+}
+
+// UpdateFundHoldingInput describes user-editable correction fields for a fund holding record.
+type UpdateFundHoldingInput struct {
+	Amount           string
+	Shares           string
+	ConfirmedNav     string
+	ConfirmedNavDate string
+	TradeAt          string
+	Note             string
+	SourcePlatform   string
+	SourceLabel      string
+}
+
+// CreateFundHoldingInput describes one user fund-level position record to create.
+type CreateFundHoldingInput struct {
+	FundID         string `json:"fund_id"`
+	Amount         string `json:"amount"`
+	TradeAt        string `json:"trade_at"`
+	Note           string `json:"note"`
+	SourcePlatform string `json:"source_platform,omitempty"`
+	SourceLabel    string `json:"source_label,omitempty"`
+}
+
+// UserFundHoldingBatchCreateFailure records one rejected row during safe batch import.
+type UserFundHoldingBatchCreateFailure struct {
+	Index   int    `json:"index"`
+	FundID  string `json:"fund_id,omitempty"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+// UserFundHoldingBatchCreateResult summarizes a safe batch import attempt.
+type UserFundHoldingBatchCreateResult struct {
+	Total        int                                 `json:"total"`
+	CreatedCount int                                 `json:"created_count"`
+	FailedCount  int                                 `json:"failed_count"`
+	Created      []UserFundHoldingDetail             `json:"created"`
+	Failed       []UserFundHoldingBatchCreateFailure `json:"failed,omitempty"`
+}
+
+// SellFundHoldingInput describes a user redemption/decrease operation.
+type SellFundHoldingInput struct {
+	Amount  string
+	Shares  string
+	TradeAt string
+	Note    string
+	SellAll bool
+}
+
+// DividendFundHoldingInput describes a cash dividend or dividend reinvestment record.
+type DividendFundHoldingInput struct {
+	Amount         string
+	Shares         string
+	TradeAt        string
+	Note           string
+	Reinvest       bool
+	SourcePlatform string
+	SourceLabel    string
+}
+
+// AdjustFundHoldingSharesInput describes a non-trade share adjustment.
+type AdjustFundHoldingSharesInput struct {
+	SharesDelta      string
+	TargetShares     string
+	ConfirmedNav     string
+	ConfirmedNavDate string
+	TradeAt          string
+	Note             string
+	SourcePlatform   string
+	SourceLabel      string
+}
+
+// UserFundHoldingTransactionType identifies the purpose of a user fund holding activity.
+type UserFundHoldingTransactionType string
+
+const (
+	UserFundHoldingTransactionBuy        UserFundHoldingTransactionType = "buy"
+	UserFundHoldingTransactionCorrection UserFundHoldingTransactionType = "correction"
+	UserFundHoldingTransactionDelete     UserFundHoldingTransactionType = "delete"
+	UserFundHoldingTransactionSell       UserFundHoldingTransactionType = "sell"
+	UserFundHoldingTransactionDividend   UserFundHoldingTransactionType = "dividend"
+	UserFundHoldingTransactionAdjustment UserFundHoldingTransactionType = "adjustment"
+)
+
+// UserFundHoldingTransaction records user-visible activity around a fund holding.
+type UserFundHoldingTransaction struct {
+	ID                 string                         `json:"id"`
+	UserID             string                         `json:"user_id"`
+	HoldingID          string                         `json:"holding_id,omitempty"`
+	FundID             string                         `json:"fund_id"`
+	Type               UserFundHoldingTransactionType `json:"type"`
+	Amount             decimal.Decimal                `json:"amount"`
+	Shares             decimal.Decimal                `json:"shares"`
+	ConfirmedNav       decimal.Decimal                `json:"confirmed_nav"`
+	ConfirmedNavDate   string                         `json:"confirmed_nav_date,omitempty"`
+	ManualConfirmation bool                           `json:"manual_confirmation,omitempty"`
+	TradeAt            string                         `json:"trade_at,omitempty"`
+	AsOfDate           string                         `json:"as_of_date,omitempty"`
+	Note               string                         `json:"note"`
+	SourcePlatform     string                         `json:"source_platform,omitempty"`
+	SourceLabel        string                         `json:"source_label,omitempty"`
+	Metadata           map[string]string              `json:"metadata,omitempty"`
+	Voided             bool                           `json:"voided"`
+	VoidedAt           *time.Time                     `json:"voided_at,omitempty"`
+	VoidReason         string                         `json:"void_reason,omitempty"`
+	CreatedAt          time.Time                      `json:"created_at"`
+	Fund               *Fund                          `json:"fund,omitempty"`
+}
+
+// UserFundHoldingTransactionFilter narrows recent holding activity lookups.
+type UserFundHoldingTransactionFilter struct {
+	Limit          int
+	Offset         int
+	FundID         string
+	Types          []UserFundHoldingTransactionType
+	Voided         *bool
+	SourcePlatform string
+	Keyword        string
+	CreatedFrom    *time.Time
+	CreatedBefore  *time.Time
+}
+
+// UserFundHoldingTransactionRollbackField describes one field that a manual rollback/correction would touch.
+type UserFundHoldingTransactionRollbackField struct {
+	Field         string `json:"field"`
+	Label         string `json:"label"`
+	CurrentValue  string `json:"current_value,omitempty"`
+	RollbackValue string `json:"rollback_value,omitempty"`
+	Delta         string `json:"delta,omitempty"`
+	Direction     string `json:"direction,omitempty"`
+}
+
+// UserFundHoldingTransactionRollbackPreview is a read-only impact summary for voiding/reversing one transaction.
+type UserFundHoldingTransactionRollbackPreview struct {
+	Transaction           UserFundHoldingTransaction                `json:"transaction"`
+	CurrentHolding        *UserFundHoldingDetail                    `json:"current_holding,omitempty"`
+	PreviewOnly           bool                                      `json:"preview_only"`
+	CanApplyAutomatically bool                                      `json:"can_apply_automatically"`
+	State                 string                                    `json:"state"`
+	Title                 string                                    `json:"title"`
+	Summary               string                                    `json:"summary"`
+	SuggestedAction       string                                    `json:"suggested_action"`
+	AffectedFields        []UserFundHoldingTransactionRollbackField `json:"affected_fields"`
+	Warnings              []string                                  `json:"warnings,omitempty"`
+}
+
+// UserFundHoldingTransactionRollbackApplyResult reports a user-confirmed automatic rollback.
+type UserFundHoldingTransactionRollbackApplyResult struct {
+	Transaction     UserFundHoldingTransaction                `json:"transaction"`
+	CurrentHolding  *UserFundHoldingDetail                    `json:"current_holding,omitempty"`
+	Preview         UserFundHoldingTransactionRollbackPreview `json:"preview"`
+	Applied         bool                                      `json:"applied"`
+	HoldingRemoved  bool                                      `json:"holding_removed,omitempty"`
+	HoldingRestored bool                                      `json:"holding_restored,omitempty"`
+	Message         string                                    `json:"message"`
+}
+
+// UserFundHoldingTransactionDetail is the drill-down view for one historical holding activity.
+type UserFundHoldingTransactionDetail struct {
+	Transaction            UserFundHoldingTransaction                 `json:"transaction"`
+	CurrentHolding         *UserFundHoldingDetail                     `json:"current_holding,omitempty"`
+	RollbackPreview        *UserFundHoldingTransactionRollbackPreview `json:"rollback_preview,omitempty"`
+	RelatedTransactions    []UserFundHoldingTransaction               `json:"related_transactions,omitempty"`
+	SubsequentTransactions []UserFundHoldingTransaction               `json:"subsequent_transactions,omitempty"`
+	ImpactChain            []string                                   `json:"impact_chain,omitempty"`
 }
 
 // UserFundHoldingSummary aggregates the user's holdings page totals.

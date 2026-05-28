@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import useSWR from 'swr'
 import { useMarketTradingState } from '@/hooks/use-market-status'
 import type { Fund, FundEstimate } from '@/hooks/use-fund-data'
+import type { HoldingSourceFilter } from '@/lib/holding-sources'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -31,6 +32,7 @@ export interface HoldingEntry {
   shares?: string
   confirmed_nav?: string
   confirmed_nav_date?: string
+  manual_confirmation?: boolean
   trade_at?: string
   as_of_date: string
   actual_date?: string
@@ -42,6 +44,8 @@ export interface HoldingEntry {
   real_metrics_ready: boolean
   real_metrics_message?: string
   note: string
+  source_platform?: string
+  source_label?: string
   created_at: string
   updated_at: string
   fund?: Fund
@@ -80,10 +84,155 @@ export interface HoldingAggregateEntry {
   fund?: Fund
 }
 
+export type HoldingTransactionType = 'buy' | 'correction' | 'delete' | 'sell' | 'dividend' | 'adjustment'
+export type HoldingTransactionStatusFilter = 'all' | 'active' | 'voided'
+
+export interface HoldingTransactionFilters {
+  fundID?: string
+  type?: HoldingTransactionType | 'all'
+  status?: HoldingTransactionStatusFilter
+  sourcePlatform?: HoldingSourceFilter
+  keyword?: string
+  startDate?: string
+  endDate?: string
+  offset?: number
+  limit?: number
+}
+
+export interface HoldingTransactionEntry {
+  id: string
+  user_id: string
+  holding_id?: string
+  fund_id: string
+  type: HoldingTransactionType
+  amount: string
+  shares?: string
+  confirmed_nav?: string
+  confirmed_nav_date?: string
+  manual_confirmation?: boolean
+  trade_at?: string
+  as_of_date?: string
+  note?: string
+  source_platform?: string
+  source_label?: string
+  metadata?: Record<string, string>
+  voided?: boolean
+  voided_at?: string
+  void_reason?: string
+  created_at: string
+  fund?: Fund
+}
+
+export interface HoldingTransactionRollbackField {
+  field: string
+  label: string
+  current_value?: string
+  rollback_value?: string
+  delta?: string
+  direction?: string
+}
+
+export interface HoldingTransactionRollbackPreview {
+  transaction: HoldingTransactionEntry
+  current_holding?: HoldingEntry
+  preview_only: boolean
+  can_apply_automatically: boolean
+  state: string
+  title: string
+  summary: string
+  suggested_action: string
+  affected_fields: HoldingTransactionRollbackField[]
+  warnings?: string[]
+}
+
+export interface HoldingTransactionRollbackApplyResult {
+  transaction: HoldingTransactionEntry
+  current_holding?: HoldingEntry
+  preview: HoldingTransactionRollbackPreview
+  applied: boolean
+  holding_removed?: boolean
+  holding_restored?: boolean
+  message: string
+}
+
+export interface HoldingTransactionDetail {
+  transaction: HoldingTransactionEntry
+  current_holding?: HoldingEntry
+  rollback_preview?: HoldingTransactionRollbackPreview
+  related_transactions?: HoldingTransactionEntry[]
+  subsequent_transactions?: HoldingTransactionEntry[]
+  impact_chain?: string[]
+}
+
 interface HoldingsResponse {
   items: HoldingEntry[]
   aggregates: HoldingAggregateEntry[]
   summary: HoldingSummary
+}
+
+export interface CreateHoldingBatchItem {
+  fund_id: string
+  amount: string
+  trade_at?: string
+  as_of_date?: string
+  note?: string
+  source_platform?: string
+  source_label?: string
+}
+
+export interface HoldingBatchCreateFailure {
+  index: number
+  fund_id?: string
+  code: string
+  message: string
+}
+
+export interface HoldingBatchCreateResult {
+  total: number
+  created_count: number
+  failed_count: number
+  created: HoldingEntry[]
+  failed?: HoldingBatchCreateFailure[]
+}
+
+export interface UpdateHoldingPayload {
+  amount: string
+  shares?: string
+  confirmed_nav?: string
+  confirmed_nav_date?: string
+  trade_at?: string
+  note?: string
+  source_platform?: string
+  source_label?: string
+}
+
+export interface SellHoldingPayload {
+  amount?: string
+  shares?: string
+  trade_at?: string
+  note?: string
+  sell_all?: boolean
+}
+
+export interface DividendHoldingPayload {
+  amount: string
+  shares?: string
+  trade_at?: string
+  note?: string
+  reinvest?: boolean
+  source_platform?: string
+  source_label?: string
+}
+
+export interface AdjustHoldingSharesPayload {
+  shares_delta?: string
+  target_shares?: string
+  confirmed_nav?: string
+  confirmed_nav_date?: string
+  trade_at?: string
+  note?: string
+  source_platform?: string
+  source_label?: string
 }
 
 export interface HoldingEstimateAggregateMetrics {
@@ -123,7 +272,7 @@ async function fetcher<T>(url: string): Promise<T> {
   const res = await fetch(url, {
     credentials: 'include',
   })
-  const json = await res.json() as ApiEnvelope<T>
+  const json = (await res.json()) as ApiEnvelope<T>
   if (!res.ok || !json.success || !json.data) {
     throw new Error(json.error?.message || 'Failed to fetch user portfolio data')
   }
@@ -140,7 +289,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
     ...init,
   })
 
-  const json = await res.json() as ApiEnvelope<T>
+  const json = (await res.json()) as ApiEnvelope<T>
   if (!res.ok || !json.success) {
     throw new Error(json.error?.message || 'Request failed')
   }
@@ -166,17 +315,51 @@ async function fetchHoldingEstimates(fundIDs: string[]): Promise<Record<string, 
       } catch {
         return [fundID, null] as const
       }
-    })
+    }),
   )
 
   return Object.fromEntries(entries)
+}
+
+function buildHoldingTransactionsPath(filters: HoldingTransactionFilters = {}) {
+  const params = new URLSearchParams()
+  params.set('limit', String(filters.limit ?? 12))
+
+  if (filters.fundID && filters.fundID !== 'all') {
+    params.set('fund_id', filters.fundID)
+  }
+  if (filters.type && filters.type !== 'all') {
+    params.set('type', filters.type)
+  }
+  if (filters.status === 'active') {
+    params.set('voided', 'false')
+  } else if (filters.status === 'voided') {
+    params.set('voided', 'true')
+  }
+  if (filters.sourcePlatform && filters.sourcePlatform !== 'all') {
+    params.set('source_platform', filters.sourcePlatform)
+  }
+  if (filters.keyword?.trim()) {
+    params.set('keyword', filters.keyword.trim())
+  }
+  if (filters.startDate) {
+    params.set('start_date', filters.startDate)
+  }
+  if (filters.endDate) {
+    params.set('end_date', filters.endDate)
+  }
+  if (typeof filters.offset === 'number' && filters.offset > 0) {
+    params.set('offset', String(filters.offset))
+  }
+
+  return `${API_BASE_URL}/api/v1/user/holdings/transactions?${params.toString()}`
 }
 
 export function useHoldingEstimateMetrics(aggregates: HoldingAggregateEntry[]) {
   const { isTrading } = useMarketTradingState()
   const fundIDs = useMemo(
     () => Array.from(new Set(aggregates.map((aggregate) => aggregate.fund_id).filter(Boolean))).sort(),
-    [aggregates]
+    [aggregates],
   )
 
   const { data: estimatesByFundID = {} } = useSWR<Record<string, FundEstimate | null>>(
@@ -186,7 +369,7 @@ export function useHoldingEstimateMetrics(aggregates: HoldingAggregateEntry[]) {
       revalidateOnFocus: isTrading,
       dedupingInterval: 5000,
       refreshInterval: isTrading ? 30000 : 0,
-    }
+    },
   )
 
   const aggregateMetrics = useMemo(() => {
@@ -199,7 +382,8 @@ export function useHoldingEstimateMetrics(aggregates: HoldingAggregateEntry[]) {
       const prevNav = parseDecimal(estimate?.prev_nav)
       const changePercent = parseDecimal(estimate?.change_percent)
 
-      const previewReady = typeof confirmedShares === 'number' &&
+      const previewReady =
+        typeof confirmedShares === 'number' &&
         confirmedShares > 0 &&
         typeof estimateNav === 'number' &&
         typeof prevNav === 'number' &&
@@ -208,13 +392,13 @@ export function useHoldingEstimateMetrics(aggregates: HoldingAggregateEntry[]) {
       const previewCurrentMarketValue = previewReady ? confirmedShares * estimateNav : null
       const previewTodayProfit = previewReady ? confirmedShares * (estimateNav - prevNav) : null
       const previewPreviousMarketValue = previewReady ? confirmedShares * prevNav : null
-      const previewTodayChangePercent = previewReady && prevNav > 0
-        ? ((previewTodayProfit ?? 0) / (previewPreviousMarketValue ?? 1)) * 100
-        : changePercent
+      const previewTodayChangePercent =
+        previewReady && prevNav > 0
+          ? ((previewTodayProfit ?? 0) / (previewPreviousMarketValue ?? 1)) * 100
+          : changePercent
 
-      const fallbackTodayProfit = !previewReady && typeof changePercent === 'number'
-        ? totalPrincipal * changePercent / 100
-        : null
+      const fallbackTodayProfit =
+        !previewReady && typeof changePercent === 'number' ? (totalPrincipal * changePercent) / 100 : null
 
       result[aggregate.fund_id] = {
         fund_id: aggregate.fund_id,
@@ -223,9 +407,8 @@ export function useHoldingEstimateMetrics(aggregates: HoldingAggregateEntry[]) {
         fallback_ready: fallbackTodayProfit !== null,
         preview_current_market_value: previewCurrentMarketValue?.toFixed(2),
         preview_today_profit: previewTodayProfit?.toFixed(2),
-        preview_today_change_percent: typeof previewTodayChangePercent === 'number'
-          ? previewTodayChangePercent.toFixed(4)
-          : undefined,
+        preview_today_change_percent:
+          typeof previewTodayChangePercent === 'number' ? previewTodayChangePercent.toFixed(4) : undefined,
         fallback_today_profit: fallbackTodayProfit?.toFixed(2),
         confirmed_principal: confirmedPrincipal?.toFixed(2),
         confirmed_shares: confirmedShares?.toFixed(6),
@@ -269,11 +452,7 @@ export function useHoldingEstimateMetrics(aggregates: HoldingAggregateEntry[]) {
       totalPreviousMarketValue += confirmedShares * prevNav
     }
 
-    const metricsScope = readyCount === 0
-      ? 'none'
-      : readyCount === aggregates.length
-        ? 'full'
-        : 'partial'
+    const metricsScope = readyCount === 0 ? 'none' : readyCount === aggregates.length ? 'full' : 'partial'
 
     return {
       metrics_scope: metricsScope,
@@ -282,14 +461,16 @@ export function useHoldingEstimateMetrics(aggregates: HoldingAggregateEntry[]) {
       ready_principal: readyPrincipal.toFixed(2),
       total_current_market_value: readyCount > 0 ? totalCurrentMarketValue.toFixed(2) : undefined,
       total_today_profit: readyCount > 0 ? totalTodayProfit.toFixed(2) : undefined,
-      total_today_change_percent: readyCount > 0 && totalPreviousMarketValue > 0
-        ? ((totalTodayProfit / totalPreviousMarketValue) * 100).toFixed(4)
-        : undefined,
-      message: readyCount === 0
-        ? '待确认份额补齐后展示盘中预估总览。'
-        : readyCount < aggregates.length
-          ? `当前已按确认份额汇总 ${readyCount}/${aggregates.length} 只基金的盘中预估，剩余基金待补齐份额。`
-          : '盘中预估总览已按全部已确认份额汇总。',
+      total_today_change_percent:
+        readyCount > 0 && totalPreviousMarketValue > 0
+          ? ((totalTodayProfit / totalPreviousMarketValue) * 100).toFixed(4)
+          : undefined,
+      message:
+        readyCount === 0
+          ? '待确认份额补齐后展示盘中预估总览。'
+          : readyCount < aggregates.length
+            ? `当前已按确认份额汇总 ${readyCount}/${aggregates.length} 只基金的盘中预估，剩余基金待补齐份额。`
+            : '盘中预估总览已按全部已确认份额汇总。',
     }
   }, [aggregateMetrics, aggregates])
 
@@ -300,14 +481,39 @@ export function useHoldingEstimateMetrics(aggregates: HoldingAggregateEntry[]) {
   }
 }
 
-export function useUserPortfolio(userID: string | null) {
+export function useUserPortfolio(userID: string | null, transactionFilters: HoldingTransactionFilters = {}) {
+  const {
+    fundID: transactionFundID,
+    type: transactionType,
+    status: transactionStatus,
+    sourcePlatform: transactionSourcePlatform,
+    keyword: transactionKeyword,
+    startDate: transactionStartDate,
+    endDate: transactionEndDate,
+    offset: transactionOffset,
+    limit: transactionLimit,
+  } = transactionFilters
+  const holdingTransactionsPath = userID
+    ? buildHoldingTransactionsPath({
+        fundID: transactionFundID,
+        type: transactionType,
+        status: transactionStatus,
+        sourcePlatform: transactionSourcePlatform,
+        keyword: transactionKeyword,
+        startDate: transactionStartDate,
+        endDate: transactionEndDate,
+        offset: transactionOffset,
+        limit: transactionLimit,
+      })
+    : null
+
   const { data: watchlistGroups = [], mutate: mutateWatchlistGroups } = useSWR<WatchlistGroup[]>(
     userID ? `${API_BASE_URL}/api/v1/user/watchlist/groups` : null,
     fetcher,
     {
       revalidateOnFocus: false,
       dedupingInterval: 5000,
-    }
+    },
   )
 
   const { data: holdingsPayload, mutate: mutateHoldings } = useSWR<HoldingsResponse>(
@@ -316,7 +522,16 @@ export function useUserPortfolio(userID: string | null) {
     {
       revalidateOnFocus: false,
       dedupingInterval: 5000,
-    }
+    },
+  )
+
+  const { data: holdingTransactions = [], mutate: mutateHoldingTransactions } = useSWR<HoldingTransactionEntry[]>(
+    holdingTransactionsPath,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 5000,
+    },
   )
 
   const holdings = holdingsPayload?.items ?? []
@@ -336,6 +551,7 @@ export function useUserPortfolio(userID: string | null) {
     watchlistGroups,
     holdings,
     holdingAggregates,
+    holdingTransactions,
     holdingSummary,
     totalWatchlistFunds: watchlistGroups.reduce((sum, group) => sum + group.funds.length, 0),
     seedDemoData: async () => {
@@ -400,7 +616,7 @@ export function useUserPortfolio(userID: string | null) {
         })
       }
 
-      await Promise.all([mutateWatchlistGroups(), mutateHoldings()])
+      await Promise.all([mutateWatchlistGroups(), mutateHoldings(), mutateHoldingTransactions()])
     },
     createGroup: async (name: string, description: string) => {
       if (!userID) return
@@ -464,14 +680,105 @@ export function useUserPortfolio(userID: string | null) {
           note,
         }),
       })
-      await mutateHoldings()
+      await Promise.all([mutateHoldings(), mutateHoldingTransactions()])
+    },
+    updateHolding: async (holdingID: string, payload: UpdateHoldingPayload) => {
+      if (!userID) return
+      await request(`/api/v1/user/holdings/${holdingID}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      })
+      await Promise.all([mutateHoldings(), mutateHoldingTransactions()])
+    },
+    sellHolding: async (holdingID: string, payload: SellHoldingPayload) => {
+      if (!userID) return
+      await request(`/api/v1/user/holdings/${holdingID}/sell`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      await Promise.all([mutateHoldings(), mutateHoldingTransactions()])
+    },
+    recordHoldingDividend: async (holdingID: string, payload: DividendHoldingPayload) => {
+      if (!userID) return
+      await request(`/api/v1/user/holdings/${holdingID}/dividend`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      await Promise.all([mutateHoldings(), mutateHoldingTransactions()])
+    },
+    adjustHoldingShares: async (holdingID: string, payload: AdjustHoldingSharesPayload) => {
+      if (!userID) return
+      await request(`/api/v1/user/holdings/${holdingID}/adjustment`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      await Promise.all([mutateHoldings(), mutateHoldingTransactions()])
     },
     removeHolding: async (holdingID: string) => {
       if (!userID) return
       await request(`/api/v1/user/holdings/${holdingID}`, {
         method: 'DELETE',
       })
-      await mutateHoldings()
+      await Promise.all([mutateHoldings(), mutateHoldingTransactions()])
     },
+    voidHoldingTransaction: async (transactionID: string, reason: string) => {
+      if (!userID) return
+      await request(`/api/v1/user/holdings/transactions/${transactionID}/void`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      })
+      await mutateHoldingTransactions()
+    },
+    previewHoldingTransactionRollback: async (transactionID: string) => {
+      if (!userID) return null
+      return request<HoldingTransactionRollbackPreview>(
+        `/api/v1/user/holdings/transactions/${transactionID}/rollback-preview`,
+      )
+    },
+    applyHoldingTransactionRollback: async (transactionID: string, reason: string) => {
+      if (!userID) return null
+      const result = await request<HoldingTransactionRollbackApplyResult>(
+        `/api/v1/user/holdings/transactions/${transactionID}/rollback-apply`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ reason }),
+        },
+      )
+      await Promise.all([mutateHoldings(), mutateHoldingTransactions()])
+      return result
+    },
+    addHoldingsBatch: async (items: CreateHoldingBatchItem[]) => {
+      if (!userID) return null
+      const result = await request<HoldingBatchCreateResult>('/api/v1/user/holdings/batch', {
+        method: 'POST',
+        body: JSON.stringify({ items }),
+      })
+      await Promise.all([mutateHoldings(), mutateHoldingTransactions()])
+      return result
+    },
+    getHoldingTransactionDetail: async (transactionID: string) => {
+      if (!userID) return null
+      return request<HoldingTransactionDetail>(`/api/v1/user/holdings/transactions/${transactionID}`)
+    },
+  }
+}
+
+export function useHoldingTransactionDetail(userID: string | null, transactionID: string | null) {
+  const { data, error, isLoading, mutate } = useSWR<HoldingTransactionDetail>(
+    userID && transactionID
+      ? `${API_BASE_URL}/api/v1/user/holdings/transactions/${transactionID}`
+      : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 5000,
+    },
+  )
+
+  return {
+    detail: data ?? null,
+    error,
+    isLoading,
+    refresh: mutate,
   }
 }

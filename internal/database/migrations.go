@@ -62,6 +62,26 @@ var managedMigrations = []sqlMigration{
 		Statements:     userHoldingConfirmationMigrationStatements,
 	},
 	{
+		ID:             "20260525_user_holding_manual_confirmation",
+		RequiredTables: []string{"tb_user_fund_holding"},
+		Statements:     userHoldingManualConfirmationMigrationStatements,
+	},
+	{
+		ID:             "20260525_user_holding_transactions",
+		RequiredTables: []string{"tb_user_fund_holding"},
+		Statements:     userHoldingTransactionMigrationStatements,
+	},
+	{
+		ID:             "20260525_user_holding_transaction_voids",
+		RequiredTables: []string{"tb_user_fund_holding_transaction"},
+		Statements:     userHoldingTransactionVoidMigrationStatements,
+	},
+	{
+		ID:             "20260526_user_holding_sources",
+		RequiredTables: []string{"tb_user_fund_holding", "tb_user_fund_holding_transaction"},
+		Statements:     userHoldingSourceMigrationStatements,
+	},
+	{
 		ID:             "20260423_user_watchlist_group_ordering",
 		RequiredTables: []string{"tb_user_watchlist_group"},
 		Statements:     watchlistGroupOrderingMigrationStatements,

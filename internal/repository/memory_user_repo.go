@@ -22,6 +22,7 @@ type MemoryUserRepository struct {
 	watchlistGroups  map[string]map[string]domain.UserWatchlistGroup
 	watchlistFunds   map[string]map[string][]domain.UserWatchlistFund
 	fundHoldings     map[string]map[string]domain.UserFundHolding
+	holdingTxs       map[string][]domain.UserFundHoldingTransaction
 	holdingOverrides map[string]map[string][]domain.UserHoldingOverride
 }
 
@@ -36,6 +37,7 @@ func NewMemoryUserRepository() *MemoryUserRepository {
 		watchlistGroups:  make(map[string]map[string]domain.UserWatchlistGroup),
 		watchlistFunds:   make(map[string]map[string][]domain.UserWatchlistFund),
 		fundHoldings:     make(map[string]map[string]domain.UserFundHolding),
+		holdingTxs:       make(map[string][]domain.UserFundHoldingTransaction),
 		holdingOverrides: make(map[string]map[string][]domain.UserHoldingOverride),
 	}
 }
@@ -386,6 +388,19 @@ func (r *MemoryUserRepository) ListFundHoldings(ctx context.Context, userID stri
 	return result, nil
 }
 
+func (r *MemoryUserRepository) GetFundHolding(ctx context.Context, userID, holdingID string) (*domain.UserFundHolding, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if holdingMap, ok := r.fundHoldings[userID]; ok {
+		if holding, exists := holdingMap[holdingID]; exists {
+			copyHolding := holding
+			return &copyHolding, nil
+		}
+	}
+	return nil, nil
+}
+
 func (r *MemoryUserRepository) ListFundHoldingsMissingConfirmation(ctx context.Context) ([]domain.UserFundHolding, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -393,6 +408,9 @@ func (r *MemoryUserRepository) ListFundHoldingsMissingConfirmation(ctx context.C
 	result := make([]domain.UserFundHolding, 0)
 	for _, holdingMap := range r.fundHoldings {
 		for _, holding := range holdingMap {
+			if holding.ManualConfirmation {
+				continue
+			}
 			if holding.Shares.GreaterThan(decimal.Zero) && holding.ConfirmedNav.GreaterThan(decimal.Zero) && holding.ConfirmedNavDate != "" {
 				continue
 			}
@@ -441,6 +459,167 @@ func (r *MemoryUserRepository) DeleteFundHolding(ctx context.Context, userID, ho
 		delete(holdingMap, holdingID)
 	}
 	return nil
+}
+
+func (r *MemoryUserRepository) ListFundHoldingTransactions(ctx context.Context, userID string, limit int) ([]domain.UserFundHoldingTransaction, error) {
+	return r.ListFundHoldingTransactionsFiltered(ctx, userID, domain.UserFundHoldingTransactionFilter{Limit: limit})
+}
+
+func (r *MemoryUserRepository) ListFundHoldingTransactionsFiltered(ctx context.Context, userID string, filter domain.UserFundHoldingTransactionFilter) ([]domain.UserFundHoldingTransaction, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	transactions := r.holdingTxs[userID]
+	result := make([]domain.UserFundHoldingTransaction, 0, len(transactions))
+	types := holdingTransactionTypeSet(filter.Types)
+	for i := range transactions {
+		tx := transactions[i]
+		if filter.FundID != "" && tx.FundID != filter.FundID {
+			continue
+		}
+		if len(types) > 0 {
+			if _, ok := types[tx.Type]; !ok {
+				continue
+			}
+		}
+		if filter.Voided != nil && tx.Voided != *filter.Voided {
+			continue
+		}
+		if filter.SourcePlatform != "" && tx.SourcePlatform != filter.SourcePlatform {
+			continue
+		}
+		if filter.CreatedFrom != nil && tx.CreatedAt.Before(*filter.CreatedFrom) {
+			continue
+		}
+		if filter.CreatedBefore != nil && !tx.CreatedAt.Before(*filter.CreatedBefore) {
+			continue
+		}
+		if filter.Keyword != "" && !holdingTransactionMatchesKeyword(tx, filter.Keyword) {
+			continue
+		}
+		result = append(result, copyFundHoldingTransaction(tx))
+	}
+	sort.SliceStable(result, func(i, j int) bool {
+		return result[i].CreatedAt.After(result[j].CreatedAt)
+	})
+
+	resolvedLimit := normalizeHoldingTransactionLimit(filter.Limit)
+	if filter.Offset >= len(result) {
+		return []domain.UserFundHoldingTransaction{}, nil
+	}
+	if filter.Offset > 0 {
+		result = result[filter.Offset:]
+	}
+	if len(result) > resolvedLimit {
+		result = result[:resolvedLimit]
+	}
+	return result, nil
+}
+
+func holdingTransactionMatchesKeyword(tx domain.UserFundHoldingTransaction, keyword string) bool {
+	keyword = strings.ToLower(strings.TrimSpace(keyword))
+	if keyword == "" {
+		return true
+	}
+
+	candidates := []string{
+		tx.ID,
+		tx.HoldingID,
+		tx.FundID,
+		string(tx.Type),
+		tx.Note,
+		tx.SourcePlatform,
+		tx.SourceLabel,
+		tx.ConfirmedNavDate,
+		tx.TradeAt,
+		tx.AsOfDate,
+		tx.VoidReason,
+	}
+	for _, candidate := range candidates {
+		if strings.Contains(strings.ToLower(candidate), keyword) {
+			return true
+		}
+	}
+	for key, value := range tx.Metadata {
+		if strings.Contains(strings.ToLower(key), keyword) || strings.Contains(strings.ToLower(value), keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+func holdingTransactionTypeSet(types []domain.UserFundHoldingTransactionType) map[domain.UserFundHoldingTransactionType]struct{} {
+	if len(types) == 0 {
+		return nil
+	}
+
+	result := make(map[domain.UserFundHoldingTransactionType]struct{}, len(types))
+	for _, txType := range types {
+		if txType == "" {
+			continue
+		}
+		result[txType] = struct{}{}
+	}
+	return result
+}
+
+func (r *MemoryUserRepository) GetFundHoldingTransaction(ctx context.Context, userID, transactionID string) (*domain.UserFundHoldingTransaction, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, tx := range r.holdingTxs[userID] {
+		if tx.ID == transactionID {
+			copyTx := copyFundHoldingTransaction(tx)
+			return &copyTx, nil
+		}
+	}
+	return nil, nil
+}
+
+func (r *MemoryUserRepository) SaveFundHoldingTransaction(ctx context.Context, tx *domain.UserFundHoldingTransaction) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if tx.CreatedAt.IsZero() {
+		tx.CreatedAt = time.Now()
+	}
+	copyTx := copyFundHoldingTransaction(*tx)
+	r.holdingTxs[tx.UserID] = append(r.holdingTxs[tx.UserID], copyTx)
+	return nil
+}
+
+func (r *MemoryUserRepository) VoidFundHoldingTransaction(ctx context.Context, userID, transactionID, reason string, voidedAt time.Time) (*domain.UserFundHoldingTransaction, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for index, tx := range r.holdingTxs[userID] {
+		if tx.ID != transactionID {
+			continue
+		}
+		updated := copyFundHoldingTransaction(tx)
+		updated.Voided = true
+		updated.VoidedAt = &voidedAt
+		updated.VoidReason = reason
+		r.holdingTxs[userID][index] = updated
+		copyTx := copyFundHoldingTransaction(updated)
+		return &copyTx, nil
+	}
+	return nil, nil
+}
+
+func copyFundHoldingTransaction(tx domain.UserFundHoldingTransaction) domain.UserFundHoldingTransaction {
+	copyTx := tx
+	if tx.Metadata != nil {
+		copyTx.Metadata = make(map[string]string, len(tx.Metadata))
+		for key, value := range tx.Metadata {
+			copyTx.Metadata[key] = value
+		}
+	}
+	if tx.VoidedAt != nil {
+		voidedAt := *tx.VoidedAt
+		copyTx.VoidedAt = &voidedAt
+	}
+	return copyTx
 }
 
 func (r *MemoryUserRepository) findGroupOwnerLocked(groupID string) (string, bool) {

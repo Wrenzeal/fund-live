@@ -1056,6 +1056,18 @@ textarea::selection {
   color: #92400e;
 }
 
+[data-theme="classic"] .vip-premium-gradient {
+  background: linear-gradient(135deg, #b45309 0%, #0369a1 54%, #1d4ed8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+[data-theme="classic"] .vip-hero-orb {
+  opacity: 0.46;
+  filter: blur(30px);
+}
+
 [data-theme="classic"] .vip-stat-card,
 [data-theme="classic"] .vip-value-card,
 [data-theme="classic"] .vip-order-summary {
@@ -1157,6 +1169,52 @@ textarea::selection {
 [data-theme="classic"] .vip-secondary-cta:hover {
   border-color: rgba(245, 158, 11, 0.34);
   background: linear-gradient(135deg, rgba(255, 255, 255, 1), rgba(254, 243, 199, 0.68));
+}
+
+[data-theme="classic"] .vip-primary-cta {
+  color: #0f172a;
+  background: linear-gradient(135deg, #fef3c7 0%, #fbbf24 34%, #7dd3fc 78%, #bfdbfe 100%);
+  box-shadow:
+    0 18px 34px rgba(245, 158, 11, 0.16),
+    0 10px 22px rgba(14, 165, 233, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+
+[data-theme="classic"] .vip-primary-cta:hover {
+  box-shadow:
+    0 22px 42px rgba(245, 158, 11, 0.20),
+    0 14px 28px rgba(14, 165, 233, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.68);
+}
+
+[data-theme="classic"] .vip-entry-action-cyan,
+[data-theme="classic"] .vip-entry-action-amber {
+  color: #0f172a;
+  box-shadow:
+    0 14px 28px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.68);
+}
+
+[data-theme="classic"] .vip-entry-action-cyan {
+  border-color: rgba(14, 165, 233, 0.28);
+  background: linear-gradient(135deg, rgba(224, 242, 254, 0.94), rgba(219, 234, 254, 0.82));
+}
+
+[data-theme="classic"] .vip-entry-action-amber {
+  border-color: rgba(245, 158, 11, 0.30);
+  background: linear-gradient(135deg, rgba(254, 243, 199, 0.96), rgba(255, 247, 237, 0.86));
+}
+
+[data-theme="classic"] .vip-entry-action-cyan:hover,
+[data-theme="classic"] .vip-entry-action-amber:hover {
+  box-shadow:
+    0 18px 34px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.74);
+}
+
+[data-theme="classic"] .vip-entry-action-shine,
+[data-theme="classic"] .vip-primary-cta::after {
+  background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.48) 34%, rgba(14, 165, 233, 0.16) 48%, transparent 74%);
 }
 
 [data-theme="classic"] .vip-price-spotlight,

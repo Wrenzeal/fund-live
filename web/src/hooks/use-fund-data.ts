@@ -575,6 +575,11 @@ export interface FundAnalysisRankingsPayload {
     risk_alerts: FundAnalysisRankingItem[]
 }
 
+export interface FundExposureSnapshotEntry {
+    sectorSnapshot?: FundSectorSnapshot
+    themeSnapshot?: FundThemeSnapshot
+}
+
 /**
  * useTimeSeries - 获取分时数据
  * 
@@ -738,6 +743,83 @@ export function useFundDashboard(fundId: string | null, options?: SWRConfigurati
         isTrading: dashboard.isTrading,
         refreshInterval: dashboard.refreshInterval,
         isWarming: dashboard.isWarming,
+    }
+}
+
+async function fetchFundExposureSnapshots(fundIDs: string[]): Promise<Record<string, FundExposureSnapshotEntry>> {
+    const entries = await Promise.all(
+        fundIDs.map(async (fundID) => {
+            try {
+                const payload = await fetchEnvelope<FundDashboardPayload>(`${API_BASE_URL}/api/v1/fund/${fundID}/dashboard?include_analysis=false`)
+                return [fundID, {
+                    sectorSnapshot: payload.data.sector_snapshot,
+                    themeSnapshot: payload.data.theme_snapshot,
+                }] as const
+            } catch {
+                return [fundID, {}] as const
+            }
+        })
+    )
+
+    return Object.fromEntries(entries)
+}
+
+export function useFundExposureSnapshots(fundIDs: string[]) {
+    const { isTrading } = useMarketTradingState()
+    const normalizedFundIDs = [...new Set(fundIDs.filter(Boolean))].sort()
+
+    const { data = {}, error, isLoading, isValidating } = useSWR<Record<string, FundExposureSnapshotEntry>>(
+        normalizedFundIDs.length > 0 ? ['fund-exposure-snapshots', normalizedFundIDs.join(',')] : null,
+        () => fetchFundExposureSnapshots(normalizedFundIDs),
+        {
+            refreshInterval: isTrading ? DEFAULT_TRADING_INTERVAL : DEFAULT_CLOSED_INTERVAL,
+            revalidateOnFocus: false,
+            dedupingInterval: 10000,
+        }
+    )
+
+    return {
+        exposureSnapshotsByFundID: data,
+        isLoading,
+        isValidating,
+        isError: !!error,
+    }
+}
+
+async function fetchFundTopHoldings(fundIDs: string[]): Promise<Record<string, FundHoldingRecord[]>> {
+    const entries = await Promise.all(
+        fundIDs.map(async (fundID) => {
+            try {
+                const payload = await fetchEnvelope<{ fund: Fund; holdings: FundHoldingRecord[] }>(
+                    `${API_BASE_URL}/api/v1/fund/${fundID}/holdings`
+                )
+                return [fundID, payload.data.holdings ?? []] as const
+            } catch {
+                return [fundID, []] as const
+            }
+        })
+    )
+
+    return Object.fromEntries(entries)
+}
+
+export function useFundTopHoldings(fundIDs: string[]) {
+    const normalizedFundIDs = [...new Set(fundIDs.filter(Boolean))].sort()
+
+    const { data = {}, error, isLoading, isValidating } = useSWR<Record<string, FundHoldingRecord[]>>(
+        normalizedFundIDs.length > 0 ? ['fund-top-holdings', normalizedFundIDs.join(',')] : null,
+        () => fetchFundTopHoldings(normalizedFundIDs),
+        {
+            revalidateOnFocus: false,
+            dedupingInterval: 60000,
+        }
+    )
+
+    return {
+        topHoldingsByFundID: data,
+        isLoading,
+        isValidating,
+        isError: !!error,
     }
 }
 

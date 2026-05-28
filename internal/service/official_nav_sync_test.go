@@ -100,6 +100,52 @@ func TestOfficialNAVSyncServiceSkipsImmediateSyncOnWeekend(t *testing.T) {
 	}
 }
 
+func TestOfficialNAVSyncServiceSkipsManualHoldingConfirmation(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewOfficialNAVSyncService(fundRepo, userRepo)
+
+	if err := userRepo.SaveFundHolding(context.Background(), &domain.UserFundHolding{
+		ID:                 "ufh_manual",
+		UserID:             "user-1",
+		FundID:             "005827",
+		Amount:             decimal.RequireFromString("1000"),
+		AsOfDate:           "2026-03-31",
+		ManualConfirmation: true,
+	}); err != nil {
+		t.Fatalf("SaveFundHolding() error = %v", err)
+	}
+	if err := fundRepo.SaveFundHistory(context.Background(), &domain.FundHistory{
+		FundID:      "005827",
+		Date:        "2026-03-31",
+		NetAssetVal: decimal.RequireFromString("2.0000"),
+		AccumVal:    decimal.RequireFromString("2.0000"),
+		DailyReturn: decimal.RequireFromString("1.0000"),
+		CreatedAt:   time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFundHistory() error = %v", err)
+	}
+
+	backfilledCount, err := service.backfillHoldingConfirmations(context.Background())
+	if err != nil {
+		t.Fatalf("backfillHoldingConfirmations() error = %v", err)
+	}
+	if backfilledCount != 0 {
+		t.Fatalf("backfilledCount = %d, want 0", backfilledCount)
+	}
+
+	holdings, err := userRepo.ListFundHoldings(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("ListFundHoldings() error = %v", err)
+	}
+	if len(holdings) != 1 {
+		t.Fatalf("holdings len = %d, want 1", len(holdings))
+	}
+	if holdings[0].Shares.GreaterThan(decimal.Zero) || holdings[0].ConfirmedNav.GreaterThan(decimal.Zero) || holdings[0].ConfirmedNavDate != "" {
+		t.Fatalf("manual holding was unexpectedly backfilled: %+v", holdings[0])
+	}
+}
+
 func TestOfficialNAVSyncServiceBackfillsHoldingConfirmationWhenHistoryExists(t *testing.T) {
 	fundRepo := repository.NewMemoryFundRepository()
 	userRepo := repository.NewMemoryUserRepository()
