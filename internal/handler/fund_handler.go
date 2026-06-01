@@ -12,6 +12,7 @@ import (
 
 	"github.com/RomaticDOG/fund/internal/database"
 	"github.com/RomaticDOG/fund/internal/domain"
+	"github.com/RomaticDOG/fund/internal/middleware"
 	"github.com/RomaticDOG/fund/internal/service"
 	"github.com/RomaticDOG/fund/internal/trading"
 	"github.com/gin-gonic/gin"
@@ -50,6 +51,9 @@ type fundSectorSnapshotStore interface {
 	GetLatestSnapshot(ctx context.Context, fundID string) (*domain.FundSectorSnapshot, error)
 	GetLatestThemeSnapshot(ctx context.Context, fundID string) (*domain.FundThemeSnapshot, error)
 	ResolveFundCategory(ctx context.Context, fund *domain.Fund, snapshot *domain.FundSectorSnapshot) (*domain.FundCategory, error)
+	GetClassificationOverride(ctx context.Context, fundID string) (*domain.FundClassificationOverride, error)
+	UpsertClassificationOverride(ctx context.Context, input service.FundClassificationOverrideInput) (*domain.FundClassificationOverride, error)
+	ListClassificationOptions(ctx context.Context) (*domain.FundClassificationOptions, error)
 }
 
 // FundHandler handles fund-related HTTP requests.
@@ -165,17 +169,26 @@ type EstimateResponse struct {
 }
 
 type FundDashboardResponse struct {
-	Fund           *domain.Fund               `json:"fund,omitempty"`
-	Estimate       *EstimateResponse          `json:"estimate,omitempty"`
-	Analysis       *domain.FundAnalysis       `json:"analysis,omitempty"`
-	SectorSnapshot *domain.FundSectorSnapshot `json:"sector_snapshot,omitempty"`
-	ThemeSnapshot  *domain.FundThemeSnapshot  `json:"theme_snapshot,omitempty"`
-	TimeSeries     []domain.TimeSeriesPoint   `json:"time_series"`
-	DisplayDate    string                     `json:"display_date"`
-	IsTrading      bool                       `json:"is_trading"`
-	IsHistorical   bool                       `json:"is_historical"`
-	Session        trading.SessionType        `json:"session"`
-	LastTradingDay string                     `json:"last_trading_day"`
+	Fund                   *domain.Fund                       `json:"fund,omitempty"`
+	Estimate               *EstimateResponse                  `json:"estimate,omitempty"`
+	Analysis               *domain.FundAnalysis               `json:"analysis,omitempty"`
+	SectorSnapshot         *domain.FundSectorSnapshot         `json:"sector_snapshot,omitempty"`
+	ThemeSnapshot          *domain.FundThemeSnapshot          `json:"theme_snapshot,omitempty"`
+	ClassificationOverride *domain.FundClassificationOverride `json:"classification_override,omitempty"`
+	TimeSeries             []domain.TimeSeriesPoint           `json:"time_series"`
+	DisplayDate            string                             `json:"display_date"`
+	IsTrading              bool                               `json:"is_trading"`
+	IsHistorical           bool                               `json:"is_historical"`
+	Session                trading.SessionType                `json:"session"`
+	LastTradingDay         string                             `json:"last_trading_day"`
+}
+
+type ClassificationOverrideRequest struct {
+	CategoryCode      string   `json:"category_code"`
+	PrimarySectorCode string   `json:"primary_sector_code"`
+	PrimaryThemeCode  string   `json:"primary_theme_code"`
+	ManualTags        []string `json:"manual_tags"`
+	Note              string   `json:"note"`
 }
 
 type FundAnalysisResponse struct {
@@ -442,6 +455,10 @@ func (h *FundHandler) GetDashboard(c *gin.Context) {
 		fund.CategoryCode = category.Code
 		fund.CategoryName = category.Name
 	}
+	classificationOverride, overrideErr := h.getClassificationOverride(c.Request.Context(), fundID)
+	if overrideErr != nil {
+		log.Printf("⚠️ Failed to load classification override for %s: %v", fundID, overrideErr)
+	}
 	var analysis *domain.FundAnalysis
 	includeAnalysis := strings.TrimSpace(c.DefaultQuery("include_analysis", "true")) != "false"
 	if includeAnalysis && estimate != nil {
@@ -454,20 +471,117 @@ func (h *FundHandler) GetDashboard(c *gin.Context) {
 	c.JSON(http.StatusOK, APIResponse{
 		Success: true,
 		Data: FundDashboardResponse{
-			Fund:           fund,
-			Estimate:       estimateResponse,
-			Analysis:       analysis,
-			SectorSnapshot: sectorSnapshot,
-			ThemeSnapshot:  themeSnapshot,
-			TimeSeries:     timeSeries,
-			DisplayDate:    displayDate,
-			IsTrading:      marketStatus.IsTrading,
-			IsHistorical:   isHistorical,
-			Session:        marketStatus.Session,
-			LastTradingDay: marketStatus.LastTradingDay,
+			Fund:                   fund,
+			Estimate:               estimateResponse,
+			Analysis:               analysis,
+			SectorSnapshot:         sectorSnapshot,
+			ThemeSnapshot:          themeSnapshot,
+			ClassificationOverride: classificationOverride,
+			TimeSeries:             timeSeries,
+			DisplayDate:            displayDate,
+			IsTrading:              marketStatus.IsTrading,
+			IsHistorical:           isHistorical,
+			Session:                marketStatus.Session,
+			LastTradingDay:         marketStatus.LastTradingDay,
 		},
 		Meta: buildResponseMeta("", cacheStatus),
 	})
+}
+
+// GetClassificationOptions returns the dictionaries used by administrator classification overrides.
+// GET /api/v1/admin/funds/classification-options
+func (h *FundHandler) GetClassificationOptions(c *gin.Context) {
+	if h == nil || h.sectorStore == nil {
+		c.JSON(http.StatusServiceUnavailable, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "CLASSIFICATION_STORE_UNAVAILABLE", Message: "Classification store is unavailable"},
+		})
+		return
+	}
+
+	options, err := h.sectorStore.ListClassificationOptions(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "CLASSIFICATION_OPTIONS_FAILED", Message: err.Error()},
+		})
+		return
+	}
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: options})
+}
+
+// GetClassificationOverride returns one fund's administrator-maintained classification override.
+// GET /api/v1/admin/funds/:id/classification
+func (h *FundHandler) GetClassificationOverride(c *gin.Context) {
+	fundID := strings.TrimSpace(c.Param("id"))
+	if fundID == "" {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_FUND_ID", Message: "Fund ID is required"},
+		})
+		return
+	}
+
+	override, err := h.getClassificationOverride(c.Request.Context(), fundID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "CLASSIFICATION_OVERRIDE_FAILED", Message: err.Error()},
+		})
+		return
+	}
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: override})
+}
+
+// UpdateClassificationOverride updates one fund's administrator-maintained classification override.
+// PUT /api/v1/admin/funds/:id/classification
+func (h *FundHandler) UpdateClassificationOverride(c *gin.Context) {
+	fundID := strings.TrimSpace(c.Param("id"))
+	if fundID == "" {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_FUND_ID", Message: "Fund ID is required"},
+		})
+		return
+	}
+	if h == nil || h.sectorStore == nil {
+		c.JSON(http.StatusServiceUnavailable, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "CLASSIFICATION_STORE_UNAVAILABLE", Message: "Classification store is unavailable"},
+		})
+		return
+	}
+
+	var req ClassificationOverrideRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_REQUEST", Message: err.Error()},
+		})
+		return
+	}
+
+	updatedBy := ""
+	if user, ok := middleware.CurrentUser(c); ok && user != nil {
+		updatedBy = user.Email
+	}
+	override, err := h.sectorStore.UpsertClassificationOverride(c.Request.Context(), service.FundClassificationOverrideInput{
+		FundID:            fundID,
+		CategoryCode:      req.CategoryCode,
+		PrimarySectorCode: req.PrimarySectorCode,
+		PrimaryThemeCode:  req.PrimaryThemeCode,
+		ManualTags:        req.ManualTags,
+		Note:              req.Note,
+		UpdatedBy:         updatedBy,
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "CLASSIFICATION_OVERRIDE_INVALID", Message: err.Error()},
+		})
+		return
+	}
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: override})
 }
 
 // GetAnalysis returns standalone quant analysis so rankings/holdings/watchlist can reuse one analysis surface.
@@ -890,6 +1004,13 @@ func (h *FundHandler) resolveFundCategory(ctx context.Context, fund *domain.Fund
 		return nil, nil
 	}
 	return h.sectorStore.ResolveFundCategory(ctx, fund, snapshot)
+}
+
+func (h *FundHandler) getClassificationOverride(ctx context.Context, fundID string) (*domain.FundClassificationOverride, error) {
+	if h == nil || h.sectorStore == nil {
+		return nil, nil
+	}
+	return h.sectorStore.GetClassificationOverride(ctx, fundID)
 }
 
 // GetHoldings handles fund holdings requests.

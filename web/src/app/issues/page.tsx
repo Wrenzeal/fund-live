@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { AlertTriangle, Bug, Check, CheckCircle2, ChevronDown, LoaderCircle, Search, Sparkles, WandSparkles } from 'lucide-react'
+import { ScrollReveal, ScrollRevealStack } from '@/components/scroll-reveal'
 import { SiteShell } from '@/components/site-shell'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { createIssue, type IssueStatus, type IssueType, useIssues } from '@/hooks/use-issues'
@@ -217,7 +218,7 @@ export default function IssuesPage() {
       EyebrowIcon={WandSparkles}
     >
       <div className="space-y-8">
-        <section className="grid gap-5 lg:grid-cols-4">
+        <ScrollRevealStack className="grid gap-5 lg:grid-cols-4" stagger={65}>
           {[
             { label: '当前想法', value: counts.total, accent: 'text-cyan-300' },
             { label: '待接收', value: counts.pending, accent: 'text-amber-300' },
@@ -229,53 +230,55 @@ export default function IssuesPage() {
               <div className={cn('mt-3 text-4xl font-black', item.accent)}>{item.value}</div>
             </article>
           ))}
-        </section>
+        </ScrollRevealStack>
 
-        <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
-          <div className="grid gap-4 lg:grid-cols-[1.4fr_0.7fr_0.7fr]">
-            <label className="rounded-[22px] border border-[var(--input-border)] bg-[var(--input-bg)]/70 px-4 py-3">
-              <div className="mb-2 text-xs tracking-[0.18em] text-theme-muted">关键字搜索</div>
-              <div className="flex items-center gap-3">
-                <Search className="h-4 w-4 text-theme-muted" />
-                <input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="搜索标题或详情"
-                  className="w-full bg-transparent text-sm text-theme-primary outline-none placeholder:text-theme-muted"
-                />
-              </div>
-            </label>
+        <ScrollReveal>
+          <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
+            <div className="grid gap-4 lg:grid-cols-[1.4fr_0.7fr_0.7fr]">
+              <label className="rounded-[22px] border border-[var(--input-border)] bg-[var(--input-bg)]/70 px-4 py-3">
+                <div className="mb-2 text-xs tracking-[0.18em] text-theme-muted">关键字搜索</div>
+                <div className="flex items-center gap-3">
+                  <Search className="h-4 w-4 text-theme-muted" />
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="搜索标题或详情"
+                    className="w-full bg-transparent text-sm text-theme-primary outline-none placeholder:text-theme-muted"
+                  />
+                </div>
+              </label>
 
-            <IdeaSelect
-              label="按类型筛选"
-              value={type}
-              options={issueTypes.map((option) => ({
-                id: option.id,
-                label: option.label,
-                hint: option.id ? `只看 ${option.label} 相关想法` : '查看所有类型的想法',
-              }))}
-              isOpen={openSelect === 'filter-type'}
-              onToggle={() => setOpenSelect((current) => current === 'filter-type' ? null : 'filter-type')}
-              onSelect={(value) => setType(value as '' | IssueType)}
-            />
+              <IdeaSelect
+                label="按类型筛选"
+                value={type}
+                options={issueTypes.map((option) => ({
+                  id: option.id,
+                  label: option.label,
+                  hint: option.id ? `只看 ${option.label} 相关想法` : '查看所有类型的想法',
+                }))}
+                isOpen={openSelect === 'filter-type'}
+                onToggle={() => setOpenSelect((current) => current === 'filter-type' ? null : 'filter-type')}
+                onSelect={(value) => setType(value as '' | IssueType)}
+              />
 
-            <IdeaSelect
-              label="按状态筛选"
-              value={status}
-              options={issueStatuses.map((option) => ({
-                id: option.id,
-                label: option.label,
-                hint: option.id ? `只看 ${option.label} 的处理状态` : '查看所有处理状态',
-              }))}
-              isOpen={openSelect === 'filter-status'}
-              onToggle={() => setOpenSelect((current) => current === 'filter-status' ? null : 'filter-status')}
-              onSelect={(value) => setStatus(value as '' | IssueStatus)}
-            />
-          </div>
-        </section>
+              <IdeaSelect
+                label="按状态筛选"
+                value={status}
+                options={issueStatuses.map((option) => ({
+                  id: option.id,
+                  label: option.label,
+                  hint: option.id ? `只看 ${option.label} 的处理状态` : '查看所有处理状态',
+                }))}
+                isOpen={openSelect === 'filter-status'}
+                onToggle={() => setOpenSelect((current) => current === 'filter-status' ? null : 'filter-status')}
+                onSelect={(value) => setStatus(value as '' | IssueStatus)}
+              />
+            </div>
+          </section>
+        </ScrollReveal>
 
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-4">
+          <ScrollRevealStack className="space-y-4">
             {isLoading ? (
               <div className="rounded-[32px] border border-[var(--card-border)] p-10 glass text-center">
                 <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
@@ -334,9 +337,9 @@ export default function IssuesPage() {
                 )
               })
             )}
-          </div>
+          </ScrollRevealStack>
 
-          <div className="space-y-6">
+          <ScrollReveal className="space-y-6" delay={80}>
             <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
               <div className="text-xs tracking-[0.22em] text-theme-muted">想法投递</div>
               <div className="mt-2 text-2xl font-bold text-theme-primary">发出一个新的想法</div>
@@ -433,7 +436,7 @@ export default function IssuesPage() {
                 </div>
               )}
             </section>
-          </div>
+          </ScrollReveal>
         </section>
       </div>
     </SiteShell>

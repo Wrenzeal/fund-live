@@ -7,6 +7,8 @@ var coreFundTableMigrationStatements = []string{
 		type varchar(20),
 		manager varchar(50),
 		company varchar(100),
+		catalog_status varchar(32) NOT NULL DEFAULT 'active',
+		catalog_synced_at timestamptz,
 		net_asset_val numeric(10,4),
 		total_scale numeric(15,4),
 		created_at timestamptz DEFAULT now(),
@@ -14,6 +16,7 @@ var coreFundTableMigrationStatements = []string{
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_funds_name ON funds (name)`,
 	`CREATE INDEX IF NOT EXISTS idx_funds_type ON funds (type)`,
+	`CREATE INDEX IF NOT EXISTS idx_funds_catalog_status ON funds (catalog_status)`,
 	`CREATE TABLE IF NOT EXISTS stock_holdings (
 		id bigserial PRIMARY KEY,
 		fund_id varchar(10) NOT NULL,

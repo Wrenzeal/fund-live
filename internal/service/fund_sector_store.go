@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -61,6 +63,22 @@ type themeAgg struct {
 	code   string
 	weight decimal.Decimal
 }
+
+type FundClassificationOverrideInput struct {
+	FundID            string
+	CategoryCode      string
+	PrimarySectorCode string
+	PrimaryThemeCode  string
+	ManualTags        []string
+	Note              string
+	UpdatedBy         string
+}
+
+const (
+	maxManualClassificationTags         = 12
+	maxManualClassificationTagLength    = 24
+	maxClassificationOverrideNoteLength = 500
+)
 
 var defaultFundSectors = []database.FundSector{
 	{Code: "semiconductor", Name: "半导体", Level: 1, SortOrder: 10, IsEnabled: true},
@@ -421,6 +439,104 @@ func (s *FundSectorStore) ResolveFundCategory(ctx context.Context, fund *domain.
 	}, nil
 }
 
+func (s *FundSectorStore) GetClassificationOverride(ctx context.Context, fundID string) (*domain.FundClassificationOverride, error) {
+	fundID = strings.TrimSpace(fundID)
+	if fundID == "" {
+		return nil, nil
+	}
+	override, err := s.getClassificationOverride(ctx, fundID)
+	if err != nil || override == nil {
+		return nil, err
+	}
+	return s.toDomainClassificationOverride(ctx, override)
+}
+
+func (s *FundSectorStore) UpsertClassificationOverride(ctx context.Context, input FundClassificationOverrideInput) (*domain.FundClassificationOverride, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("classification override store unavailable")
+	}
+
+	fundID := strings.TrimSpace(input.FundID)
+	if fundID == "" {
+		return nil, fmt.Errorf("fund id is required")
+	}
+
+	categoryCode := strings.TrimSpace(input.CategoryCode)
+	primarySectorCode := strings.TrimSpace(input.PrimarySectorCode)
+	primaryThemeCode := strings.TrimSpace(input.PrimaryThemeCode)
+	note := strings.TrimSpace(input.Note)
+	if len([]rune(note)) > maxClassificationOverrideNoteLength {
+		note = string([]rune(note)[:maxClassificationOverrideNoteLength])
+	}
+	manualTags := normalizeManualClassificationTags(input.ManualTags)
+	if err := s.validateClassificationOverrideCodes(ctx, categoryCode, primarySectorCode, primaryThemeCode); err != nil {
+		return nil, err
+	}
+
+	if categoryCode == "" && primarySectorCode == "" && primaryThemeCode == "" && len(manualTags) == 0 && note == "" {
+		if err := s.db.WithContext(ctx).Where("fund_id = ?", fundID).Delete(&database.FundClassificationOverride{}).Error; err != nil {
+			return nil, err
+		}
+		if err := s.invalidateClassificationDependentAnalysis(ctx, fundID); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
+
+	manualTagsJSON := encodeManualClassificationTags(manualTags)
+	record := &database.FundClassificationOverride{
+		FundID:            fundID,
+		CategoryCode:      categoryCode,
+		PrimarySectorCode: primarySectorCode,
+		PrimaryThemeCode:  primaryThemeCode,
+		ManualTagsJSON:    manualTagsJSON,
+		SectorTagsJSON:    manualTagsJSON,
+		Note:              note,
+		UpdatedBy:         strings.TrimSpace(input.UpdatedBy),
+	}
+
+	if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "fund_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"category_code",
+			"primary_sector_code",
+			"primary_theme_code",
+			"manual_tags_json",
+			"sector_tags_json",
+			"note",
+			"updated_by",
+			"updated_at",
+		}),
+	}).Create(record).Error; err != nil {
+		return nil, err
+	}
+	if err := s.invalidateClassificationDependentAnalysis(ctx, fundID); err != nil {
+		return nil, err
+	}
+
+	return s.GetClassificationOverride(ctx, fundID)
+}
+
+func (s *FundSectorStore) ListClassificationOptions(ctx context.Context) (*domain.FundClassificationOptions, error) {
+	categories, err := s.loadCategoryOptions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sectors, err := s.loadSectorOptions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	themes, err := s.loadThemeOptions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &domain.FundClassificationOptions{
+		Categories: categories,
+		Sectors:    sectors,
+		Themes:     themes,
+	}, nil
+}
+
 func (s *FundSectorStore) UpsertFromHoldings(ctx context.Context, fundID string, holdings []domain.StockHolding, source string) (*domain.FundSectorSnapshot, error) {
 	snapshot, err := s.BuildSnapshot(ctx, fundID, holdings, source)
 	if err != nil || snapshot == nil || s == nil || s.db == nil {
@@ -480,6 +596,9 @@ func (s *FundSectorStore) UpsertFromHoldings(ctx context.Context, fundID string,
 		return nil, err
 	}
 
+	if err := s.applySectorOverride(ctx, snapshot); err != nil {
+		return nil, err
+	}
 	return snapshot, nil
 }
 
@@ -538,6 +657,9 @@ func (s *FundSectorStore) UpsertThemeFromHoldings(ctx context.Context, fundID st
 		return nil, err
 	}
 
+	if err := s.applyThemeOverride(ctx, snapshot); err != nil {
+		return nil, err
+	}
 	return snapshot, nil
 }
 
@@ -693,12 +815,12 @@ func (s *FundSectorStore) GetLatestSnapshot(ctx context.Context, fundID string) 
 	}
 
 	var snapshot database.FundSectorSnapshot
-	result := s.db.WithContext(ctx).Where("fund_id = ?", fundID).Order("as_of_date DESC").First(&snapshot)
-	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
+	query := s.db.WithContext(ctx).Where("fund_id = ?", fundID).Order("as_of_date DESC").First(&snapshot)
+	if query.Error != nil {
+		if query.Error == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
-		return nil, result.Error
+		return nil, query.Error
 	}
 
 	var breakdownRecords []database.FundSectorBreakdown
@@ -713,31 +835,20 @@ func (s *FundSectorStore) GetLatestSnapshot(ctx context.Context, fundID string) 
 	if err != nil {
 		return nil, err
 	}
-	override, err := s.getClassificationOverride(ctx, fundID)
-	if err != nil {
-		return nil, err
-	}
 
 	primarySectorCode := snapshot.PrimarySectorCode
-	if override != nil && strings.TrimSpace(override.PrimarySectorCode) != "" {
-		primarySectorCode = strings.TrimSpace(override.PrimarySectorCode)
-	}
 
 	breakdown := make([]domain.FundSectorBreakdown, 0, len(breakdownRecords))
 	for _, item := range breakdownRecords {
-		sectorCode := item.SectorCode
-		if override != nil && strings.TrimSpace(override.PrimarySectorCode) != "" && item.Rank == 1 {
-			sectorCode = strings.TrimSpace(override.PrimarySectorCode)
-		}
 		breakdown = append(breakdown, domain.FundSectorBreakdown{
-			SectorCode:    sectorCode,
-			SectorName:    sectorNameByCode[sectorCode],
+			SectorCode:    item.SectorCode,
+			SectorName:    sectorNameByCode[item.SectorCode],
 			WeightPercent: item.WeightPercent,
 			Rank:          item.Rank,
 		})
 	}
 
-	return &domain.FundSectorSnapshot{
+	result := &domain.FundSectorSnapshot{
 		FundID:            snapshot.FundID,
 		AsOfDate:          snapshot.AsOfDate.Format("2006-01-02"),
 		PrimarySectorCode: primarySectorCode,
@@ -745,7 +856,11 @@ func (s *FundSectorStore) GetLatestSnapshot(ctx context.Context, fundID string) 
 		Source:            snapshot.Source,
 		Confidence:        snapshot.Confidence,
 		Breakdown:         breakdown,
-	}, nil
+	}
+	if err := s.applySectorOverride(ctx, result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *FundSectorStore) GetLatestThemeSnapshot(ctx context.Context, fundID string) (*domain.FundThemeSnapshot, error) {
@@ -754,12 +869,12 @@ func (s *FundSectorStore) GetLatestThemeSnapshot(ctx context.Context, fundID str
 	}
 
 	var snapshot database.FundThemeSnapshot
-	result := s.db.WithContext(ctx).Where("fund_id = ?", fundID).Order("as_of_date DESC").First(&snapshot)
-	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
+	query := s.db.WithContext(ctx).Where("fund_id = ?", fundID).Order("as_of_date DESC").First(&snapshot)
+	if query.Error != nil {
+		if query.Error == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
-		return nil, result.Error
+		return nil, query.Error
 	}
 
 	var breakdownRecords []database.FundThemeBreakdown
@@ -785,7 +900,7 @@ func (s *FundSectorStore) GetLatestThemeSnapshot(ctx context.Context, fundID str
 		})
 	}
 
-	return &domain.FundThemeSnapshot{
+	result := &domain.FundThemeSnapshot{
 		FundID:           snapshot.FundID,
 		AsOfDate:         snapshot.AsOfDate.Format("2006-01-02"),
 		PrimaryThemeCode: snapshot.PrimaryThemeCode,
@@ -793,7 +908,11 @@ func (s *FundSectorStore) GetLatestThemeSnapshot(ctx context.Context, fundID str
 		Source:           snapshot.Source,
 		Confidence:       snapshot.Confidence,
 		Breakdown:        breakdown,
-	}, nil
+	}
+	if err := s.applyThemeOverride(ctx, result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *FundSectorStore) loadInstrumentMappings(ctx context.Context, holdings []domain.StockHolding) (map[string]string, error) {
@@ -868,6 +987,32 @@ func (s *FundSectorStore) loadSectorNames(ctx context.Context) (map[string]strin
 	return result, nil
 }
 
+func (s *FundSectorStore) loadSectorOptions(ctx context.Context) ([]domain.FundClassificationOption, error) {
+	options := make([]domain.FundClassificationOption, 0, len(defaultFundSectors))
+	for _, sector := range defaultFundSectors {
+		options = append(options, domain.FundClassificationOption{
+			Code:      sector.Code,
+			Name:      sector.Name,
+			SortOrder: sector.SortOrder,
+		})
+	}
+	if s != nil && s.db != nil {
+		var sectors []database.FundSector
+		if err := s.db.WithContext(ctx).Where("is_enabled = ?", true).Find(&sectors).Error; err != nil {
+			return nil, err
+		}
+		for _, sector := range sectors {
+			options = upsertClassificationOption(options, domain.FundClassificationOption{
+				Code:      sector.Code,
+				Name:      sector.Name,
+				SortOrder: sector.SortOrder,
+			})
+		}
+	}
+	sortClassificationOptions(options)
+	return options, nil
+}
+
 func (s *FundSectorStore) loadCategoryNames(ctx context.Context) (map[string]string, error) {
 	result := make(map[string]string)
 	for _, category := range defaultFundCategories {
@@ -885,6 +1030,34 @@ func (s *FundSectorStore) loadCategoryNames(ctx context.Context) (map[string]str
 		result[category.Code] = category.Name
 	}
 	return result, nil
+}
+
+func (s *FundSectorStore) loadCategoryOptions(ctx context.Context) ([]domain.FundClassificationOption, error) {
+	options := make([]domain.FundClassificationOption, 0, len(defaultFundCategories))
+	for _, category := range defaultFundCategories {
+		options = append(options, domain.FundClassificationOption{
+			Code:        category.Code,
+			Name:        category.Name,
+			Description: category.Description,
+			SortOrder:   category.SortOrder,
+		})
+	}
+	if s != nil && s.db != nil {
+		var categories []database.FundCategory
+		if err := s.db.WithContext(ctx).Where("is_enabled = ?", true).Find(&categories).Error; err != nil {
+			return nil, err
+		}
+		for _, category := range categories {
+			options = upsertClassificationOption(options, domain.FundClassificationOption{
+				Code:        category.Code,
+				Name:        category.Name,
+				Description: category.Description,
+				SortOrder:   category.SortOrder,
+			})
+		}
+	}
+	sortClassificationOptions(options)
+	return options, nil
 }
 
 func (s *FundSectorStore) loadThemeNames(ctx context.Context) (map[string]string, error) {
@@ -906,6 +1079,32 @@ func (s *FundSectorStore) loadThemeNames(ctx context.Context) (map[string]string
 	return result, nil
 }
 
+func (s *FundSectorStore) loadThemeOptions(ctx context.Context) ([]domain.FundClassificationOption, error) {
+	options := make([]domain.FundClassificationOption, 0, len(defaultFundThemes))
+	for _, theme := range defaultFundThemes {
+		options = append(options, domain.FundClassificationOption{
+			Code:      theme.Code,
+			Name:      theme.Name,
+			SortOrder: theme.SortOrder,
+		})
+	}
+	if s != nil && s.db != nil {
+		var themes []database.FundTheme
+		if err := s.db.WithContext(ctx).Where("is_enabled = ?", true).Find(&themes).Error; err != nil {
+			return nil, err
+		}
+		for _, theme := range themes {
+			options = upsertClassificationOption(options, domain.FundClassificationOption{
+				Code:      theme.Code,
+				Name:      theme.Name,
+				SortOrder: theme.SortOrder,
+			})
+		}
+	}
+	sortClassificationOptions(options)
+	return options, nil
+}
+
 func (s *FundSectorStore) getClassificationOverride(ctx context.Context, fundID string) (*database.FundClassificationOverride, error) {
 	if s == nil || s.db == nil {
 		return nil, nil
@@ -920,6 +1119,205 @@ func (s *FundSectorStore) getClassificationOverride(ctx context.Context, fundID 
 		return nil, result.Error
 	}
 	return &override, nil
+}
+
+func (s *FundSectorStore) toDomainClassificationOverride(ctx context.Context, override *database.FundClassificationOverride) (*domain.FundClassificationOverride, error) {
+	if override == nil {
+		return nil, nil
+	}
+	categoryNames, err := s.loadCategoryNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sectorNames, err := s.loadSectorNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	themeNames, err := s.loadThemeNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	categoryCode := strings.TrimSpace(override.CategoryCode)
+	primarySectorCode := strings.TrimSpace(override.PrimarySectorCode)
+	primaryThemeCode := strings.TrimSpace(override.PrimaryThemeCode)
+	return &domain.FundClassificationOverride{
+		FundID:            override.FundID,
+		CategoryCode:      categoryCode,
+		CategoryName:      categoryNames[categoryCode],
+		PrimarySectorCode: primarySectorCode,
+		PrimarySectorName: sectorNames[primarySectorCode],
+		PrimaryThemeCode:  primaryThemeCode,
+		PrimaryThemeName:  themeNames[primaryThemeCode],
+		ManualTags:        decodeManualClassificationTags(firstNonEmptyString(override.ManualTagsJSON, override.SectorTagsJSON)),
+		Note:              override.Note,
+		UpdatedBy:         override.UpdatedBy,
+		CreatedAt:         override.CreatedAt,
+		UpdatedAt:         override.UpdatedAt,
+	}, nil
+}
+
+func (s *FundSectorStore) validateClassificationOverrideCodes(ctx context.Context, categoryCode, primarySectorCode, primaryThemeCode string) error {
+	if categoryCode != "" {
+		names, err := s.loadCategoryNames(ctx)
+		if err != nil {
+			return err
+		}
+		if names[categoryCode] == "" {
+			return fmt.Errorf("unknown fund category code: %s", categoryCode)
+		}
+	}
+	if primarySectorCode != "" {
+		names, err := s.loadSectorNames(ctx)
+		if err != nil {
+			return err
+		}
+		if names[primarySectorCode] == "" {
+			return fmt.Errorf("unknown fund sector code: %s", primarySectorCode)
+		}
+	}
+	if primaryThemeCode != "" {
+		names, err := s.loadThemeNames(ctx)
+		if err != nil {
+			return err
+		}
+		if names[primaryThemeCode] == "" {
+			return fmt.Errorf("unknown fund theme code: %s", primaryThemeCode)
+		}
+	}
+	return nil
+}
+
+func (s *FundSectorStore) applySectorOverride(ctx context.Context, snapshot *domain.FundSectorSnapshot) error {
+	if snapshot == nil {
+		return nil
+	}
+	override, err := s.getClassificationOverride(ctx, snapshot.FundID)
+	if err != nil || override == nil {
+		return err
+	}
+	primarySectorCode := strings.TrimSpace(override.PrimarySectorCode)
+	if primarySectorCode == "" {
+		return nil
+	}
+	sectorNames, err := s.loadSectorNames(ctx)
+	if err != nil {
+		return err
+	}
+	snapshot.PrimarySectorCode = primarySectorCode
+	snapshot.PrimarySectorName = sectorNames[primarySectorCode]
+	return nil
+}
+
+func (s *FundSectorStore) applyThemeOverride(ctx context.Context, snapshot *domain.FundThemeSnapshot) error {
+	if snapshot == nil {
+		return nil
+	}
+	override, err := s.getClassificationOverride(ctx, snapshot.FundID)
+	if err != nil || override == nil {
+		return err
+	}
+	primaryThemeCode := strings.TrimSpace(override.PrimaryThemeCode)
+	if primaryThemeCode == "" {
+		return nil
+	}
+	themeNames, err := s.loadThemeNames(ctx)
+	if err != nil {
+		return err
+	}
+	snapshot.PrimaryThemeCode = primaryThemeCode
+	snapshot.PrimaryThemeName = themeNames[primaryThemeCode]
+	return nil
+}
+
+func (s *FundSectorStore) invalidateClassificationDependentAnalysis(ctx context.Context, fundID string) error {
+	fundID = strings.TrimSpace(fundID)
+	if s == nil || s.db == nil || fundID == "" {
+		return nil
+	}
+	return s.db.WithContext(ctx).Where("fund_id = ?", fundID).Delete(&database.FundAnalysisSnapshot{}).Error
+}
+
+func normalizeManualClassificationTags(tags []string) []string {
+	seen := make(map[string]struct{}, len(tags))
+	result := make([]string, 0, minInt(len(tags), maxManualClassificationTags))
+	for _, tag := range tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		runes := []rune(tag)
+		if len(runes) > maxManualClassificationTagLength {
+			tag = string(runes[:maxManualClassificationTagLength])
+		}
+		if _, ok := seen[tag]; ok {
+			continue
+		}
+		seen[tag] = struct{}{}
+		result = append(result, tag)
+		if len(result) >= maxManualClassificationTags {
+			break
+		}
+	}
+	return result
+}
+
+func encodeManualClassificationTags(tags []string) string {
+	tags = normalizeManualClassificationTags(tags)
+	if len(tags) == 0 {
+		return ""
+	}
+	payload, err := json.Marshal(tags)
+	if err != nil {
+		return ""
+	}
+	return string(payload)
+}
+
+func decodeManualClassificationTags(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return []string{}
+	}
+	var tags []string
+	if err := json.Unmarshal([]byte(raw), &tags); err == nil {
+		return normalizeManualClassificationTags(tags)
+	}
+	return normalizeManualClassificationTags(strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == '，' || r == ';' || r == '；' || r == '\n' || r == '\t'
+	}))
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func upsertClassificationOption(options []domain.FundClassificationOption, next domain.FundClassificationOption) []domain.FundClassificationOption {
+	next.Code = strings.TrimSpace(next.Code)
+	if next.Code == "" {
+		return options
+	}
+	for idx, option := range options {
+		if option.Code == next.Code {
+			options[idx] = next
+			return options
+		}
+	}
+	return append(options, next)
+}
+
+func sortClassificationOptions(options []domain.FundClassificationOption) {
+	sort.SliceStable(options, func(i, j int) bool {
+		if options[i].SortOrder == options[j].SortOrder {
+			return options[i].Code < options[j].Code
+		}
+		return options[i].SortOrder < options[j].SortOrder
+	})
 }
 
 func inferFundSectorCode(holding domain.StockHolding, mappingByKey map[string]string) string {

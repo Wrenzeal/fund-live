@@ -15,12 +15,15 @@ import (
 	"github.com/RomaticDOG/fund/internal/database"
 	"github.com/RomaticDOG/fund/internal/domain"
 	"github.com/RomaticDOG/fund/internal/repository"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func main() {
 	// Command line flags
 	codes := flag.String("codes", "", "Comma-separated list of fund codes to crawl")
 	listMode := flag.String("list", "", "Fetch fund list: 'all', 'stock' (股票+混合), 'popular' (热门20只)")
+	catalogOnly := flag.Bool("catalog-only", false, "When used with --list and --save-db, only upsert fund catalog metadata without crawling details/holdings")
 	concurrency := flag.Int("concurrency", 3, "Maximum number of concurrent requests")
 	output := flag.String("output", "", "Output JSON file path (if empty, prints to stdout)")
 	timeout := flag.Duration("timeout", 120*time.Second, "Request timeout duration")
@@ -30,6 +33,10 @@ func main() {
 	fixAllNames := flag.Bool("fix-all-names", false, "Refresh ALL stock names from Sina Finance API")
 
 	flag.Parse()
+
+	if *catalogOnly && !*saveDB {
+		log.Fatalf("❌ --catalog-only requires --save-db")
+	}
 
 	// Handle --fix-names mode: fix garbled stock names in database
 	if *fixNames || *fixAllNames {
@@ -104,6 +111,34 @@ func main() {
 		fundCodes = make([]string, len(funds))
 		for i, f := range funds {
 			fundCodes[i] = f.Code
+		}
+
+		if *catalogOnly {
+			log.Println("🔧 Connecting to PostgreSQL database...")
+			cfg := database.DefaultConfig()
+			db, err := database.InitDB(cfg, database.AllModels()...)
+			if err != nil {
+				log.Fatalf("❌ Failed to connect to database: %v", err)
+			}
+			defer database.Close()
+
+			log.Println("💾 Saving fund catalog metadata to database...")
+			dbCtx, dbCancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			defer dbCancel()
+
+			markMissing := *listMode == "all" && *limit == 0
+			stats, err := saveFundCatalogEntries(dbCtx, db, funds, markMissing)
+			if err != nil {
+				log.Fatalf("❌ Failed to save fund catalog: %v", err)
+			}
+			log.Printf(
+				"💾 Fund catalog save complete: %d funds upserted (%d active, %d unavailable, %d marked catalog_missing)",
+				stats.Upserted,
+				stats.Active,
+				stats.Unavailable,
+				stats.MarkedMissing,
+			)
+			return
 		}
 	} else if *codes != "" {
 		// Use provided codes
@@ -248,6 +283,90 @@ func main() {
 		}
 		log.Printf("📄 Results saved to %s", *output)
 	}
+}
+
+type catalogSaveStats struct {
+	Upserted      int
+	Active        int
+	Unavailable   int
+	MarkedMissing int64
+}
+
+func saveFundCatalogEntries(ctx context.Context, db *gorm.DB, funds []crawler.FundListItem, markMissing bool) (catalogSaveStats, error) {
+	if len(funds) == 0 {
+		return catalogSaveStats{}, nil
+	}
+
+	const batchSize = 1000
+	upsertClause := clause.OnConflict{
+		Columns:   []clause.Column{{Name: "id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"name", "type", "catalog_status", "catalog_synced_at", "updated_at"}),
+	}
+
+	stats := catalogSaveStats{}
+	now := time.Now()
+	remoteCodes := make([]string, 0, len(funds))
+
+	for start := 0; start < len(funds); start += batchSize {
+		end := start + batchSize
+		if end > len(funds) {
+			end = len(funds)
+		}
+
+		rows := make([]database.Fund, 0, end-start)
+		for _, fund := range funds[start:end] {
+			status := resolveFundCatalogStatus(fund)
+			if status == domain.FundCatalogStatusUnavailable {
+				stats.Unavailable++
+			} else {
+				stats.Active++
+			}
+			remoteCodes = append(remoteCodes, fund.Code)
+			rows = append(rows, database.Fund{
+				ID:              fund.Code,
+				Name:            fund.Name,
+				Type:            fund.Type,
+				CatalogStatus:   status,
+				CatalogSyncedAt: &now,
+				UpdatedAt:       now,
+			})
+		}
+
+		if err := db.WithContext(ctx).Clauses(upsertClause).CreateInBatches(&rows, len(rows)).Error; err != nil {
+			return stats, fmt.Errorf("failed to upsert fund catalog batch %d-%d: %w", start+1, end, err)
+		}
+
+		stats.Upserted += len(rows)
+		if stats.Upserted%5000 == 0 || stats.Upserted == len(funds) {
+			log.Printf("   💾 Progress: %d/%d catalog records saved...", stats.Upserted, len(funds))
+		}
+	}
+
+	if markMissing && len(remoteCodes) > 0 {
+		result := db.WithContext(ctx).
+			Model(&database.Fund{}).
+			Where("id NOT IN ?", remoteCodes).
+			Where("id NOT IN (SELECT fund_id FROM fund_valuation_profiles)").
+			Updates(map[string]interface{}{
+				"catalog_status":    domain.FundCatalogStatusCatalogMissing,
+				"catalog_synced_at": now,
+				"updated_at":        now,
+			})
+		if result.Error != nil {
+			return stats, fmt.Errorf("failed to mark missing catalog funds: %w", result.Error)
+		}
+		stats.MarkedMissing = result.RowsAffected
+	}
+
+	return stats, nil
+}
+
+func resolveFundCatalogStatus(fund crawler.FundListItem) string {
+	name := strings.TrimSpace(fund.Name)
+	if strings.Contains(name, "后端") {
+		return domain.FundCatalogStatusUnavailable
+	}
+	return domain.FundCatalogStatusActive
 }
 
 // OutputData represents the JSON output structure.

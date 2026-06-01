@@ -85,8 +85,12 @@ func (r *PostgresFundRepository) SearchFunds(ctx context.Context, query string, 
 
 	var highPriority []database.Fund
 	prefixPattern := trimmedQuery + "%"
-	result := r.db.WithContext(ctx).
-		Where("id = ? OR id LIKE ? OR name ILIKE ? OR manager ILIKE ?",
+	activeFundsQuery := func() *gorm.DB {
+		return r.db.WithContext(ctx).
+			Where("catalog_status = ? OR catalog_status IS NULL OR catalog_status = ''", domain.FundCatalogStatusActive)
+	}
+	result := activeFundsQuery().
+		Where("(id = ? OR id LIKE ? OR name ILIKE ? OR manager ILIKE ?)",
 			trimmedQuery, prefixPattern, prefixPattern, prefixPattern).
 		Limit(candidateLimit).
 		Find(&highPriority)
@@ -98,8 +102,8 @@ func (r *PostgresFundRepository) SearchFunds(ctx context.Context, query string, 
 	if len(candidates) < limit {
 		var fuzzy []database.Fund
 		fuzzyPattern := "%" + trimmedQuery + "%"
-		result = r.db.WithContext(ctx).
-			Where("id LIKE ? OR name ILIKE ? OR manager ILIKE ?",
+		result = activeFundsQuery().
+			Where("(id LIKE ? OR name ILIKE ? OR manager ILIKE ?)",
 				fuzzyPattern, fuzzyPattern, fuzzyPattern).
 			Limit(candidateLimit).
 			Find(&fuzzy)
@@ -148,11 +152,24 @@ func (r *PostgresFundRepository) ListFundIDsWithHoldings(ctx context.Context) ([
 // SaveFund saves or updates a fund (upsert).
 func (r *PostgresFundRepository) SaveFund(ctx context.Context, fund *domain.Fund) error {
 	dbFund := r.toDBFund(fund)
+	updateColumns := []string{
+		"name",
+		"type",
+		"category_code",
+		"manager",
+		"company",
+		"net_asset_val",
+		"total_scale",
+		"updated_at",
+	}
+	if strings.TrimSpace(fund.CatalogStatus) != "" {
+		updateColumns = append(updateColumns, "catalog_status", "catalog_synced_at")
+	}
 
 	// Upsert: insert or update on conflict
 	result := r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "id"}},
-		UpdateAll: true,
+		DoUpdates: clause.AssignmentColumns(updateColumns),
 	}).Create(&dbFund)
 
 	if result.Error != nil {
@@ -427,15 +444,17 @@ func (r *PostgresFundRepository) GetFundHistoriesByLookupKeys(ctx context.Contex
 
 func (r *PostgresFundRepository) toDomainFund(dbFund *database.Fund) *domain.Fund {
 	return &domain.Fund{
-		ID:           dbFund.ID,
-		Name:         dbFund.Name,
-		Type:         dbFund.Type,
-		CategoryCode: dbFund.CategoryCode,
-		Manager:      dbFund.Manager,
-		Company:      dbFund.Company,
-		NetAssetVal:  dbFund.NetAssetVal,
-		TotalScale:   dbFund.TotalScale,
-		UpdatedAt:    dbFund.UpdatedAt,
+		ID:              dbFund.ID,
+		Name:            dbFund.Name,
+		Type:            dbFund.Type,
+		CategoryCode:    dbFund.CategoryCode,
+		CatalogStatus:   dbFund.CatalogStatus,
+		CatalogSyncedAt: dbFund.CatalogSyncedAt,
+		Manager:         dbFund.Manager,
+		Company:         dbFund.Company,
+		NetAssetVal:     dbFund.NetAssetVal,
+		TotalScale:      dbFund.TotalScale,
+		UpdatedAt:       dbFund.UpdatedAt,
 	}
 }
 
@@ -454,15 +473,22 @@ func uniqueTimes(values []time.Time) []time.Time {
 }
 
 func (r *PostgresFundRepository) toDBFund(fund *domain.Fund) *database.Fund {
+	catalogStatus := strings.TrimSpace(fund.CatalogStatus)
+	if catalogStatus == "" {
+		catalogStatus = domain.FundCatalogStatusActive
+	}
+
 	return &database.Fund{
-		ID:           fund.ID,
-		Name:         fund.Name,
-		Type:         fund.Type,
-		CategoryCode: fund.CategoryCode,
-		Manager:      fund.Manager,
-		Company:      fund.Company,
-		NetAssetVal:  fund.NetAssetVal,
-		TotalScale:   fund.TotalScale,
+		ID:              fund.ID,
+		Name:            fund.Name,
+		Type:            fund.Type,
+		CategoryCode:    fund.CategoryCode,
+		CatalogStatus:   catalogStatus,
+		CatalogSyncedAt: fund.CatalogSyncedAt,
+		Manager:         fund.Manager,
+		Company:         fund.Company,
+		NetAssetVal:     fund.NetAssetVal,
+		TotalScale:      fund.TotalScale,
 	}
 }
 

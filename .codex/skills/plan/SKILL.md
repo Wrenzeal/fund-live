@@ -30,7 +30,7 @@ Jumping into code without understanding requirements leads to rework, scope cree
 - Auto-detect interview vs direct mode based on request specificity
 - Ask one question at a time during interviews -- never batch multiple interview rounds into one question form
 - Gather codebase facts via `explore` agent before asking the user about them
-- When session guidance enables `USE_OMX_EXPLORE_CMD`, prefer `omx explore` for simple read-only repository lookups during planning; keep prompts narrow and concrete, and keep prompt-heavy or ambiguous planning work on the richer normal path and fall back normally if `omx explore` is unavailable.
+- `omx explore` is deprecated. Use normal repository inspection tools/subagents for simple read-only repository lookups during planning; use `omx sparkshell` only for explicit shell-native read-only evidence, and keep prompt-heavy or ambiguous planning work on the richer normal path.
 - Plans must meet quality standards: 80%+ claims cite file/line, 90%+ criteria are testable
 - Implementation step count must be right-sized to task scope; avoid defaulting to exactly five steps when the work is clearly smaller or larger
 - Consensus mode outputs the final plan by default; add `--interactive` to enable execution handoff
@@ -80,8 +80,8 @@ Jumping into code without understanding requirements leads to rework, scope cree
    - **Request changes** — return to step 1 with user feedback incorporated
    - **Skip review** — go directly to final approval (step 7)
    If NOT running with `--interactive`, automatically proceed to review (step 3).
-3. **Architect** reviews for architectural soundness using `ask_codex` with `agent_role: "architect"`. Architect review **MUST** include: strongest steelman counterargument (antithesis) against the favored option, at least one meaningful tradeoff tension, and (when possible) a synthesis path. In deliberate mode, Architect should explicitly flag principle violations. **Wait for this step to complete before proceeding to step 4.** Do NOT run steps 3 and 4 in parallel.
-4. **Critic** evaluates against quality criteria using `ask_codex` with `agent_role: "critic"`. Critic **MUST** verify principle-option consistency, fair alternative exploration, risk mitigation clarity, testable acceptance criteria, and concrete verification steps. Critic **MUST** explicitly reject shallow alternatives, driver contradictions, vague risks, or weak verification. In deliberate mode, Critic **MUST** reject missing/weak pre-mortem or missing/weak expanded test plan. Run only after step 3 is complete.
+3. **Architect** reviews for architectural soundness as a dedicated subsequent `Architect` subagent with the full task, current plan text/path, RALPLAN-DR summary, and relevant artifact context. Architect review **MUST** include: strongest steelman counterargument (antithesis) against the favored option, at least one meaningful tradeoff tension, and (when possible) a synthesis path. In deliberate mode, Architect should explicitly flag principle violations. **Wait for this step to complete before proceeding to step 4.** Do NOT run steps 3 and 4 in parallel. Do NOT substitute a default/improvised subagent prompt for the role-specific `Architect` prompt.
+4. **Critic** evaluates against quality criteria as a dedicated subsequent `Critic` subagent with the full task, current plan text/path, RALPLAN-DR summary, artifact context, and the completed `Architect` result. Critic **MUST** verify principle-option consistency, fair alternative exploration, risk mitigation clarity, testable acceptance criteria, and concrete verification steps. Critic **MUST** explicitly reject shallow alternatives, driver contradictions, vague risks, or weak verification. In deliberate mode, Critic **MUST** reject missing/weak pre-mortem or missing/weak expanded test plan. Run only after step 3 is complete. Do NOT let the `Architect` response self-approve the Critic gate.
 5. **Re-review loop** (max 5 iterations): If Critic rejects or iterates, execute this closed loop:
    a. Collect all feedback from Architect + Critic
    b. Pass feedback to Planner to produce a revised plan
@@ -94,18 +94,21 @@ Jumping into code without understanding requirements leads to rework, scope cree
    b. Deduplicate and categorize the suggestions
    c. Update the plan file in `.omx/plans/` with the accepted improvements (add missing details, refine steps, strengthen acceptance criteria, ADR updates, etc.)
    d. Note which improvements were applied in a brief changelog section at the end of the plan
-   e. Before any execution handoff, derive an explicit **available-agent-types roster** from the known prompt catalog and add concrete **follow-up staffing guidance** for both `$ralph` and `$team` (recommended roles, counts, suggested reasoning levels by lane, and why each lane exists)
-   f. For the `$team` path, add an explicit launch-hint block with concrete `omx team` / `$team` commands and a **team verification path** (what team proves before shutdown, what Ralph verifies after handoff)
+   e. Before any execution handoff, derive an explicit **available-agent-types roster** from the known prompt catalog and add concrete **follow-up staffing guidance** for `$ultragoal` and `$team` (recommended roles, counts, suggested reasoning levels by lane, and why each lane exists), plus an explicit `$ralph` fallback note only when persistent single-owner verification is intentionally selected
+   f. Add a product-facing **Goal-Mode Follow-up Suggestions** section: recommend `$ultragoal` by default for general goal-oriented follow-up, `$autoresearch-goal` only when the context is a research project with a research deliverable/evaluator, and `$performance-goal` when the context is an optimization or performance project. Keep these suggestions alongside the Team path and any explicit Ralph fallback rather than replacing implementation-delivery guidance. For ordinary pre-planning external docs or best-practice lookup, cite `$best-practice-research` evidence and synthesize it into the plan instead of recommending Autoresearch as a final architecture component. For durable-goal work that is also parallelizable, explicitly recommend **Team + Ultragoal**: Ultragoal remains leader-owned goal/ledger state and Team returns checkpoint-ready execution evidence.
+   g. For the `$team` path, add an explicit launch-hint block with concrete `omx team` / `$team` commands and a **team verification path** (what Team proves before shutdown and what Ultragoal checkpoints as durable completion evidence). Distinguish Team + Ultragoal from any explicit Ralph fallback: Team handles coordinated parallel lanes; Ultragoal is the default durable follow-up/ledger owner, and Ralph is only an explicitly requested legacy-style persistent sequential verification/fix lane when needed.
 7. On Critic approval (with improvements applied): *(--interactive only)* If running with `--interactive`, use `AskUserQuestion` / the structured question UI to present the plan with these options:
-   - **Approve and execute** — proceed to implementation via ralph+ultrawork
+   - **Approve durable goal execution** — proceed via `$ultragoal` by default (optionally with `$team` for parallel lanes)
    - **Approve and implement via team** — proceed to implementation via coordinated parallel team agents
+   - **Start goal-mode follow-up** — proceed via `$ultragoal` by default, or `$autoresearch-goal` / `$performance-goal` when the approved plan specifically fits research validation or measurable optimization
    - **Request changes** — return to step 1 with user feedback
    - **Reject** — discard the plan entirely
    If NOT running with `--interactive`, output the final approved plan and stop. Do NOT auto-execute.
 8. *(--interactive only)* User chooses via the structured question UI (never ask for approval in plain text when a structured surface is available)
 9. On user approval (--interactive only):
-   - **Approve and execute**: **MUST** invoke `$ralph` with the approved plan path from `.omx/plans/` as context **plus the explicit available-agent-types roster, suggested reasoning levels, concrete role allocation guidance, and direct launch hints for Ralph follow-up work**. Do NOT implement directly. Do NOT edit source code files in the planning agent. The ralph skill handles execution via ultrawork parallel agents.
+   - **Approve durable goal execution**: **MUST** invoke `$ultragoal` with the approved plan path from `.omx/plans/` as context **plus the explicit available-agent-types roster, suggested reasoning levels, concrete role allocation guidance, and direct launch hints for Ultragoal follow-up work**. Use `$team` alongside Ultragoal when parallel lanes are warranted. Do NOT implement directly. Do NOT edit source code files in the planning agent. Ralph is not the default follow-up; only invoke `$ralph` when the user explicitly selects a legacy/persistent single-owner execution lane.
    - **Approve and implement via team**: **MUST** invoke `$team` with the approved plan path from `.omx/plans/` as context **plus the explicit available-agent-types roster, suggested reasoning levels, concrete staffing / worker-role allocation guidance, explicit `omx team` / `$team` launch hints, and the team verification path**. Do NOT implement directly. The team skill coordinates parallel agents across the staged pipeline for faster execution on large tasks.
+   - **Start goal-mode follow-up**: **MUST** invoke the selected goal workflow with the approved plan path and appropriate success context: `$ultragoal` as the default goal-mode path, `$autoresearch-goal` for research projects, or `$performance-goal` for optimization/performance projects with measurable evaluator criteria. Do NOT implement directly in the planning agent.
 
 ### Review Mode (`--review`)
 
@@ -127,29 +130,26 @@ Every plan includes:
 - Verification Steps
 - For consensus/ralplan: **RALPLAN-DR summary** (Principles, Decision Drivers, Options)
 - For consensus/ralplan final output: **ADR** (Decision, Drivers, Alternatives considered, Why chosen, Consequences, Follow-ups)
-- For consensus/ralplan execution handoff: **Available-Agent-Types Roster**, **Follow-up Staffing Guidance** (including suggested reasoning levels by lane), explicit `omx team` / `$team` **Launch Hints**, and **Team Verification Path**
+- For consensus/ralplan execution handoff: **Available-Agent-Types Roster**, **Follow-up Staffing Guidance** (including suggested reasoning levels by lane), product-facing **Goal-Mode Follow-up Suggestions** (`$ultragoal`, `$autoresearch-goal`, `$performance-goal` when contextually appropriate), explicit `omx team` / `$team` **Launch Hints**, and **Team Verification Path**
 - For deliberate consensus mode: **Pre-mortem (3 scenarios)** and **Expanded Test Plan** (unit/integration/e2e/observability)
 
 Plans are saved to `.omx/plans/`. Drafts go to `.omx/drafts/`.
 </Steps>
 
 <Tool_Usage>
-- Before first MCP tool use, call `ToolSearch("mcp")` to discover deferred MCP tools
-- Use the surface-appropriate structured question path for preference questions (scope, priority, timeline, risk tolerance): attached-tmux OMX runtime uses `omx question`; outside tmux uses native structured input when available. Use plain text only as a last fallback for unsupported surfaces or highly specific free-form values.
-- `omx question` success JSON uses `answers[]` as the primary contract. For single-question planning prompts, read `answers[0].answer`; treat top-level `answer` as legacy compatibility fallback only.
-- Batch `questions[]` may be used for non-interview grouped preference or approval prompts when one submitted form is clearer than multiple interruptions; interview mode still asks one question per round.
+- Use `AskUserQuestion` for preference questions (scope, priority, timeline, risk tolerance) -- provides clickable UI
+- Use plain text for questions needing specific values (port numbers, names, follow-up clarifications)
 - Use the `explore` agent (LOW tier, bounded quick pass) to gather codebase facts before asking the user
 - Use `ask_codex` with `agent_role: "planner"` for planning validation on large-scope plans
 - Use `ask_codex` with `agent_role: "analyst"` for requirements analysis
-- Use `ask_codex` with `agent_role: "critic"` for plan review in consensus and review modes
-- If ToolSearch finds no MCP tools or Codex is unavailable, fall back to equivalent OMX prompt agents -- never block on external tools
-- **CRITICAL — Consensus mode agent calls MUST be sequential, never parallel.** Always await the Architect result before issuing the Critic call.
+- Use `ask_codex` with `agent_role: "critic"` for standalone review mode. In consensus mode, use the dedicated sequential role-specific `Architect` and `Critic` subagents described in steps 3-4 instead of a single critic-only review call.
+- If optional MCP compatibility tools or Codex consultation are unavailable, fall back to equivalent OMX prompt/native agents -- never block on external tools
+- **CRITICAL — Consensus mode agent calls MUST be sequential, never parallel.** Always await the subsequent role-specific `Architect` result before issuing the subsequent role-specific `Critic` call.
 - In consensus mode, default to RALPLAN-DR short mode; enable deliberate mode on `--deliberate` or explicit high-risk signals (auth/security, migrations, destructive changes, production incidents, compliance/PII, public API breakage)
 - In consensus mode with `--interactive`: use `AskUserQuestion` / the structured question UI for the user feedback step (step 2) and the final approval step (step 7) -- never ask for approval in plain text when a structured surface is available. Without `--interactive`, auto-proceed through planning steps without pausing. Output the final plan without execution.
-- In consensus mode with `--interactive`, on user approval **MUST** invoke `$ralph` for execution (step 9) -- never implement directly in the planning agent
-- In consensus mode, execution follow-up handoff **MUST** include an explicit available-agent-types roster plus concrete staffing / role-allocation guidance grounded in that roster, suggested reasoning levels by lane, explicit `omx team` / `$team` launch hints, and a team verification path
+- In consensus mode with `--interactive`, on user approval **MUST** invoke the selected follow-up lane from step 9 (`$ultragoal`, `$team`, `$autoresearch-goal`, `$performance-goal`, or explicit `$ralph` fallback) -- never implement directly in the planning agent
+- In consensus mode, execution follow-up handoff **MUST** include an explicit available-agent-types roster plus concrete staffing / role-allocation guidance grounded in that roster, suggested reasoning levels by lane, product-facing goal-mode follow-up suggestions (`$ultragoal` by default, `$autoresearch-goal` for research projects, `$performance-goal` for optimization/performance projects), explicit `omx team` / `$team` launch hints, and a team verification path. For parallelizable durable-goal plans, recommend Team + Ultragoal with leader-owned checkpointing from Team evidence; reserve Ralph for persistent sequential single-owner verification/fix follow-up.
 </Tool_Usage>
-
 
 ## Scenario Examples
 
@@ -212,8 +212,8 @@ Why bad: Decision fatigue. Present one option with trade-offs, get reaction, the
 <Escalation_And_Stop_Conditions>
 - Stop interviewing when requirements are clear enough to plan -- do not over-interview
 - In consensus mode, stop after 5 Planner/Architect/Critic iterations and present the best version
-- Consensus mode outputs the plan by default; with `--interactive`, user can approve and hand off to ralph/team
-- If the user says "just do it" or "skip planning", **MUST** invoke `$ralph` to transition to execution mode. Do NOT implement directly in the planning agent.
+- Consensus mode outputs the plan by default; with `--interactive`, user can approve and hand off to ultragoal/team, with Ralph only as an explicit legacy/persistent single-owner lane
+- If the user says "just do it" or "skip planning", **MUST** invoke `$ultragoal` to transition to durable goal execution mode by default; use `$ralph` only when the user explicitly asks for that fallback. Do NOT implement directly in the planning agent.
 - Escalate to the user when there are irreconcilable trade-offs that require a business decision
 </Escalation_And_Stop_Conditions>
 

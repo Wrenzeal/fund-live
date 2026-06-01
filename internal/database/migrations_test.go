@@ -83,6 +83,8 @@ func TestInitDBCreatesCoreSchemaWithoutAutoMigrate(t *testing.T) {
 		"20260418_fund_sector_tables",
 		"20260419_fund_category_tables",
 		"20260422_fund_theme_tables",
+		"20260530_fund_catalog_status",
+		"20260529_fund_classification_override_manual_tags",
 		"20260421_fund_estimate_capability_tables",
 		"20260416_user_holding_confirmation",
 		"20260525_user_holding_manual_confirmation",

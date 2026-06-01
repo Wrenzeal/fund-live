@@ -43,6 +43,14 @@ type Fund struct {
 	// CategoryCode 站内稳定主分类
 	CategoryCode string `gorm:"type:varchar(50);index" json:"category_code"`
 
+	// CatalogStatus 表示该基金在上游目录中的可搜索状态。
+	// active: 可作为默认搜索结果；unavailable: 目录存在但详情不可用；
+	// catalog_missing: 已不在最新目录中，保留历史记录但不默认搜索。
+	CatalogStatus string `gorm:"type:varchar(32);index;default:active" json:"catalog_status"`
+
+	// CatalogSyncedAt 记录最近一次全量目录同步时间。
+	CatalogSyncedAt *time.Time `json:"catalog_synced_at"`
+
 	// NetAssetVal 最新单位净值 (NAV)
 	NetAssetVal decimal.Decimal `gorm:"type:decimal(10,4)" json:"nav"`
 

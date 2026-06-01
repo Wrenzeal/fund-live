@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useMemo } from 'react'
 import { AlertTriangle, Clock3, FileStack, Layers3, LoaderCircle, Wallet } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
+import { ScrollRevealStack } from '@/components/scroll-reveal'
 import { useVIPPreview } from '@/hooks/use-vip-preview'
 import { cn } from '@/lib/utils'
 
@@ -45,7 +46,7 @@ export default function VIPTasksPage() {
       title="分析任务中心"
       description="查看 VIP 板块分析和组合分析的任务状态，以及当前可用额度与报告入口。"
     >
-      <div className="space-y-8">
+      <ScrollRevealStack className="space-y-8">
         {!membership.isVip && (
           <section className="rounded-[32px] border border-amber-500/25 bg-amber-500/10 p-6">
             <div className="flex items-start gap-3">
@@ -175,7 +176,7 @@ export default function VIPTasksPage() {
             })}
           </section>
         )}
-      </div>
+      </ScrollRevealStack>
     </AccountAreaShell>
   )
 }

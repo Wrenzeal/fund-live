@@ -1,14 +1,15 @@
 'use client'
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, ArrowLeft, BarChart3, CalendarClock, FileText, Gauge, Layers3, PieChart, ShieldCheck, ShieldAlert, Sparkles, Target, TimerReset, Zap } from 'lucide-react'
 import { AnimatedScoreGauge } from '@/components/animated-score-gauge'
+import { AnalysisReveal as RevealSection, AnalysisSectionHeading as SectionHeading, useLazyReveal } from '@/components/analysis-layout'
 import { EstimateCard } from '@/components/estimate-card'
 import { FundSectorCard } from '@/components/fund-sector-card'
 import { HoldingsTable } from '@/components/holdings-table'
 import { TargetETFHoldingsCard } from '@/components/target-etf-holdings-card'
-import { useFundAnalysis, useFundDashboard, useFundHoldings, type FundAnalysis, type FundAnalysisEventImpact, type FundAnalysisModuleScore } from '@/hooks/use-fund-data'
+import { useFundAnalysis, useFundDashboard, useFundHoldings, type Fund, type FundAnalysis, type FundAnalysisEventImpact, type FundAnalysisModuleScore, type FundClassificationOverride, type FundEstimate, type FundSectorSnapshot, type FundThemeSnapshot } from '@/hooks/use-fund-data'
 import { cn } from '@/lib/utils'
 import {
   confidenceLevelLabel,
@@ -29,15 +30,18 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
     estimate,
     sectorSnapshot,
     themeSnapshot,
+    classificationOverride,
     displayDate,
     isHistorical,
     officialClose,
     isLoading,
     isValidating,
+    mutate: refreshDashboard,
   } = useFundDashboard(fundId)
   const {
     analysis,
     isLoading: isAnalysisLoading,
+    mutate: refreshAnalysis,
   } = useFundAnalysis(fundId)
 
   const {
@@ -57,146 +61,123 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
 
   return (
     <main className="min-h-screen">
-      <div className="container mx-auto px-4 py-6 md:py-8">
-        <header className="mb-6 flex flex-col gap-4 rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/40 p-5 md:flex-row md:items-center md:justify-between">
-          <div>
-            <Link
-              href={fundId ? `/?fund=${fundId}` : '/'}
-              className="mb-3 inline-flex items-center gap-2 text-sm text-theme-secondary transition-colors hover:text-theme-primary"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              返回基金详情
-            </Link>
-            <div className="text-2xl font-bold text-theme-primary">完整量化看板</div>
-            <div className="mt-2 text-sm text-theme-secondary">
-              {fund?.name ? `${fund.name}（${fund.id}）` : `基金 ${fundId}`} ·
-              {' '}用于承载更完整的结构、事件与风险拆解
+      <div className="container mx-auto max-w-7xl px-4 py-6 md:py-8">
+        <header className="mb-6 overflow-hidden rounded-[2rem] border border-[var(--card-border)] bg-[var(--card-bg)]/45 p-5 shadow-[0_22px_60px_rgba(0,0,0,0.10)] md:p-6">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <Link
+                href={fundId ? `/?fund=${fundId}` : '/'}
+                className="mb-4 inline-flex items-center gap-2 text-sm text-theme-secondary transition-colors hover:text-theme-primary"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                返回基金详情
+              </Link>
+              <div className="text-2xl font-black tracking-tight text-theme-primary md:text-3xl">量化看板</div>
+              <div className="mt-2 max-w-3xl text-sm leading-6 text-theme-secondary">
+                {fund?.name ? `${fund.name}（${fund.id}）` : `基金 ${fundId}`} · 先看结论和证据，再展开事件、风险与底层数据。
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs text-theme-secondary sm:grid-cols-4 lg:min-w-[30rem]">
+              <QuickStat label="口径" value={analysis?.analysis_basis || '--'} />
+              <QuickStat label="风险" value={riskLevelLabel(analysis?.risk_level)} />
+              <QuickStat label="覆盖" value={confidenceLevelLabel(analysis?.confidence)} />
+              <QuickStat label="披露期" value={analysis?.latest_holding_period || '--'} />
             </div>
           </div>
         </header>
 
-        <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <OverviewCard
-            icon={<BarChart3 className="h-4 w-4 text-cyan-200" />}
-            title="当前分析口径"
-            value={analysis?.analysis_basis || '--'}
-            description={analysis?.analysis_type === 'tracked_etf' ? '联接基金优先复用目标 ETF 口径' : '当前量化分析以单快照规则打分为主'}
-          />
-          <OverviewCard
-            icon={<ShieldCheck className="h-4 w-4 text-emerald-200" />}
-            title="风险与覆盖"
-            value={`${riskLevelLabel(analysis?.risk_level)} / ${confidenceLevelLabel(analysis?.confidence)}`}
-            description={analysis?.latest_holding_period ? `最新持仓披露：${analysis.latest_holding_period}` : '当前未获取有效持仓披露'}
-          />
-          <OverviewCard
-            icon={<Layers3 className="h-4 w-4 text-fuchsia-200" />}
-            title="主线结构"
-            value={themeSnapshot?.primary_theme_name || sectorSnapshot?.primary_sector_name || fund?.category_name || '--'}
-            description={themeSnapshot?.primary_theme_name && sectorSnapshot?.primary_sector_name ? `${sectorSnapshot.primary_sector_name} / ${themeSnapshot.primary_theme_name}` : '主暴露结构会继续细化到季报变化层'}
-          />
-          <OverviewCard
-            icon={<FileText className="h-4 w-4 text-amber-200" />}
-            title="当前阶段"
-            value="基础版"
-            description="已覆盖总分、建议分布、事件影响、持仓分类；后续继续补季报变化与详细时间线"
-          />
-        </div>
-
-        <div className="mt-6 space-y-6">
-          <AnalysisHeroVisual
-            analysis={analysis}
-            isLoading={isAnalysisLoading}
-            sectorName={sectorSnapshot?.primary_sector_name}
-            themeName={themeSnapshot?.primary_theme_name}
-          />
-
-          <div className="grid items-stretch gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-            <RecommendationMixPanel items={recommendationItems} />
-            <ModuleRadarPanel modules={analysis?.module_scores || []} />
-          </div>
-
-          <EvidenceFocusGrid analysis={analysis} />
-
-          <div className="grid items-stretch gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(22rem,0.95fr)]">
-            <EventSignalBoard events={timelineEvents} />
-            <QuarterlyDiffCard events={quarterlyEvents} />
-          </div>
-
-          <div className="grid items-stretch gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.95fr)]">
-            <RiskBreakdownCard analysis={analysis} riskModules={riskModules} />
-            <StructureComparisonCard
-              sectorSnapshot={sectorSnapshot}
-              themeSnapshot={themeSnapshot}
-              exposureEvents={exposureEvents}
-              positiveModules={positiveModules}
+        <div className="space-y-5 md:space-y-6">
+          <RevealSection>
+            <AnalysisHeroVisual
+              analysis={analysis}
+              isLoading={isAnalysisLoading}
+              sectorName={sectorSnapshot?.primary_sector_name}
+              themeName={themeSnapshot?.primary_theme_name}
             />
-          </div>
+          </RevealSection>
 
-          <div className="grid items-stretch gap-6 xl:grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]">
-            <EstimateCard
-              estimate={estimate}
+          <RevealSection delay={80}>
+            <InsightStrip
+              analysis={analysis}
+              sectorName={sectorSnapshot?.primary_sector_name}
+              themeName={themeSnapshot?.primary_theme_name}
+            />
+          </RevealSection>
+
+          <RevealSection delay={120}>
+            <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+              <RecommendationMixPanel items={recommendationItems} />
+              <ModuleRadarPanel modules={analysis?.module_scores || []} />
+            </div>
+          </RevealSection>
+
+          <RevealSection delay={120}>
+            <EvidenceFocusGrid analysis={analysis} />
+          </RevealSection>
+
+          <RevealSection delay={120}>
+            <div className="space-y-5">
+              <EventSignalBoard events={timelineEvents} />
+              <RiskBreakdownCard analysis={analysis} riskModules={riskModules} />
+            </div>
+          </RevealSection>
+
+          <RevealSection delay={120}>
+            <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.92fr)]">
+              <StructureComparisonCard
+                sectorSnapshot={sectorSnapshot}
+                themeSnapshot={themeSnapshot}
+                exposureEvents={exposureEvents}
+                positiveModules={positiveModules}
+              />
+              <QuarterlyDiffCard events={quarterlyEvents} />
+            </div>
+          </RevealSection>
+
+          <RevealSection delay={120}>
+            <DataContextPanel
               fund={fund}
+              estimate={estimate}
               isLoading={isLoading}
               isValidating={isValidating}
               lastUpdated={lastUpdated}
-              className="h-full"
-            />
-            <FundSectorCard
-              fund={fund}
               sectorSnapshot={sectorSnapshot}
               themeSnapshot={themeSnapshot}
+              classificationOverride={classificationOverride}
+              onClassificationOverrideUpdated={() => {
+                void refreshDashboard()
+                void refreshAnalysis()
+              }}
+              displayLevel={displayLevel}
+              lookthroughAvailable={lookthroughAvailable}
+              displayDate={displayDate}
+              isHistorical={isHistorical}
+              officialCloseStatus={officialClose?.display_status}
             />
+          </RevealSection>
 
-            <section className="glass flex h-full flex-col rounded-3xl p-6">
-              <div className="mb-4 text-sm font-semibold text-theme-primary">结构与数据视角</div>
-              <div className="flex flex-1 flex-col justify-center space-y-3 text-sm text-theme-secondary">
-                <MetaRow label="展示层级" value={displayLevel === 'target_layer' ? '下一层追踪目标' : '股票持仓层'} />
-                <MetaRow label="可穿透估值" value={lookthroughAvailable ? '是' : '否'} />
-                <MetaRow label="分时日期" value={displayDate || '--'} />
-                <MetaRow label="历史数据" value={isHistorical ? '是' : '否'} />
-                <MetaRow label="官方收盘结果" value={officialClose?.display_status === 'ready' ? '已就绪' : officialClose?.display_status === 'pending' ? '待同步' : '隐藏'} />
-                <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4 text-xs leading-6 text-theme-muted">
-                  当前完整量化看板页主要负责把“评分 + 结构 + 事件 + 持仓”串起来。后续如果事件层继续扩展，这里会承载时间线、季报变化与更细的风险拆解。
-                </div>
-              </div>
-            </section>
-          </div>
-
-          <HoldingsTable
-            estimate={estimate}
-            displayLevel={displayLevel}
-            items={displayItems}
-            lookthroughAvailable={lookthroughAvailable}
-          />
+          <RevealSection delay={120}>
+            <HoldingsTable
+              estimate={estimate}
+              displayLevel={displayLevel}
+              items={displayItems}
+              lookthroughAvailable={lookthroughAvailable}
+            />
+          </RevealSection>
 
           {displayLevel === 'target_layer' && resolvedHoldings.length > 0 && (
-            <TargetETFHoldingsCard
-              targetName={displayItems[0]?.name}
-              holdings={resolvedHoldings}
-            />
+            <RevealSection delay={120}>
+              <TargetETFHoldingsCard
+                targetName={displayItems[0]?.name}
+                holdings={resolvedHoldings}
+              />
+            </RevealSection>
           )}
 
-          <section className="glass rounded-3xl p-6">
-            <div className="mb-4 text-sm font-semibold text-theme-primary">方法与限制</div>
-            <div className="grid gap-4 xl:grid-cols-2">
-              <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
-                <div className="mb-2 text-sm font-medium text-cyan-100">当前方法</div>
-                <div className="space-y-2 text-sm text-theme-secondary">
-                  <p>1. 先基于 dashboard 单快照统一估值、分时、分类与持仓口径。</p>
-                  <p>2. 再按趋势 / 结构 / 热度 / 风险 / 性价比 / 事件六模块打分。</p>
-                  <p>3. 最后把综合偏向映射成加 / 平 / 减分布，而不是直接给单句买卖结论。</p>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-                <div className="mb-2 text-sm font-medium text-amber-100">当前限制</div>
-                <div className="space-y-2 text-sm text-theme-secondary">
-                  <p>1. 事件模块还未接外部新闻、政策、财报与基金公告数据源。</p>
-                  <p>2. 六模块权重仍在样本池校准阶段，部分 ETF 与低覆盖主动基金还需继续调参。</p>
-                  <p>3. 目前以详情页展示为主，后续才会扩展到持仓页、自选页与排行榜。</p>
-                </div>
-              </div>
-            </div>
-          </section>
+          <RevealSection delay={120}>
+            <MethodCompactCard analysis={analysis} />
+          </RevealSection>
         </div>
       </div>
     </main>
@@ -385,25 +366,188 @@ function HeroEvidencePill({
   )
 }
 
+function QuickStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-3 py-2.5">
+      <div className="text-[10px] tracking-[0.18em] text-theme-muted">{label}</div>
+      <div className="mt-1 truncate text-sm font-semibold text-theme-primary">{value}</div>
+    </div>
+  )
+}
+
+function InsightStrip({
+  analysis,
+  sectorName,
+  themeName,
+}: {
+  analysis?: FundAnalysis
+  sectorName?: string
+  themeName?: string
+}) {
+  const dominant = dominantRecommendationItem(buildRecommendationItems(analysis))
+  const facts = [
+    {
+      icon: <BarChart3 className="h-4 w-4 text-cyan-200" />,
+      label: '当前方向',
+      value: analysis ? dominant.label : '--',
+      detail: analysis ? `${formatAnalysisPercent(dominant.value)} · 阈值规则口径` : '等待量化结果',
+    },
+    {
+      icon: <ShieldCheck className="h-4 w-4 text-emerald-200" />,
+      label: '可信覆盖',
+      value: confidenceLevelLabel(analysis?.confidence),
+      detail: analysis?.latest_holding_period ? `持仓披露：${analysis.latest_holding_period}` : '持仓披露待补齐',
+    },
+    {
+      icon: <Layers3 className="h-4 w-4 text-fuchsia-200" />,
+      label: '主线结构',
+      value: themeName || sectorName || '--',
+      detail: themeName && sectorName ? `${sectorName} / ${themeName}` : '行业与主题快照合并观察',
+    },
+    {
+      icon: <FileText className="h-4 w-4 text-amber-200" />,
+      label: '证据数量',
+      value: `${(analysis?.primary_evidence || []).length} / ${(analysis?.counter_evidence || []).length}`,
+      detail: '主证据 / 反方限制，避免重复堆叠规则文本',
+    },
+  ]
+
+  return (
+    <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {facts.map((item) => (
+        <div key={item.label} className="rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-cyan-400/25">
+          <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-theme-muted">
+            {item.icon}
+            {item.label}
+          </div>
+          <div className="truncate text-base font-bold text-theme-primary">{item.value}</div>
+          <div className="mt-2 line-clamp-2 text-xs leading-5 text-theme-muted">{item.detail}</div>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+function DataContextPanel({
+  fund,
+  estimate,
+  isLoading,
+  isValidating,
+  lastUpdated,
+  sectorSnapshot,
+  themeSnapshot,
+  classificationOverride,
+  onClassificationOverrideUpdated,
+  displayLevel,
+  lookthroughAvailable,
+  displayDate,
+  isHistorical,
+  officialCloseStatus,
+}: {
+  fund?: Fund
+  estimate?: FundEstimate
+  isLoading: boolean
+  isValidating: boolean
+  lastUpdated: Date | null
+  sectorSnapshot?: FundSectorSnapshot
+  themeSnapshot?: FundThemeSnapshot
+  classificationOverride?: FundClassificationOverride
+  onClassificationOverrideUpdated?: () => void
+  displayLevel: 'stock_layer' | 'target_layer'
+  lookthroughAvailable: boolean
+  displayDate: string
+  isHistorical: boolean
+  officialCloseStatus?: 'hidden' | 'pending' | 'ready'
+}) {
+  return (
+    <section className="space-y-5">
+      <EstimateCard
+        estimate={estimate}
+        fund={fund}
+        isLoading={isLoading}
+        isValidating={isValidating}
+        lastUpdated={lastUpdated}
+        className="h-full"
+      />
+
+      <FundSectorCard
+        fund={fund}
+        sectorSnapshot={sectorSnapshot}
+        themeSnapshot={themeSnapshot}
+        classificationOverride={classificationOverride}
+        onClassificationOverrideUpdated={onClassificationOverrideUpdated}
+      />
+
+      <section className="glass flex h-full flex-col rounded-3xl p-5">
+          <SectionHeading
+            icon={<Gauge className="h-4 w-4 text-cyan-200" />}
+            title="数据口径"
+            description="把展示层级、分时与官方净值状态收在一个位置。"
+          />
+          <div className="mt-4 flex flex-1 flex-col justify-center space-y-2 text-sm text-theme-secondary">
+            <MetaRow label="展示层级" value={displayLevel === 'target_layer' ? '下一层追踪目标' : '股票持仓层'} />
+            <MetaRow label="可穿透估值" value={lookthroughAvailable ? '是' : '否'} />
+            <MetaRow label="分时日期" value={displayDate || '--'} />
+            <MetaRow label="历史数据" value={isHistorical ? '是' : '否'} />
+            <MetaRow label="官方收盘" value={officialCloseStatus === 'ready' ? '已就绪' : officialCloseStatus === 'pending' ? '待同步' : '隐藏'} />
+          </div>
+      </section>
+    </section>
+  )
+}
+
+function MethodCompactCard({ analysis }: { analysis?: FundAnalysis }) {
+  const deductions = analysis?.confidence_deductions || []
+  const limitations = analysis?.ai_explanation?.limitations || []
+  const mergedLimits = [...deductions, ...limitations].slice(0, 4)
+
+  return (
+    <section className="glass rounded-3xl p-5 md:p-6">
+      <SectionHeading
+        icon={<FileText className="h-4 w-4 text-amber-200" />}
+        title="方法与限制"
+        description="保留必要边界说明，避免和上方证据、事件、风险模块重复。"
+      />
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm leading-6 text-theme-secondary">
+          量化看板以规则评分为主：先统一估值、持仓、分类与事件快照，再输出建议分布、模块分与证据链。AI 解释层只增强可读性，不改写评分或风险等级。
+        </div>
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
+          {mergedLimits.length === 0 ? (
+            <EmptyInline text="当前没有额外可信度扣分或解释层限制。" />
+          ) : (
+            <div className="space-y-2">
+              {mergedLimits.map((item, index) => (
+                <div key={`${item}-${index}`} className="flex gap-3 text-sm leading-6 text-theme-secondary">
+                  <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0 text-amber-200" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function RecommendationMixPanel({ items }: { items: RecommendationItem[] }) {
   const [panelRef, hasEnteredView] = useLazyReveal<HTMLElement>()
   const total = items.reduce((sum, item) => sum + Math.max(item.value, 0), 0)
 
   return (
-    <section ref={panelRef} className="glass relative flex h-full min-h-[24rem] flex-col overflow-hidden rounded-3xl p-6">
+    <section ref={panelRef} className="glass relative flex h-full min-h-[22rem] flex-col overflow-hidden rounded-3xl p-5 md:p-6">
       <div className="pointer-events-none absolute -left-20 top-1/2 h-56 w-56 -translate-y-1/2 rounded-full bg-fuchsia-500/10 blur-3xl" />
       <div className="pointer-events-none absolute -right-16 top-8 h-48 w-48 rounded-full bg-cyan-500/10 blur-3xl" />
 
       <div className="relative mb-5 flex items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-theme-primary">
-            <PieChart className="h-4 w-4 text-cyan-200" />
-            建议分布
-          </div>
-          <div className="mt-1 text-xs text-theme-muted">滚动到此处后再绘制环形分布；比例只表示结构偏向，不是交易指令。</div>
-        </div>
+        <SectionHeading
+          icon={<PieChart className="h-4 w-4 text-cyan-200" />}
+          title="建议分布"
+          description="比例只表示结构偏向，不是交易指令。"
+        />
         <span className="hidden rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-100 sm:inline-flex">
-          视口触发动画
+          滚动绘制
         </span>
       </div>
 
@@ -412,12 +556,12 @@ function RecommendationMixPanel({ items }: { items: RecommendationItem[] }) {
           <EmptyPanel text="当前没有可绘制的建议分布数据。" />
         </div>
       ) : (
-        <div className="relative grid flex-1 items-center gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
-          <div className="flex min-h-[18rem] items-center justify-center">
+        <div className="relative grid flex-1 items-center gap-5 lg:grid-cols-[16rem_minmax(0,1fr)]">
+          <div className="flex min-h-[16rem] items-center justify-center">
             {hasEnteredView ? (
               <AnimatedRecommendationDonut items={items} />
             ) : (
-              <div className="relative flex h-64 w-64 items-center justify-center rounded-full border border-dashed border-[var(--card-border)] bg-[var(--card-bg)]/30 text-center">
+              <div className="relative flex h-56 w-56 items-center justify-center rounded-full border border-dashed border-[var(--card-border)] bg-[var(--card-bg)]/30 text-center">
                 <div className="absolute inset-6 rounded-full border border-[var(--card-border)]/70" />
                 <div className="px-8 text-xs leading-6 text-theme-muted">
                   到达图表位置后
@@ -512,7 +656,7 @@ function AnimatedRecommendationDonut({ items }: { items: RecommendationItem[] })
   }, [])
 
   return (
-    <div className={cn('relative h-72 w-72 transition-all duration-700', draw ? 'scale-100 opacity-100' : 'scale-95 opacity-0')}>
+    <div className={cn('relative h-64 w-64 transition-all duration-700 md:h-72 md:w-72', draw ? 'scale-100 opacity-100' : 'scale-95 opacity-0')}>
       <div className="absolute inset-0 rounded-full bg-[conic-gradient(from_140deg,rgba(244,63,94,.22),rgba(34,211,238,.18),rgba(16,185,129,.2),rgba(244,63,94,.22))] blur-2xl" />
       <div className="absolute inset-5 rounded-full border border-white/10 bg-[var(--card-bg)]/20 shadow-[inset_0_0_50px_rgba(255,255,255,0.04)]" />
       <div className="absolute inset-3 rounded-full border border-cyan-300/10 animate-[spin_18s_linear_infinite]" />
@@ -566,45 +710,6 @@ function AnimatedRecommendationDonut({ items }: { items: RecommendationItem[] })
   )
 }
 
-function useLazyReveal<T extends HTMLElement>() {
-  const ref = useRef<T | null>(null)
-  const [hasEnteredView, setHasEnteredView] = useState(false)
-
-  useEffect(() => {
-    if (hasEnteredView) {
-      return
-    }
-
-    const element = ref.current
-    if (!element) {
-      return
-    }
-
-    if (typeof IntersectionObserver === 'undefined') {
-      const frame = window.requestAnimationFrame(() => setHasEnteredView(true))
-      return () => window.cancelAnimationFrame(frame)
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting || entry.intersectionRatio > 0) {
-          setHasEnteredView(true)
-          observer.disconnect()
-        }
-      },
-      {
-        rootMargin: '0px 0px -12% 0px',
-        threshold: 0.28,
-      }
-    )
-
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [hasEnteredView])
-
-  return [ref, hasEnteredView] as const
-}
-
 function ModuleRadarPanel({ modules }: { modules: FundAnalysisModuleScore[] }) {
   const normalized = modules.slice(0, 6)
   const center = 96
@@ -617,15 +722,16 @@ function ModuleRadarPanel({ modules }: { modules: FundAnalysisModuleScore[] }) {
   const gridLevels = [0.33, 0.66, 1]
 
   return (
-    <section className="glass flex h-full min-h-[18rem] flex-col justify-center rounded-3xl p-6">
-      <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-theme-primary">
-        <Zap className="h-4 w-4 text-fuchsia-200" />
-        六维模块雷达
-      </div>
+    <section className="glass flex h-full min-h-[22rem] flex-col justify-center rounded-3xl p-5 md:p-6">
+      <SectionHeading
+        icon={<Zap className="h-4 w-4 text-fuchsia-200" />}
+        title="六维模块"
+        description="用雷达图压缩展示模块强弱，避免重复展开每条规则。"
+      />
       {normalized.length === 0 ? (
         <EmptyPanel text="当前没有可展示的模块分数。" />
       ) : (
-      <div className="grid items-center gap-5 md:grid-cols-[13rem_minmax(0,1fr)]">
+      <div className="mt-5 grid items-center gap-5 md:grid-cols-[13rem_minmax(0,1fr)]">
         <div className="relative mx-auto h-52 w-52">
           <svg viewBox="0 0 192 192" className="h-full w-full">
             {gridLevels.map((level) => (
@@ -678,16 +784,17 @@ function EvidenceFocusGrid({ analysis }: { analysis?: FundAnalysis }) {
   const ai = analysis?.ai_explanation
 
   return (
-    <section className="grid items-stretch gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_22rem]">
+    <section className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_20rem]">
       <EvidenceColumn title="主证据" icon={<Target className="h-4 w-4 text-cyan-200" />} items={primary} />
       <EvidenceColumn title="反方证据 / 限制" icon={<ShieldAlert className="h-4 w-4 text-amber-200" />} items={counter} amber />
-      <div className="glass flex h-full min-h-[18rem] flex-col rounded-3xl p-6">
-        <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-theme-primary">
-          <Sparkles className="h-4 w-4 text-fuchsia-200" />
-          AI解释层
-        </div>
+      <div className="glass flex h-full min-h-[18rem] flex-col rounded-3xl p-5 md:p-6">
+        <SectionHeading
+          icon={<Sparkles className="h-4 w-4 text-fuchsia-200" />}
+          title="AI解释层"
+          description="只做解释和归因，不改规则评分。"
+        />
         {ai ? (
-          <div className="flex flex-1 flex-col justify-center space-y-3">
+          <div className="mt-4 flex flex-1 flex-col justify-center space-y-3">
             <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4">
               <div className="text-xs text-theme-muted">状态 / 缓存</div>
               <div className="mt-2 text-sm font-semibold text-theme-primary">
@@ -723,12 +830,9 @@ function EvidenceColumn({
   amber?: boolean
 }) {
   return (
-    <div className={cn('glass flex h-full min-h-[18rem] flex-col rounded-3xl p-6', amber ? 'bg-amber-500/5' : 'bg-cyan-500/5')}>
-      <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-theme-primary">
-        {icon}
-        {title}
-      </div>
-      <div className={cn('flex flex-1 flex-col gap-3', items.length === 0 && 'justify-center')}>
+    <div className={cn('glass flex h-full min-h-[18rem] flex-col rounded-3xl p-5 md:p-6', amber ? 'bg-amber-500/5' : 'bg-cyan-500/5')}>
+      <SectionHeading icon={icon} title={title} />
+      <div className={cn('mt-4 flex flex-1 flex-col gap-3', items.length === 0 && 'justify-center')}>
         {items.length === 0 ? (
           <EmptyPanel text={`${title} 暂无结构化数据。`} />
         ) : items.slice(0, 3).map((item, index) => (
@@ -747,29 +851,6 @@ function EvidenceColumn({
   )
 }
 
-function OverviewCard({
-  icon,
-  title,
-  value,
-  description,
-}: {
-  icon: ReactNode
-  title: string
-  value: string
-  description: string
-}) {
-  return (
-    <section className="glass flex h-full min-h-[8.5rem] flex-col justify-center rounded-2xl p-5">
-      <div className="mb-3 flex items-center gap-2 text-theme-primary">
-        {icon}
-        <span className="text-sm font-medium">{title}</span>
-      </div>
-      <div className="text-lg font-semibold text-theme-primary">{value}</div>
-      <div className="mt-2 text-xs leading-5 text-theme-muted">{description}</div>
-    </section>
-  )
-}
-
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex min-h-[3rem] items-center justify-between gap-4 rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-4 py-3">
@@ -785,18 +866,14 @@ function isRiskModule(code: string) {
 
 function EventSignalBoard({ events }: { events: FundAnalysisEventImpact[] }) {
   return (
-    <section className="glass flex h-full min-h-[22rem] flex-col rounded-3xl p-6">
-      <div className="mb-5 flex items-center gap-3">
-        <div className="rounded-2xl bg-cyan-500/15 p-3">
-          <CalendarClock className="h-5 w-5 text-cyan-200" />
-        </div>
-        <div>
-          <div className="text-sm font-semibold text-theme-primary">事件信号链</div>
-          <div className="text-xs text-theme-muted">优先展示持仓、主线和近期事件，弱化纯规则说明。</div>
-        </div>
-      </div>
+    <section className="glass flex h-full min-h-[22rem] flex-col rounded-3xl p-5 md:p-6">
+      <SectionHeading
+        icon={<CalendarClock className="h-4 w-4 text-cyan-200" />}
+        title="事件信号链"
+        description="优先展示持仓、主线和近期事件，弱化纯规则说明。"
+      />
 
-      <div className={cn('relative flex-1 space-y-4', events.length === 0 && 'flex items-center')}>
+      <div className={cn('relative mt-5 flex-1 space-y-4', events.length === 0 && 'flex items-center')}>
         {events.length > 0 && (
           <div className="absolute bottom-4 left-3 top-4 w-px bg-gradient-to-b from-cyan-400/0 via-cyan-400/40 to-cyan-400/0" />
         )}
@@ -836,18 +913,14 @@ function EventSignalBoard({ events }: { events: FundAnalysisEventImpact[] }) {
 
 function QuarterlyDiffCard({ events }: { events: FundAnalysisEventImpact[] }) {
   return (
-    <section className="glass flex h-full min-h-[22rem] flex-col rounded-3xl p-6">
-      <div className="mb-4 flex items-center gap-3">
-        <div className="rounded-2xl bg-fuchsia-500/15 p-3">
-          <TimerReset className="h-5 w-5 text-fuchsia-200" />
-        </div>
-        <div>
-          <div className="text-sm font-semibold text-theme-primary">季报变化</div>
-          <div className="text-xs text-theme-muted">把上一季与当前季的持仓和主线变化单独拎出来看。</div>
-        </div>
-      </div>
+    <section className="glass flex h-full min-h-[20rem] flex-col rounded-3xl p-5 md:p-6">
+      <SectionHeading
+        icon={<TimerReset className="h-4 w-4 text-fuchsia-200" />}
+        title="季报变化"
+        description="只保留季度结构变化，避免与当前事件链重复。"
+      />
 
-      <div className={cn('flex flex-1 flex-col gap-3', events.length === 0 && 'justify-center')}>
+      <div className={cn('mt-4 flex flex-1 flex-col gap-3', events.length === 0 && 'justify-center')}>
         {events.length === 0 ? (
           <EmptyPanel text="当前没有显著的季度结构变化事件。" />
         ) : events.map((event, index) => (
@@ -869,25 +942,27 @@ function RiskBreakdownCard({
   riskModules: FundAnalysisModuleScore[]
 }) {
   return (
-    <section className="glass flex h-full flex-col rounded-3xl p-6">
-      <div className="mb-4 flex items-center gap-3">
-        <div className="rounded-2xl bg-amber-500/15 p-3">
-          <ShieldAlert className="h-5 w-5 text-amber-200" />
-        </div>
-        <div>
-          <div className="text-sm font-semibold text-theme-primary">风险拆解</div>
-          <div className="text-xs text-theme-muted">单独看风险相关模块、warning 与当前总风险等级。</div>
-        </div>
-      </div>
+    <section className="glass flex h-full flex-col rounded-3xl p-5 md:p-6">
+      <SectionHeading
+        icon={<ShieldAlert className="h-4 w-4 text-amber-200" />}
+        title="风险拆解"
+        description="合并风险模块与 warning，减少重复风险文案。"
+      />
 
-      <div className="grid flex-1 items-stretch gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
-        <div className="flex min-h-[11rem] flex-col justify-center rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-          <div className="text-xs tracking-[0.18em] text-theme-muted">CURRENT RISK</div>
-          <div className="mt-3 text-3xl font-black text-theme-primary">{riskLevelLabel(analysis?.risk_level)}</div>
-          <div className="mt-2 text-sm text-theme-secondary">总分 {formatAnalysisScore(analysis?.total_score)}</div>
+      <div className="mt-4 space-y-4">
+        <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-[11px] font-semibold tracking-[0.22em] text-amber-100/80">CURRENT RISK</div>
+              <div className="mt-2 text-3xl font-black text-theme-primary">{riskLevelLabel(analysis?.risk_level)}</div>
+            </div>
+            <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-4 py-3 text-sm text-theme-secondary">
+              总分 <span className="ml-2 text-lg font-bold text-theme-primary">{formatAnalysisScore(analysis?.total_score)}</span>
+            </div>
+          </div>
         </div>
 
-        <div className={cn('flex flex-col gap-3', riskModules.length === 0 && 'justify-center')}>
+        <div className={cn('grid gap-3 md:grid-cols-2', riskModules.length === 0 && 'block')}>
           {riskModules.length === 0 ? (
             <EmptyPanel text="当前没有单独可拆的风险模块。" />
           ) : riskModules.map((module) => (
@@ -902,20 +977,24 @@ function RiskBreakdownCard({
             </div>
           ))}
 
-          {(analysis?.warnings || []).length > 0 && (
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-              <div className="mb-2 text-sm font-semibold text-amber-100">重点风险提示</div>
-              <div className="space-y-2">
-                {analysis?.warnings.map((warning, index) => (
-                  <div key={`${warning}-${index}`} className="flex gap-3 text-sm text-theme-secondary">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-200" />
-                    <span>{warning}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
+
+        {(analysis?.warnings || []).length > 0 && (
+          <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-theme-primary">
+              <AlertTriangle className="h-4 w-4 text-amber-200" />
+              重点风险提示
+            </div>
+            <div className="space-y-2">
+              {analysis?.warnings.map((warning, index) => (
+                <div key={`${warning}-${index}`} className="flex gap-3 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/30 px-3 py-2 text-sm leading-6 text-theme-secondary">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300" />
+                  <span>{warning}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   )
@@ -936,18 +1015,14 @@ function StructureComparisonCard({
   const topThemes = (themeSnapshot?.breakdown || []).slice(0, 3)
 
   return (
-    <section className="glass flex h-full flex-col rounded-3xl p-6">
-      <div className="mb-4 flex items-center gap-3">
-        <div className="rounded-2xl bg-emerald-500/15 p-3">
-          <Layers3 className="h-5 w-5 text-emerald-200" />
-        </div>
-        <div>
-          <div className="text-sm font-semibold text-theme-primary">结构变化对比</div>
-          <div className="text-xs text-theme-muted">把当前主行业 / 主主题和暴露变化事件放到一起看。</div>
-        </div>
-      </div>
+    <section className="glass flex h-full flex-col rounded-3xl p-5 md:p-6">
+      <SectionHeading
+        icon={<Layers3 className="h-4 w-4 text-emerald-200" />}
+        title="结构与暴露"
+        description="聚合主行业、主题和暴露变化，不再重复完整分类卡。"
+      />
 
-      <div className="flex flex-1 flex-col space-y-4">
+      <div className="mt-4 flex flex-1 flex-col space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <MetaRow label="当前主行业" value={sectorSnapshot?.primary_sector_name || '--'} />
           <MetaRow label="当前主主题" value={themeSnapshot?.primary_theme_name || '--'} />

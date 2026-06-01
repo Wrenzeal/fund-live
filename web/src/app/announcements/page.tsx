@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { Bell, FileUp, LoaderCircle, Megaphone } from 'lucide-react'
+import { ScrollRevealStack } from '@/components/scroll-reveal'
 import { SiteShell } from '@/components/site-shell'
 import { useCurrentUser } from '@/hooks/use-auth'
 import {
@@ -70,8 +71,8 @@ export default function AnnouncementsPage() {
     >
       <div className="space-y-8">
         {user?.is_admin && (
-          <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-            <div className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
+          <ScrollRevealStack className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+            <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
               <div className="text-xs tracking-[0.22em] text-theme-muted">管理员发布</div>
               <div className="mt-2 text-2xl font-bold text-theme-primary">手动新增公告</div>
               <div className="mt-6 space-y-4">
@@ -138,9 +139,9 @@ export default function AnnouncementsPage() {
                   </button>
                 </div>
               </div>
-            </div>
+            </section>
 
-            <div className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
+            <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
               <div className="text-xs tracking-[0.22em] text-theme-muted">管理提示</div>
               <div className="mt-2 text-2xl font-bold text-theme-primary">公告策略</div>
               <div className="mt-5 space-y-4 text-sm leading-7 text-theme-secondary">
@@ -154,11 +155,11 @@ export default function AnnouncementsPage() {
                   登录用户会在存在未读公告时收到弹窗提醒，并可手动标记已读。
                 </div>
               </div>
-            </div>
-          </section>
+            </section>
+          </ScrollRevealStack>
         )}
 
-        <section className="space-y-4">
+        <ScrollRevealStack className="space-y-4">
           {isLoading ? (
             <div className="rounded-[32px] border border-[var(--card-border)] p-10 glass text-center">
               <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
@@ -206,7 +207,7 @@ export default function AnnouncementsPage() {
               </Link>
             ))
           )}
-        </section>
+        </ScrollRevealStack>
       </div>
     </SiteShell>
   )

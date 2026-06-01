@@ -1,6 +1,17 @@
 'use client'
 
-import { Ban, CalendarDays, CheckCircle2, History, Pencil, Plus, RotateCcw, Search, Trash2, WalletCards } from 'lucide-react'
+import {
+  Ban,
+  CalendarDays,
+  CheckCircle2,
+  History,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Search,
+  Trash2,
+  WalletCards,
+} from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
 import type {
@@ -20,9 +31,26 @@ import { cn } from '@/lib/utils'
 
 interface HoldingActivityTimelineProps {
   transactions: HoldingTransactionEntry[]
-  onVoidTransaction?: (transactionID: string, reason: string) => Promise<void> | void
-  onPreviewRollback?: (transactionID: string) => Promise<HoldingTransactionRollbackPreview | null> | HoldingTransactionRollbackPreview | null | void
-  onApplyRollback?: (transactionID: string, reason: string) => Promise<HoldingTransactionRollbackApplyResult | null> | HoldingTransactionRollbackApplyResult | null | void
+  compact?: boolean
+  onVoidTransaction?: (
+    transactionID: string,
+    reason: string,
+  ) => Promise<void> | void
+  onPreviewRollback?: (
+    transactionID: string,
+  ) =>
+    | Promise<HoldingTransactionRollbackPreview | null>
+    | HoldingTransactionRollbackPreview
+    | null
+    | void
+  onApplyRollback?: (
+    transactionID: string,
+    reason: string,
+  ) =>
+    | Promise<HoldingTransactionRollbackApplyResult | null>
+    | HoldingTransactionRollbackApplyResult
+    | null
+    | void
   fundOptions?: Array<{ fund_id: string; name: string }>
   fundFilter?: string
   typeFilter?: HoldingTransactionType | 'all'
@@ -141,8 +169,18 @@ function formatRollbackValue(value?: string) {
   return value
 }
 
-const activityCoverageTypes: HoldingTransactionType[] = ['buy', 'sell', 'correction', 'dividend', 'adjustment', 'delete']
-const transactionTypeOptions: Array<{ value: HoldingTransactionType | 'all'; label: string }> = [
+const activityCoverageTypes: HoldingTransactionType[] = [
+  'buy',
+  'sell',
+  'correction',
+  'dividend',
+  'adjustment',
+  'delete',
+]
+const transactionTypeOptions: Array<{
+  value: HoldingTransactionType | 'all'
+  label: string
+}> = [
   { value: 'all', label: '全部类型' },
   { value: 'buy', label: '买入/补仓' },
   { value: 'sell', label: '卖出/清仓' },
@@ -151,7 +189,10 @@ const transactionTypeOptions: Array<{ value: HoldingTransactionType | 'all'; lab
   { value: 'dividend', label: '分红' },
   { value: 'adjustment', label: '调整' },
 ]
-const transactionStatusOptions: Array<{ value: HoldingTransactionStatusFilter; label: string }> = [
+const transactionStatusOptions: Array<{
+  value: HoldingTransactionStatusFilter
+  label: string
+}> = [
   { value: 'all', label: '全部状态' },
   { value: 'active', label: '仅有效' },
   { value: 'voided', label: '仅作废' },
@@ -159,6 +200,7 @@ const transactionStatusOptions: Array<{ value: HoldingTransactionStatusFilter; l
 
 export function HoldingActivityTimeline({
   transactions,
+  compact = false,
   onVoidTransaction,
   onPreviewRollback,
   onApplyRollback,
@@ -185,22 +227,27 @@ export function HoldingActivityTimeline({
   const [pendingVoidID, setPendingVoidID] = useState<string | null>(null)
   const [pendingPreviewID, setPendingPreviewID] = useState<string | null>(null)
   const [pendingApplyID, setPendingApplyID] = useState<string | null>(null)
-  const [rollbackPreview, setRollbackPreview] = useState<HoldingTransactionRollbackPreview | null>(null)
+  const [rollbackPreview, setRollbackPreview] =
+    useState<HoldingTransactionRollbackPreview | null>(null)
   const [voidFeedback, setVoidFeedback] = useState<string | null>(null)
   const [previewFeedback, setPreviewFeedback] = useState<string | null>(null)
 
   const latest = transactions[0] ?? null
   const displayTransactions = transactions.slice(0, visibleLimit)
-  const activeCount = transactions.filter((transaction) => !transaction.voided).length
+  const activeCount = transactions.filter(
+    (transaction) => !transaction.voided,
+  ).length
   const voidedCount = transactions.length - activeCount
-  const hasActiveFilter = fundFilter !== 'all' ||
+  const hasActiveFilter =
+    fundFilter !== 'all' ||
     typeFilter !== 'all' ||
     statusFilter !== 'all' ||
     sourceFilter !== 'all' ||
     keywordFilter.trim() !== '' ||
     startDateFilter !== '' ||
     endDateFilter !== ''
-  const filterControlClass = 'rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-xs font-medium text-theme-secondary outline-none transition focus:border-cyan-300/50'
+  const filterControlClass =
+    'rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-xs font-medium text-theme-secondary outline-none transition focus:border-cyan-300/50'
 
   const handleClearFilters = () => {
     setRollbackPreview(null)
@@ -208,14 +255,18 @@ export function HoldingActivityTimeline({
     onClearFilters?.()
   }
 
-  const handleVoidTransaction = async (transaction: HoldingTransactionEntry) => {
+  const handleVoidTransaction = async (
+    transaction: HoldingTransactionEntry,
+  ) => {
     if (!onVoidTransaction || transaction.voided || pendingVoidID) {
       return
     }
 
     const reason = window.prompt(
       '请输入作废原因。作废只会标记这条历史流水无效，不会自动回滚或修改当前持仓快照。',
-      transaction.note ? `原备注：${transaction.note}` : '录入错误，保留流水痕迹'
+      transaction.note
+        ? `原备注：${transaction.note}`
+        : '录入错误，保留流水痕迹',
     )
     if (reason === null) {
       return
@@ -224,16 +275,25 @@ export function HoldingActivityTimeline({
     setVoidFeedback(null)
     setPendingVoidID(transaction.id)
     try {
-      await onVoidTransaction(transaction.id, reason.trim() || '用户标记该流水无效')
-      setVoidFeedback('已标记为作废；当前持仓快照不会自动回滚，如金额/份额也需要调整，请使用持仓校正。')
+      await onVoidTransaction(
+        transaction.id,
+        reason.trim() || '用户标记该流水无效',
+      )
+      setVoidFeedback(
+        '已标记为作废；当前持仓快照不会自动回滚，如金额/份额也需要调整，请使用持仓校正。',
+      )
     } catch (error) {
-      setVoidFeedback(error instanceof Error ? error.message : '作废流水失败，请稍后重试。')
+      setVoidFeedback(
+        error instanceof Error ? error.message : '作废流水失败，请稍后重试。',
+      )
     } finally {
       setPendingVoidID(null)
     }
   }
 
-  const handlePreviewRollback = async (transaction: HoldingTransactionEntry) => {
+  const handlePreviewRollback = async (
+    transaction: HoldingTransactionEntry,
+  ) => {
     if (!onPreviewRollback || pendingPreviewID) {
       return
     }
@@ -247,20 +307,30 @@ export function HoldingActivityTimeline({
         setPreviewFeedback('未获取到回滚预览，请稍后重试。')
       }
     } catch (error) {
-      setPreviewFeedback(error instanceof Error ? error.message : '获取回滚预览失败，请稍后重试。')
+      setPreviewFeedback(
+        error instanceof Error
+          ? error.message
+          : '获取回滚预览失败，请稍后重试。',
+      )
     } finally {
       setPendingPreviewID(null)
     }
   }
 
-  const handleApplyRollback = async (preview: HoldingTransactionRollbackPreview) => {
-    if (!onApplyRollback || !preview.can_apply_automatically || pendingApplyID) {
+  const handleApplyRollback = async (
+    preview: HoldingTransactionRollbackPreview,
+  ) => {
+    if (
+      !onApplyRollback ||
+      !preview.can_apply_automatically ||
+      pendingApplyID
+    ) {
       return
     }
 
     const reason = window.prompt(
       '确认自动冲正？系统会先作废原流水，再按安全规则更新当前持仓快照。请输入原因：',
-      '确认该流水录错，自动冲正'
+      '确认该流水录错，自动冲正',
     )
     if (reason === null) {
       return
@@ -269,11 +339,16 @@ export function HoldingActivityTimeline({
     setPreviewFeedback(null)
     setPendingApplyID(preview.transaction.id)
     try {
-      const result = await onApplyRollback(preview.transaction.id, reason.trim() || '确认自动冲正')
+      const result = await onApplyRollback(
+        preview.transaction.id,
+        reason.trim() || '确认自动冲正',
+      )
       setPreviewFeedback(result?.message || '自动冲正已完成。')
       setRollbackPreview(result?.preview ?? null)
     } catch (error) {
-      setPreviewFeedback(error instanceof Error ? error.message : '自动冲正失败，请稍后重试。')
+      setPreviewFeedback(
+        error instanceof Error ? error.message : '自动冲正失败，请稍后重试。',
+      )
     } finally {
       setPendingApplyID(null)
     }
@@ -287,16 +362,22 @@ export function HoldingActivityTimeline({
             <History className="h-3.5 w-3.5" />
             持仓流水
           </div>
-          <h3 className="mt-3 text-2xl font-black text-theme-primary">最近账本活动</h3>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-theme-secondary">
-            买入、卖出、分红、份额调整、校正、删除都会保留可追溯流水；低风险录错流水可在预览后自动冲正，高风险流水仍建议人工校正。
-          </p>
+          <h3 className="mt-3 text-2xl font-black text-theme-primary">
+            流水记录
+          </h3>
+          {!compact && (
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-theme-secondary">
+              追踪买入、卖出、分红、校正和删除。
+            </p>
+          )}
         </div>
 
         <div className="rounded-[24px] border border-amber-400/20 bg-amber-400/10 px-4 py-3 lg:min-w-[260px]">
-          <div className="text-xs text-theme-muted">{latest ? '最近一次' : '当前筛选'}</div>
+          <div className="text-xs text-theme-muted">
+            {latest ? '最近一次' : '当前筛选'}
+          </div>
           <div className="mt-1 truncate text-lg font-black text-theme-primary">
-            {latest ? (latest.fund?.name || latest.fund_id) : '暂无匹配流水'}
+            {latest ? latest.fund?.name || latest.fund_id : '暂无匹配流水'}
           </div>
           <div className="mt-1 text-xs text-amber-100">
             {latest
@@ -329,11 +410,17 @@ export function HoldingActivityTimeline({
             类型
             <select
               value={typeFilter}
-              onChange={(event) => onTypeFilterChange?.(event.target.value as HoldingTransactionType | 'all')}
+              onChange={(event) =>
+                onTypeFilterChange?.(
+                  event.target.value as HoldingTransactionType | 'all',
+                )
+              }
               className={filterControlClass}
             >
               {transactionTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
               ))}
             </select>
           </label>
@@ -341,11 +428,17 @@ export function HoldingActivityTimeline({
             状态
             <select
               value={statusFilter}
-              onChange={(event) => onStatusFilterChange?.(event.target.value as HoldingTransactionStatusFilter)}
+              onChange={(event) =>
+                onStatusFilterChange?.(
+                  event.target.value as HoldingTransactionStatusFilter,
+                )
+              }
               className={filterControlClass}
             >
               {transactionStatusOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
               ))}
             </select>
           </label>
@@ -353,12 +446,18 @@ export function HoldingActivityTimeline({
             来源
             <select
               value={sourceFilter}
-              onChange={(event) => onSourceFilterChange?.(event.target.value as HoldingSourceFilter)}
+              onChange={(event) =>
+                onSourceFilterChange?.(
+                  event.target.value as HoldingSourceFilter,
+                )
+              }
               className={filterControlClass}
             >
               <option value="all">全部来源</option>
               {HOLDING_SOURCE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
               ))}
             </select>
           </label>
@@ -379,7 +478,9 @@ export function HoldingActivityTimeline({
               <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-theme-muted" />
               <input
                 value={keywordFilter}
-                onChange={(event) => onKeywordFilterChange?.(event.target.value)}
+                onChange={(event) =>
+                  onKeywordFilterChange?.(event.target.value)
+                }
                 placeholder="搜索基金代码、备注、来源或作废原因"
                 className={cn(filterControlClass, 'w-full pl-8')}
               />
@@ -392,7 +493,9 @@ export function HoldingActivityTimeline({
               <input
                 type="date"
                 value={startDateFilter}
-                onChange={(event) => onStartDateFilterChange?.(event.target.value)}
+                onChange={(event) =>
+                  onStartDateFilterChange?.(event.target.value)
+                }
                 className={cn(filterControlClass, 'w-full pl-8')}
               />
             </span>
@@ -404,7 +507,9 @@ export function HoldingActivityTimeline({
               <input
                 type="date"
                 value={endDateFilter}
-                onChange={(event) => onEndDateFilterChange?.(event.target.value)}
+                onChange={(event) =>
+                  onEndDateFilterChange?.(event.target.value)
+                }
                 className={cn(filterControlClass, 'w-full pl-8')}
               />
             </span>
@@ -426,9 +531,15 @@ export function HoldingActivityTimeline({
                 <RotateCcw className="h-3.5 w-3.5" />
                 回滚影响预览
               </div>
-              <h4 className="mt-3 text-lg font-black text-theme-primary">{rollbackPreview.title}</h4>
-              <p className="mt-2 text-sm leading-6 text-theme-secondary">{rollbackPreview.summary}</p>
-              <p className="mt-2 text-xs leading-5 text-cyan-100">{rollbackPreview.suggested_action}</p>
+              <h4 className="mt-3 text-lg font-black text-theme-primary">
+                {rollbackPreview.title}
+              </h4>
+              <p className="mt-2 text-sm leading-6 text-theme-secondary">
+                {rollbackPreview.summary}
+              </p>
+              <p className="mt-2 text-xs leading-5 text-cyan-100">
+                {rollbackPreview.suggested_action}
+              </p>
             </div>
             <button
               type="button"
@@ -442,7 +553,9 @@ export function HoldingActivityTimeline({
           <div className="mt-4 flex flex-col gap-3 rounded-[20px] border border-white/10 bg-[var(--input-bg)]/44 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-semibold text-theme-primary">
-                {rollbackPreview.can_apply_automatically ? '这条流水可安全自动冲正' : '这条流水仅支持人工校正建议'}
+                {rollbackPreview.can_apply_automatically
+                  ? '这条流水可安全自动冲正'
+                  : '这条流水仅支持人工校正建议'}
               </div>
               <div className="mt-1 text-xs leading-5 text-theme-secondary">
                 自动冲正只在没有后续有效流水、且当前快照可安全计算时开放；系统会保留原流水作废痕迹和冲正记录。
@@ -455,7 +568,9 @@ export function HoldingActivityTimeline({
                 disabled={pendingApplyID !== null}
                 className="rounded-2xl border border-emerald-300/28 bg-emerald-400/12 px-4 py-2 text-xs font-semibold text-emerald-100 transition hover:border-emerald-200/55 hover:bg-emerald-400/18 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {pendingApplyID === rollbackPreview.transaction.id ? '冲正中...' : '应用自动冲正'}
+                {pendingApplyID === rollbackPreview.transaction.id
+                  ? '冲正中...'
+                  : '应用自动冲正'}
               </button>
             )}
           </div>
@@ -463,16 +578,23 @@ export function HoldingActivityTimeline({
           {rollbackPreview.affected_fields.length > 0 && (
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {rollbackPreview.affected_fields.map((field) => (
-                <div key={`${field.field}-${field.label}`} className="rounded-[20px] border border-white/10 bg-[var(--input-bg)]/56 p-3">
+                <div
+                  key={`${field.field}-${field.label}`}
+                  className="rounded-[20px] border border-white/10 bg-[var(--input-bg)]/56 p-3"
+                >
                   <div className="text-xs text-theme-muted">{field.label}</div>
                   <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                     <div>
                       <div className="text-theme-muted">当前值</div>
-                      <div className="mt-1 break-all font-semibold text-theme-primary">{formatRollbackValue(field.current_value)}</div>
+                      <div className="mt-1 break-all font-semibold text-theme-primary">
+                        {formatRollbackValue(field.current_value)}
+                      </div>
                     </div>
                     <div>
                       <div className="text-theme-muted">建议回到</div>
-                      <div className="mt-1 break-all font-semibold text-cyan-100">{formatRollbackValue(field.rollback_value)}</div>
+                      <div className="mt-1 break-all font-semibold text-cyan-100">
+                        {formatRollbackValue(field.rollback_value)}
+                      </div>
                     </div>
                   </div>
                   {field.delta && (
@@ -488,7 +610,10 @@ export function HoldingActivityTimeline({
           {rollbackPreview.warnings && rollbackPreview.warnings.length > 0 && (
             <div className="mt-4 space-y-2">
               {rollbackPreview.warnings.map((warning) => (
-                <div key={warning} className="rounded-2xl border border-amber-300/18 bg-amber-400/10 px-3 py-2 text-xs leading-5 text-amber-100">
+                <div
+                  key={warning}
+                  className="rounded-2xl border border-amber-300/18 bg-amber-400/10 px-3 py-2 text-xs leading-5 text-amber-100"
+                >
                   {warning}
                 </div>
               ))}
@@ -497,36 +622,63 @@ export function HoldingActivityTimeline({
         </div>
       )}
 
-      <div className="mt-5 grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
-        <div className="rounded-[24px] border border-[var(--card-border)] bg-[var(--input-bg)]/54 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-theme-primary">活动覆盖</div>
-              <div className="mt-1 text-xs text-theme-muted">当前筛选 {transactions.length} 条记录，{activeCount} 条有效</div>
-            </div>
-            <div className="text-3xl font-black text-theme-primary">{transactions.length}</div>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-2">
-            {activityCoverageTypes.map((type) => {
-              const meta = transactionMeta(type)
-              const count = transactions.filter((transaction) => transaction.type === type && !transaction.voided).length
-              return (
-                <div key={type} className={cn('rounded-[18px] border px-3 py-3 text-center', meta.className)}>
-                  <div className="text-2xl font-black text-theme-primary">{count}</div>
-                  <div className="mt-1 text-[11px]">{meta.label}</div>
+      <div
+        className={cn(
+          'mt-5 grid gap-4',
+          compact ? 'xl:grid-cols-1' : 'xl:grid-cols-[0.85fr_1.15fr]',
+        )}
+      >
+        {!compact && (
+          <div className="rounded-[24px] border border-[var(--card-border)] bg-[var(--input-bg)]/54 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-theme-primary">
+                  活动覆盖
                 </div>
-              )
-            })}
+                <div className="mt-1 text-xs text-theme-muted">
+                  当前筛选 {transactions.length} 条记录，{activeCount} 条有效
+                </div>
+              </div>
+              <div className="text-3xl font-black text-theme-primary">
+                {transactions.length}
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-2">
+              {activityCoverageTypes.map((type) => {
+                const meta = transactionMeta(type)
+                const count = transactions.filter(
+                  (transaction) =>
+                    transaction.type === type && !transaction.voided,
+                ).length
+                return (
+                  <div
+                    key={type}
+                    className={cn(
+                      'rounded-[18px] border px-3 py-3 text-center',
+                      meta.className,
+                    )}
+                  >
+                    <div className="text-2xl font-black text-theme-primary">
+                      {count}
+                    </div>
+                    <div className="mt-1 text-[11px]">{meta.label}</div>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="mt-3 rounded-[18px] border border-slate-400/15 bg-slate-400/8 px-3 py-3 text-xs text-theme-muted">
+              已作废 {voidedCount}{' '}
+              条；低风险流水可在预览后自动冲正，高风险流水仍只给人工校正建议。
+            </div>
           </div>
-          <div className="mt-3 rounded-[18px] border border-slate-400/15 bg-slate-400/8 px-3 py-3 text-xs text-theme-muted">
-            已作废 {voidedCount} 条；低风险流水可在预览后自动冲正，高风险流水仍只给人工校正建议。
-          </div>
-        </div>
+        )}
 
         {transactions.length === 0 ? (
           <div className="flex min-h-[260px] flex-col items-center justify-center rounded-[24px] border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/40 px-6 py-10 text-center">
             <History className="h-10 w-10 text-theme-muted" />
-            <div className="mt-3 text-lg font-black text-theme-primary">当前筛选没有流水</div>
+            <div className="mt-3 text-lg font-black text-theme-primary">
+              当前筛选没有流水
+            </div>
             <p className="mt-2 max-w-md text-sm leading-6 text-theme-secondary">
               可以切换基金、类型、日期或关键词继续查找；作废流水不会修改当前持仓快照，只用于降低历史流水可信度。
             </p>
@@ -547,30 +699,56 @@ export function HoldingActivityTimeline({
                 const meta = transactionMeta(transaction.type)
                 const Icon = meta.icon
                 const isVoided = Boolean(transaction.voided)
-                const sourceLabel = resolveHoldingSourceLabel(transaction.source_platform, transaction.source_label)
+                const sourceLabel = resolveHoldingSourceLabel(
+                  transaction.source_platform,
+                  transaction.source_label,
+                )
                 return (
                   <div key={transaction.id} className="relative pl-11">
-                    <span className={cn(
-                      'absolute left-[10px] top-5 h-4 w-4 rounded-full ring-4 ring-[var(--card-bg)]',
-                      isVoided ? 'bg-slate-400 shadow-none' : meta.dotClassName
-                    )} />
-                    <div className={cn(
-                      'rounded-[24px] border border-[var(--card-border)] bg-[var(--input-bg)]/58 p-4 transition-transform duration-200 hover:-translate-y-0.5',
-                      isVoided && 'border-slate-400/20 bg-slate-500/8 opacity-70'
-                    )}>
+                    <span
+                      className={cn(
+                        'absolute left-[10px] top-5 h-4 w-4 rounded-full ring-4 ring-[var(--card-bg)]',
+                        isVoided
+                          ? 'bg-slate-400 shadow-none'
+                          : meta.dotClassName,
+                      )}
+                    />
+                    <div
+                      className={cn(
+                        'rounded-[24px] border border-[var(--card-border)] bg-[var(--input-bg)]/58 p-4 transition-transform duration-200 hover:-translate-y-0.5',
+                        isVoided &&
+                          'border-slate-400/20 bg-slate-500/8 opacity-70',
+                      )}
+                    >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className={cn(
-                              'inline-flex h-8 w-8 items-center justify-center rounded-2xl border',
-                              isVoided ? 'border-slate-400/30 bg-slate-400/10 text-slate-200' : meta.className
-                            )}>
-                              {isVoided ? <Ban className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                            <span
+                              className={cn(
+                                'inline-flex h-8 w-8 items-center justify-center rounded-2xl border',
+                                isVoided
+                                  ? 'border-slate-400/30 bg-slate-400/10 text-slate-200'
+                                  : meta.className,
+                              )}
+                            >
+                              {isVoided ? (
+                                <Ban className="h-4 w-4" />
+                              ) : (
+                                <Icon className="h-4 w-4" />
+                              )}
                             </span>
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
-                                <div className="truncate text-sm font-semibold text-theme-primary">{transaction.fund?.name || transaction.fund_id}</div>
-                                <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-semibold', meta.className)}>
+                                <div className="truncate text-sm font-semibold text-theme-primary">
+                                  {transaction.fund?.name ||
+                                    transaction.fund_id}
+                                </div>
+                                <span
+                                  className={cn(
+                                    'rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+                                    meta.className,
+                                  )}
+                                >
                                   {meta.label}
                                 </span>
                                 {isVoided && (
@@ -585,12 +763,17 @@ export function HoldingActivityTimeline({
                                 )}
                               </div>
                               <div className="mt-0.5 text-xs text-theme-muted">
-                                {transaction.fund_id} · {formatDateTime(transaction.created_at)}
-                                {isVoided && transaction.voided_at ? ` · 作废于 ${formatDateTime(transaction.voided_at)}` : ''}
+                                {transaction.fund_id} ·{' '}
+                                {formatDateTime(transaction.created_at)}
+                                {isVoided && transaction.voided_at
+                                  ? ` · 作废于 ${formatDateTime(transaction.voided_at)}`
+                                  : ''}
                               </div>
                             </div>
                           </div>
-                          <p className="mt-3 text-xs leading-5 text-theme-secondary">{transaction.note || meta.description}</p>
+                          <p className="mt-3 text-xs leading-5 text-theme-secondary">
+                            {transaction.note || meta.description}
+                          </p>
                           {isVoided && transaction.void_reason && (
                             <p className="mt-2 rounded-2xl border border-slate-400/15 bg-slate-400/8 px-3 py-2 text-xs leading-5 text-theme-muted">
                               作废原因：{transaction.void_reason}
@@ -602,11 +785,18 @@ export function HoldingActivityTimeline({
                           <div className="grid grid-cols-2 gap-2 text-xs sm:text-right">
                             <div>
                               <div className="text-theme-muted">金额</div>
-                              <div className="mt-0.5 font-semibold text-theme-primary">{formatSummaryMoney(transaction.amount)}</div>
+                              <div className="mt-0.5 font-semibold text-theme-primary">
+                                {formatSummaryMoney(transaction.amount)}
+                              </div>
                             </div>
                             <div>
                               <div className="text-theme-muted">确认日</div>
-                              <div className="mt-0.5 font-semibold text-theme-primary">{formatCompactDate(transaction.confirmed_nav_date || transaction.as_of_date)}</div>
+                              <div className="mt-0.5 font-semibold text-theme-primary">
+                                {formatCompactDate(
+                                  transaction.confirmed_nav_date ||
+                                    transaction.as_of_date,
+                                )}
+                              </div>
                             </div>
                           </div>
                           <div className="grid gap-2 sm:grid-cols-3">
@@ -619,21 +809,29 @@ export function HoldingActivityTimeline({
                             {onPreviewRollback && (
                               <button
                                 type="button"
-                                onClick={() => void handlePreviewRollback(transaction)}
+                                onClick={() =>
+                                  void handlePreviewRollback(transaction)
+                                }
                                 disabled={pendingPreviewID !== null}
                                 className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-3 py-2 text-xs font-medium text-cyan-100 transition hover:border-cyan-200/45 hover:bg-cyan-400/16 disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                {pendingPreviewID === transaction.id ? '预览中...' : '回滚预览'}
+                                {pendingPreviewID === transaction.id
+                                  ? '预览中...'
+                                  : '回滚预览'}
                               </button>
                             )}
                             {onVoidTransaction && !isVoided && (
                               <button
                                 type="button"
-                                onClick={() => void handleVoidTransaction(transaction)}
+                                onClick={() =>
+                                  void handleVoidTransaction(transaction)
+                                }
                                 disabled={pendingVoidID !== null}
                                 className="rounded-2xl border border-slate-400/20 bg-slate-400/8 px-3 py-2 text-xs font-medium text-theme-secondary transition hover:border-rose-300/35 hover:bg-rose-400/10 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                {pendingVoidID === transaction.id ? '标记中...' : '作废流水'}
+                                {pendingVoidID === transaction.id
+                                  ? '标记中...'
+                                  : '作废流水'}
                               </button>
                             )}
                           </div>
@@ -655,7 +853,9 @@ export function HoldingActivityTimeline({
               </button>
             )}
             {!canLoadMore && transactions.length > visibleLimit && (
-              <div className="pl-11 text-xs text-theme-muted">已展示当前筛选下前 {displayTransactions.length} 条流水。</div>
+              <div className="pl-11 text-xs text-theme-muted">
+                已展示当前筛选下前 {displayTransactions.length} 条流水。
+              </div>
             )}
           </div>
         )}

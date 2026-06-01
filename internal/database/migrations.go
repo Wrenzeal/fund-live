@@ -42,6 +42,16 @@ var managedMigrations = []sqlMigration{
 		Statements:     fundThemeMigrationStatements,
 	},
 	{
+		ID:             "20260530_fund_catalog_status",
+		RequiredTables: []string{"funds"},
+		Statements:     fundCatalogStatusMigrationStatements,
+	},
+	{
+		ID:             "20260529_fund_classification_override_manual_tags",
+		RequiredTables: []string{"fund_classification_overrides"},
+		Statements:     fundClassificationOverrideManualTagsMigrationStatements,
+	},
+	{
 		ID:             "20260421_fund_estimate_capability_tables",
 		RequiredTables: []string{"funds"},
 		Statements:     fundEstimateCapabilityMigrationStatements,

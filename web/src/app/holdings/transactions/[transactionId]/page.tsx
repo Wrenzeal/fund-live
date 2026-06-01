@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { AlertTriangle, ArrowLeft, Ban, CheckCircle2, Clock3, FileText, History, LoaderCircle, RotateCcw, WalletCards } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
+import { ScrollRevealStack } from '@/components/scroll-reveal'
 import { useCurrentUser } from '@/hooks/use-auth'
 import {
   useHoldingTransactionDetail,
@@ -185,7 +186,7 @@ export default function HoldingTransactionDetailPage() {
 
   return (
     <AccountAreaShell title="流水详情" description="单条流水完整字段、metadata、当前快照和后续影响链。">
-      <div className="space-y-6">
+      <ScrollRevealStack className="space-y-6">
         <Link href="/holdings" className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition hover:border-cyan-300/35 hover:text-theme-primary">
           <ArrowLeft className="h-4 w-4" /> 返回持仓页
         </Link>
@@ -324,7 +325,7 @@ export default function HoldingTransactionDetailPage() {
             </div>
           </div>
         </section>
-      </div>
+      </ScrollRevealStack>
     </AccountAreaShell>
   )
 }

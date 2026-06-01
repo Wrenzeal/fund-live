@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { AlertTriangle, ArrowLeft, LoaderCircle, MessageSquareQuote, Send, WandSparkles } from 'lucide-react'
+import { ScrollRevealStack } from '@/components/scroll-reveal'
 import { SiteShell } from '@/components/site-shell'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { type IssueStatus, useIssue, updateIssueReply, updateIssueStatus } from '@/hooks/use-issues'
@@ -134,7 +135,7 @@ export default function IssueDetailPage() {
       eyebrowLabel="IDEA DETAIL"
       EyebrowIcon={WandSparkles}
     >
-      <div className="space-y-6">
+      <ScrollRevealStack className="space-y-6">
         <div>
           <Link
             href="/issues"
@@ -282,7 +283,7 @@ export default function IssueDetailPage() {
             </div>
           </section>
         )}
-      </div>
+      </ScrollRevealStack>
     </SiteShell>
   )
 }

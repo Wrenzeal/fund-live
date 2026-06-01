@@ -66,12 +66,23 @@ var fundCategoryMigrationStatements = []string{
 		fund_id varchar(10) NOT NULL UNIQUE,
 		category_code varchar(50),
 		primary_sector_code varchar(50),
+		primary_theme_code varchar(50),
+		manual_tags_json text,
 		sector_tags_json text,
 		note text,
 		updated_by varchar(100),
 		created_at timestamptz DEFAULT now(),
 		updated_at timestamptz DEFAULT now()
 	)`,
+	`ALTER TABLE fund_classification_overrides ADD COLUMN IF NOT EXISTS primary_theme_code varchar(50)`,
+	`ALTER TABLE fund_classification_overrides ADD COLUMN IF NOT EXISTS manual_tags_json text`,
 	`CREATE INDEX IF NOT EXISTS idx_fund_classification_overrides_category_code ON fund_classification_overrides (category_code)`,
 	`CREATE INDEX IF NOT EXISTS idx_fund_classification_overrides_primary_sector_code ON fund_classification_overrides (primary_sector_code)`,
+	`CREATE INDEX IF NOT EXISTS idx_fund_classification_overrides_primary_theme_code ON fund_classification_overrides (primary_theme_code)`,
+}
+
+var fundClassificationOverrideManualTagsMigrationStatements = []string{
+	`ALTER TABLE fund_classification_overrides ADD COLUMN IF NOT EXISTS primary_theme_code varchar(50)`,
+	`ALTER TABLE fund_classification_overrides ADD COLUMN IF NOT EXISTS manual_tags_json text`,
+	`CREATE INDEX IF NOT EXISTS idx_fund_classification_overrides_primary_theme_code ON fund_classification_overrides (primary_theme_code)`,
 }

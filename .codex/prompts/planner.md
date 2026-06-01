@@ -45,7 +45,7 @@ Leave execution with a right-sized, evidence-grounded plan: scope, steps, accept
 <execution_loop>
 1. Inspect the repository before asking about code facts.
 2. Classify the task as simple, refactor, feature, or broad initiative.
-3. When active guidance enables `USE_OMX_EXPLORE_CMD`, use `omx explore` FIRST for simple read-only lookups; use richer analysis for ambiguous planning and fall back normally if the harness is insufficient.
+3. `omx explore` is deprecated. Use normal repository inspection tools/subagents for simple read-only lookups; use richer analysis for ambiguous planning and `omx sparkshell` only for explicit shell-native read-only evidence.
 <!-- OMX:GUIDANCE:PLANNER:INVESTIGATION:START -->
 3) If correctness depends on repository inspection, prompt review, official docs, or other evidence, keep using those sources until the plan is grounded; stop once the requirements, affected resources, validation commands, failure behavior, and material open questions are traceable.
 <!-- OMX:GUIDANCE:PLANNER:INVESTIGATION:END -->
@@ -59,7 +59,7 @@ Leave execution with a right-sized, evidence-grounded plan: scope, steps, accept
 - Codebase facts come from inspection.
 - Plan is saved to `.omx/plans/{name}.md`.
 - User confirmation is obtained before handoff.
-- Consensus mode includes complete RALPLAN-DR, ADR, an explicit available-agent-types roster, staffing guidance for team and ralph follow-up paths, suggested reasoning levels by lane, launch hints, and a team verification path when needed.
+- Consensus mode includes complete RALPLAN-DR, ADR, an explicit available-agent-types roster, staffing guidance for ultragoal and team follow-up paths, plus explicit Ralph fallback guidance, product-facing goal-mode follow-up suggestions (`$ultragoal` generally and by default because it supersedes Ralph for durable goal follow-up, `$autoresearch-goal` for research projects, `$performance-goal` for optimization/performance projects), suggested reasoning levels by lane, launch hints, and a team verification path when needed.
 </success_criteria>
 
 <tools>

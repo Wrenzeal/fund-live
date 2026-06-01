@@ -2,6 +2,7 @@
 
 import { HoldingAggregateRow } from '@/components/holding-aggregate-row'
 import { HoldingFundRow } from '@/components/holding-fund-row'
+import { ScrollReveal } from '@/components/scroll-reveal'
 import type { FundAnalysis, FundEstimate } from '@/hooks/use-fund-data'
 import type {
   AdjustHoldingSharesPayload,
@@ -52,43 +53,45 @@ export function HoldingsList({
   return (
     <div className="space-y-4">
       {viewMode === 'aggregate'
-        ? sortedHoldingAggregates.map((aggregate) => (
-            <HoldingAggregateRow
-              key={aggregate.fund_id}
-              aggregate={aggregate}
-              metricScope={metricScope}
-              estimateMetrics={aggregateMetrics[aggregate.fund_id]}
-              analysis={analysesByFundID[aggregate.fund_id]}
-            >
-              {incompleteAggregateChildren(holdingsByFundID[aggregate.fund_id] ?? [], showIncompleteOnly).map((holding) => (
-                <HoldingFundRow
-                  key={holding.id}
-                  holding={holding}
-                  metricScope={metricScope}
-                  estimate={estimatesByFundID[holding.fund_id]}
-                  analysis={analysesByFundID[holding.fund_id]}
-                  onRemove={() => onRemoveHolding(holding.id)}
-                  onUpdate={(payload) => onUpdateHolding(holding.id, payload)}
-                  onSell={(payload) => onSellHolding(holding.id, payload)}
-                  onRecordDividend={(payload) => onRecordHoldingDividend(holding.id, payload)}
-                  onAdjustShares={(payload) => onAdjustHoldingShares(holding.id, payload)}
-                />
-              ))}
-            </HoldingAggregateRow>
+        ? sortedHoldingAggregates.map((aggregate, index) => (
+            <ScrollReveal key={aggregate.fund_id} delay={Math.min(index * 70, 280)}>
+              <HoldingAggregateRow
+                aggregate={aggregate}
+                metricScope={metricScope}
+                estimateMetrics={aggregateMetrics[aggregate.fund_id]}
+                analysis={analysesByFundID[aggregate.fund_id]}
+              >
+                {incompleteAggregateChildren(holdingsByFundID[aggregate.fund_id] ?? [], showIncompleteOnly).map((holding) => (
+                  <HoldingFundRow
+                    key={holding.id}
+                    holding={holding}
+                    metricScope={metricScope}
+                    estimate={estimatesByFundID[holding.fund_id]}
+                    analysis={analysesByFundID[holding.fund_id]}
+                    onRemove={() => onRemoveHolding(holding.id)}
+                    onUpdate={(payload) => onUpdateHolding(holding.id, payload)}
+                    onSell={(payload) => onSellHolding(holding.id, payload)}
+                    onRecordDividend={(payload) => onRecordHoldingDividend(holding.id, payload)}
+                    onAdjustShares={(payload) => onAdjustHoldingShares(holding.id, payload)}
+                  />
+                ))}
+              </HoldingAggregateRow>
+            </ScrollReveal>
           ))
-        : sortedHoldings.map((holding) => (
-            <HoldingFundRow
-              key={holding.id}
-              holding={holding}
-              metricScope={metricScope}
-              estimate={estimatesByFundID[holding.fund_id]}
-              analysis={analysesByFundID[holding.fund_id]}
-              onRemove={() => onRemoveHolding(holding.id)}
-              onUpdate={(payload) => onUpdateHolding(holding.id, payload)}
-              onSell={(payload) => onSellHolding(holding.id, payload)}
-              onRecordDividend={(payload) => onRecordHoldingDividend(holding.id, payload)}
-              onAdjustShares={(payload) => onAdjustHoldingShares(holding.id, payload)}
-            />
+        : sortedHoldings.map((holding, index) => (
+            <ScrollReveal key={holding.id} delay={Math.min(index * 70, 280)}>
+              <HoldingFundRow
+                holding={holding}
+                metricScope={metricScope}
+                estimate={estimatesByFundID[holding.fund_id]}
+                analysis={analysesByFundID[holding.fund_id]}
+                onRemove={() => onRemoveHolding(holding.id)}
+                onUpdate={(payload) => onUpdateHolding(holding.id, payload)}
+                onSell={(payload) => onSellHolding(holding.id, payload)}
+                onRecordDividend={(payload) => onRecordHoldingDividend(holding.id, payload)}
+                onAdjustShares={(payload) => onAdjustHoldingShares(holding.id, payload)}
+              />
+            </ScrollReveal>
           ))}
     </div>
   )

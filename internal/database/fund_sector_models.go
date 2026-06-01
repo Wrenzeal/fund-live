@@ -144,6 +144,8 @@ type FundClassificationOverride struct {
 	FundID            string    `gorm:"type:varchar(10);not null;uniqueIndex" json:"fund_id"`
 	CategoryCode      string    `gorm:"type:varchar(50);index" json:"category_code"`
 	PrimarySectorCode string    `gorm:"type:varchar(50);index" json:"primary_sector_code"`
+	PrimaryThemeCode  string    `gorm:"type:varchar(50);index" json:"primary_theme_code"`
+	ManualTagsJSON    string    `gorm:"type:text" json:"manual_tags_json"`
 	SectorTagsJSON    string    `gorm:"type:text" json:"sector_tags_json"`
 	Note              string    `gorm:"type:text" json:"note"`
 	UpdatedBy         string    `gorm:"type:varchar(100)" json:"updated_by"`

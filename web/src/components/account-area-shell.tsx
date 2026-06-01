@@ -7,6 +7,7 @@ import { Activity, ArrowUp, ChevronRight, Crown, Layers3, ShieldAlert, Sparkles,
 import { HeaderFundSearch } from '@/components/header-fund-search'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { UserAccountMenu } from '@/components/user-account-menu'
+import { ScrollReveal } from '@/components/scroll-reveal'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { useMobileTopSection } from '@/hooks/use-mobile-top-section'
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
@@ -204,29 +205,31 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
 
       <main className="container mx-auto px-4 py-8">
         {shouldBlockVIPPage ? (
-          <section className="mx-auto max-w-2xl rounded-[32px] border border-amber-500/25 bg-amber-500/10 p-6 glass">
-            <div className="flex items-start gap-3 text-theme-primary">
-              <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-200" />
-              <div>
-                <div className="text-lg font-bold">
-                  {isUserLoading ? '正在校验访问权限' : '仅管理员可查看 VIP 页面'}
+          <ScrollReveal variant="scale-in">
+            <section className="mx-auto max-w-2xl rounded-[32px] border border-amber-500/25 bg-amber-500/10 p-6 glass">
+              <div className="flex items-start gap-3 text-theme-primary">
+                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-200" />
+                <div>
+                  <div className="text-lg font-bold">
+                    {isUserLoading ? '正在校验访问权限' : '仅管理员可查看 VIP 页面'}
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-theme-secondary">
+                    {isUserLoading
+                      ? '请稍候，系统正在读取当前账号信息。'
+                      : 'VIP 功能仍在待办主线中打磨，当前只对管理员开放预览和验收。普通用户不会看到这些页面。'}
+                  </p>
+                  {!isUserLoading && !user && (
+                    <Link
+                      href="/auth/login"
+                      className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-theme-primary"
+                    >
+                      去登录管理员账号
+                    </Link>
+                  )}
                 </div>
-                <p className="mt-2 text-sm leading-6 text-theme-secondary">
-                  {isUserLoading
-                    ? '请稍候，系统正在读取当前账号信息。'
-                    : 'VIP 功能仍在待办主线中打磨，当前只对管理员开放预览和验收。普通用户不会看到这些页面。'}
-                </p>
-                {!isUserLoading && !user && (
-                  <Link
-                    href="/auth/login"
-                    className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-theme-primary"
-                  >
-                    去登录管理员账号
-                  </Link>
-                )}
               </div>
-            </div>
-          </section>
+            </section>
+          </ScrollReveal>
         ) : children}
       </main>
 

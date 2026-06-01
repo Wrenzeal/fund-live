@@ -124,6 +124,38 @@ async function fetchEnvelopeWithTimeout<T>(url: string, timeoutMs: number): Prom
     }
 }
 
+async function requestEnvelope<T>(path: string, init?: RequestInit): Promise<T | null> {
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(init?.headers ?? {}),
+        },
+        ...init,
+    })
+
+    let json: ApiEnvelope<T> | null = null
+    try {
+        json = await res.json() as ApiEnvelope<T>
+    } catch {
+        json = null
+    }
+
+    if (!res.ok || !json?.success) {
+        throw new ApiRequestError(
+            json?.error?.message || `API error: ${res.status}`,
+            {
+                code: json?.error?.code,
+                status: res.status,
+                retryAfterSeconds: parseRetryAfter(res),
+                meta: json?.meta,
+            }
+        )
+    }
+
+    return json.data ?? null
+}
+
 function getRetryDelayMs(error: unknown, fallbackMs: number) {
     if (error instanceof ApiRequestError && error.retryAfterSeconds > 0) {
         return error.retryAfterSeconds * 1000
@@ -259,6 +291,42 @@ export interface FundThemeSnapshot {
     source: string
     confidence: string
     breakdown: FundThemeBreakdown[]
+}
+
+export interface FundClassificationOption {
+    code: string
+    name: string
+    description?: string
+    sort_order: number
+}
+
+export interface FundClassificationOptions {
+    categories: FundClassificationOption[]
+    sectors: FundClassificationOption[]
+    themes: FundClassificationOption[]
+}
+
+export interface FundClassificationOverride {
+    fund_id: string
+    category_code?: string
+    category_name?: string
+    primary_sector_code?: string
+    primary_sector_name?: string
+    primary_theme_code?: string
+    primary_theme_name?: string
+    manual_tags: string[]
+    note?: string
+    updated_by?: string
+    created_at?: string
+    updated_at?: string
+}
+
+export interface FundClassificationOverrideInput {
+    category_code?: string
+    primary_sector_code?: string
+    primary_theme_code?: string
+    manual_tags?: string[]
+    note?: string
 }
 
 export interface FundAnalysisModuleScore {
@@ -550,6 +618,7 @@ export interface FundDashboardPayload {
     analysis?: FundAnalysis
     sector_snapshot?: FundSectorSnapshot
     theme_snapshot?: FundThemeSnapshot
+    classification_override?: FundClassificationOverride
     time_series: TimeSeriesPoint[]
     display_date: string
     is_trading: boolean
@@ -578,6 +647,7 @@ export interface FundAnalysisRankingsPayload {
 export interface FundExposureSnapshotEntry {
     sectorSnapshot?: FundSectorSnapshot
     themeSnapshot?: FundThemeSnapshot
+    classificationOverride?: FundClassificationOverride
 }
 
 /**
@@ -728,6 +798,7 @@ export function useFundDashboard(fundId: string | null, options?: SWRConfigurati
         analysis: dashboard.payload?.analysis,
         sectorSnapshot: dashboard.payload?.sector_snapshot,
         themeSnapshot: dashboard.payload?.theme_snapshot,
+        classificationOverride: dashboard.payload?.classification_override,
         timeSeries: dashboard.payload?.time_series || [],
         displayDate: dashboard.payload?.display_date || '',
         isHistorical: dashboard.payload?.is_historical || false,
@@ -746,6 +817,33 @@ export function useFundDashboard(fundId: string | null, options?: SWRConfigurati
     }
 }
 
+export async function fetchFundClassificationOptions(): Promise<FundClassificationOptions> {
+    const data = await requestEnvelope<FundClassificationOptions>('/api/v1/admin/funds/classification-options', {
+        method: 'GET',
+    })
+    return data ?? { categories: [], sectors: [], themes: [] }
+}
+
+export async function fetchFundClassificationOverride(fundId: string): Promise<FundClassificationOverride | null> {
+    return requestEnvelope<FundClassificationOverride>(
+        `/api/v1/admin/funds/${encodeURIComponent(fundId)}/classification`,
+        { method: 'GET' }
+    )
+}
+
+export async function updateFundClassificationOverride(
+    fundId: string,
+    input: FundClassificationOverrideInput
+): Promise<FundClassificationOverride | null> {
+    return requestEnvelope<FundClassificationOverride>(
+        `/api/v1/admin/funds/${encodeURIComponent(fundId)}/classification`,
+        {
+            method: 'PUT',
+            body: JSON.stringify(input),
+        }
+    )
+}
+
 async function fetchFundExposureSnapshots(fundIDs: string[]): Promise<Record<string, FundExposureSnapshotEntry>> {
     const entries = await Promise.all(
         fundIDs.map(async (fundID) => {
@@ -754,6 +852,7 @@ async function fetchFundExposureSnapshots(fundIDs: string[]): Promise<Record<str
                 return [fundID, {
                     sectorSnapshot: payload.data.sector_snapshot,
                     themeSnapshot: payload.data.theme_snapshot,
+                    classificationOverride: payload.data.classification_override,
                 }] as const
             } catch {
                 return [fundID, {}] as const

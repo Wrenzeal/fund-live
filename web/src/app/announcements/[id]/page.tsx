@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useState } from 'react'
 import { ArrowLeft, Bell, CheckCircle2, LoaderCircle } from 'lucide-react'
+import { ScrollRevealStack } from '@/components/scroll-reveal'
 import { SiteShell } from '@/components/site-shell'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { markAnnouncementRead, useAnnouncement } from '@/hooks/use-announcements'
@@ -72,7 +73,7 @@ export default function AnnouncementDetailPage() {
       eyebrowLabel="UPDATE DETAIL"
       EyebrowIcon={Bell}
     >
-      <div className="space-y-6">
+      <ScrollRevealStack className="space-y-6">
         <div className="flex flex-wrap gap-3">
           <Link
             href="/announcements"
@@ -128,7 +129,7 @@ export default function AnnouncementDetailPage() {
             {announcement.content}
           </div>
         </section>
-      </div>
+      </ScrollRevealStack>
     </SiteShell>
   )
 }

@@ -17,6 +17,7 @@ import { ThemeSwitcher } from '@/components/theme-switcher'
 import { MarketStatusIndicator } from '@/components/market-status-indicator'
 import { FundLoadingIndicator } from '@/components/loading-indicator'
 import { UserAccountMenu } from '@/components/user-account-menu'
+import { ScrollReveal, ScrollRevealStack } from '@/components/scroll-reveal'
 import { Activity, AlertTriangle, BarChart3, TrendingUp, Clock, RefreshCw, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -101,6 +102,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     estimate,
     sectorSnapshot,
     themeSnapshot,
+    classificationOverride,
     cacheStatus,
     isLoading: isDashboardLoading,
     isValidating,
@@ -363,7 +365,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
 
         {viewMode === 'minimal' ? (
           /* ===== Minimal Mode ===== */
-          <div className="flex items-center justify-center min-h-[60vh]">
+          <ScrollReveal className="flex min-h-[60vh] items-center justify-center" variant="scale-in">
             <EstimateCard
               estimate={activeEstimate}
               fund={activeFund}
@@ -373,10 +375,10 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
               lastUpdated={activeLastUpdated}
               className="w-full max-w-2xl"
             />
-          </div>
+          </ScrollReveal>
         ) : (
           /* ===== Professional Mode ===== */
-          <div className="space-y-6">
+          <ScrollRevealStack className="space-y-6">
             {/* Top Section: Estimate Card + Stats */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <EstimateCard
@@ -558,6 +560,11 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
               fund={activeFund}
               sectorSnapshot={isCallAuction ? undefined : sectorSnapshot}
               themeSnapshot={isCallAuction ? undefined : themeSnapshot}
+              classificationOverride={isCallAuction ? undefined : classificationOverride}
+              onClassificationOverrideUpdated={() => {
+                void refreshDashboard()
+                void refreshAnalysis()
+              }}
             />
 
             {/* Holdings Table */}
@@ -581,7 +588,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
               fundId={activeFund?.id || currentFundId}
               isLoading={!isCallAuction && isAnalysisLoading}
             />
-          </div>
+          </ScrollRevealStack>
         )}
       </main>
 

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { AlertTriangle, BookOpenText, CalendarDays, FileStack, LoaderCircle, ShieldAlert, TrendingUp } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
+import { ScrollRevealStack } from '@/components/scroll-reveal'
 import { useVIPReport } from '@/hooks/use-vip-preview'
 import { VIP_SAMPLE_REPORT_IDS } from '@/mocks/vip'
 import { cn } from '@/lib/utils'
@@ -90,7 +91,7 @@ export default function VIPReportDetailPage() {
       title="VIP 报告详情"
       description="查看结构化研究报告，包括摘要结论、操作建议、风险提示以及引用来源。"
     >
-      <div className="space-y-8">
+      <ScrollRevealStack className="space-y-8">
         <section className="rounded-[36px] border border-[var(--card-border)] p-8 glass">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-4">
@@ -248,7 +249,7 @@ export default function VIPReportDetailPage() {
             查看另一份示例报告
           </Link>
         </section>
-      </div>
+      </ScrollRevealStack>
     </AccountAreaShell>
   )
 }

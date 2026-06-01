@@ -9,17 +9,25 @@ import (
 
 // Fund represents a mutual fund entity.
 type Fund struct {
-	ID           string          `json:"id"`   // Fund code, e.g., "000001"
-	Name         string          `json:"name"` // Fund name
-	Type         string          `json:"type"` // Fund type: "stock", "bond", "hybrid", etc.
-	CategoryCode string          `json:"category_code,omitempty"`
-	CategoryName string          `json:"category_name,omitempty"`
-	Manager      string          `json:"manager"`    // Fund manager name
-	Company      string          `json:"company"`    // Fund company
-	NetAssetVal  decimal.Decimal `json:"nav"`        // Latest net asset value (NAV)
-	TotalScale   decimal.Decimal `json:"scale"`      // Total fund scale (亿元)
-	UpdatedAt    time.Time       `json:"updated_at"` // Last NAV update time
+	ID              string          `json:"id"`   // Fund code, e.g., "000001"
+	Name            string          `json:"name"` // Fund name
+	Type            string          `json:"type"` // Fund type: "stock", "bond", "hybrid", etc.
+	CategoryCode    string          `json:"category_code,omitempty"`
+	CategoryName    string          `json:"category_name,omitempty"`
+	CatalogStatus   string          `json:"catalog_status,omitempty"` // active, unavailable, catalog_missing
+	CatalogSyncedAt *time.Time      `json:"catalog_synced_at,omitempty"`
+	Manager         string          `json:"manager"`    // Fund manager name
+	Company         string          `json:"company"`    // Fund company
+	NetAssetVal     decimal.Decimal `json:"nav"`        // Latest net asset value (NAV)
+	TotalScale      decimal.Decimal `json:"scale"`      // Total fund scale (亿元)
+	UpdatedAt       time.Time       `json:"updated_at"` // Last NAV update time
 }
+
+const (
+	FundCatalogStatusActive         = "active"
+	FundCatalogStatusUnavailable    = "unavailable"
+	FundCatalogStatusCatalogMissing = "catalog_missing"
+)
 
 // StockHolding represents a stock holding within a fund's portfolio.
 type StockHolding struct {
@@ -219,6 +227,37 @@ type FundCategory struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 	SortOrder   int    `json:"sort_order"`
+}
+
+// FundClassificationOption describes a selectable classification dictionary item.
+type FundClassificationOption struct {
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	SortOrder   int    `json:"sort_order"`
+}
+
+// FundClassificationOptions groups dictionaries used by manual classification overrides.
+type FundClassificationOptions struct {
+	Categories []FundClassificationOption `json:"categories"`
+	Sectors    []FundClassificationOption `json:"sectors"`
+	Themes     []FundClassificationOption `json:"themes"`
+}
+
+// FundClassificationOverride stores an administrator-maintained effective classification layer.
+type FundClassificationOverride struct {
+	FundID            string    `json:"fund_id"`
+	CategoryCode      string    `json:"category_code,omitempty"`
+	CategoryName      string    `json:"category_name,omitempty"`
+	PrimarySectorCode string    `json:"primary_sector_code,omitempty"`
+	PrimarySectorName string    `json:"primary_sector_name,omitempty"`
+	PrimaryThemeCode  string    `json:"primary_theme_code,omitempty"`
+	PrimaryThemeName  string    `json:"primary_theme_name,omitempty"`
+	ManualTags        []string  `json:"manual_tags"`
+	Note              string    `json:"note,omitempty"`
+	UpdatedBy         string    `json:"updated_by,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // FundAnalysisModuleScore represents a single quant-analysis module score.

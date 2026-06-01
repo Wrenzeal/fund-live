@@ -2,7 +2,11 @@
 
 import { AlertTriangle, Layers3, ListTree } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { HoldingFilterMode, HoldingMetricScope, HoldingSortMode } from '@/lib/holding-display'
+import type {
+  HoldingFilterMode,
+  HoldingMetricScope,
+  HoldingSortMode,
+} from '@/lib/holding-display'
 
 type HoldingViewMode = 'aggregate' | 'detail'
 
@@ -43,7 +47,10 @@ const filterOptions = [
 function sortOptions(viewMode: HoldingViewMode) {
   return [
     { id: 'default', label: '默认顺序' },
-    { id: 'principal_desc', label: viewMode === 'aggregate' ? '仓位最大优先' : '金额最大优先' },
+    {
+      id: 'principal_desc',
+      label: viewMode === 'aggregate' ? '仓位最大优先' : '金额最大优先',
+    },
     { id: 'profit_asc', label: '亏损最多优先' },
     { id: 'profit_desc', label: '盈利最多优先' },
     { id: 'change_asc', label: '跌幅最大优先' },
@@ -81,7 +88,7 @@ export function HoldingsViewControls({
                 'inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs transition-all duration-200',
                 viewMode === option.id
                   ? 'border-cyan-400/50 bg-cyan-400/14 text-cyan-100 shadow-[0_10px_22px_rgba(34,211,238,0.12)]'
-                  : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-400/35 hover:text-theme-primary'
+                  : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-400/35 hover:text-theme-primary',
               )}
             >
               <option.icon className="h-3.5 w-3.5" />
@@ -100,7 +107,7 @@ export function HoldingsViewControls({
                 'rounded-full border px-3 py-2 text-xs transition-all duration-200',
                 metricScope === option.id
                   ? 'border-amber-400/45 bg-amber-400/14 text-amber-100 shadow-[0_10px_22px_rgba(251,191,36,0.12)]'
-                  : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-amber-300/35 hover:text-theme-primary'
+                  : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-amber-300/35 hover:text-theme-primary',
               )}
             >
               {option.label}
@@ -111,9 +118,11 @@ export function HoldingsViewControls({
 
       <div className="mb-6 flex flex-col gap-3 rounded-[24px] border border-[var(--card-border)] bg-[var(--card-bg)]/50 p-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="text-sm font-medium text-theme-primary">排序与筛选</div>
+          <div className="text-sm font-medium text-theme-primary">
+            列表怎么排？
+          </div>
           <div className="mt-1 text-xs text-theme-muted">
-            可按仓位、盈亏、涨跌幅、分笔数、最近录入或量化信号排序，并叠加盈利/亏损/就绪状态筛选。
+            只影响下方持仓列表，不改变任何数据。
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -127,7 +136,7 @@ export function HoldingsViewControls({
                   'rounded-full border px-3 py-2 text-xs transition-all duration-200',
                   sortMode === option.id
                     ? 'border-fuchsia-400/45 bg-fuchsia-400/14 text-fuchsia-100 shadow-[0_10px_22px_rgba(217,70,239,0.12)]'
-                    : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-fuchsia-300/35 hover:text-theme-primary'
+                    : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-fuchsia-300/35 hover:text-theme-primary',
                 )}
               >
                 {option.label}
@@ -144,7 +153,7 @@ export function HoldingsViewControls({
                   'rounded-full border px-3 py-2 text-xs transition-all duration-200',
                   filterMode === option.id
                     ? 'border-cyan-400/45 bg-cyan-400/14 text-cyan-100 shadow-[0_10px_22px_rgba(34,211,238,0.12)]'
-                    : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-300/35 hover:text-theme-primary'
+                    : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-300/35 hover:text-theme-primary',
                 )}
               >
                 {option.label}
@@ -158,7 +167,7 @@ export function HoldingsViewControls({
               'inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs transition-all duration-200',
               showIncompleteOnly
                 ? 'border-amber-400/50 bg-amber-400/14 text-amber-100 shadow-[0_10px_22px_rgba(251,191,36,0.12)]'
-                : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-amber-300/35 hover:text-theme-primary'
+                : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-amber-300/35 hover:text-theme-primary',
             )}
             aria-pressed={showIncompleteOnly}
           >

@@ -1,14 +1,29 @@
 'use client'
 
-import { Activity, AlertTriangle, CheckCircle2, HeartPulse, Info, ShieldAlert } from 'lucide-react'
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  HeartPulse,
+  Info,
+  ShieldAlert,
+} from 'lucide-react'
 import type { FundAnalysis, FundHoldingRecord } from '@/hooks/use-fund-data'
-import type { HoldingAggregateEntry, HoldingEntry, HoldingEstimateAggregateMetrics } from '@/hooks/use-user-portfolio'
-import { buildPortfolioHealthSummary, type InsightTone } from '@/lib/holding-insights'
+import type {
+  HoldingAggregateEntry,
+  HoldingEntry,
+  HoldingEstimateAggregateMetrics,
+} from '@/hooks/use-user-portfolio'
+import {
+  buildPortfolioHealthSummary,
+  type InsightTone,
+} from '@/lib/holding-insights'
 import type { HoldingExposureSnapshot } from '@/lib/holding-insights'
 import type { HoldingMetricScope } from '@/lib/holding-display'
 import { cn } from '@/lib/utils'
 
 interface HoldingPortfolioHealthPanelProps {
+  compact?: boolean
   holdings: HoldingEntry[]
   aggregates: HoldingAggregateEntry[]
   analysesByFundID: Record<string, FundAnalysis | null>
@@ -47,6 +62,7 @@ function toneIcon(tone: InsightTone) {
 }
 
 export function HoldingPortfolioHealthPanel({
+  compact = false,
   holdings,
   aggregates,
   analysesByFundID,
@@ -71,19 +87,37 @@ export function HoldingPortfolioHealthPanel({
 
   return (
     <section className="mb-6 overflow-hidden rounded-[30px] border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
-      <div className="grid gap-5 xl:grid-cols-[0.78fr_1.22fr] xl:items-stretch">
+      <div
+        className={cn(
+          'grid gap-5 xl:items-stretch',
+          compact ? 'xl:grid-cols-1' : 'xl:grid-cols-[0.78fr_1.22fr]',
+        )}
+      >
         <div className="rounded-[26px] border border-cyan-400/20 bg-cyan-400/8 p-5">
           <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-cyan-200">
             <HeartPulse className="h-3.5 w-3.5" />
             组合体检
           </div>
           <div className="mt-5 flex items-end gap-3">
-            <div className="text-5xl font-black text-theme-primary">{summary.score}</div>
+            <div className="text-5xl font-black text-theme-primary">
+              {summary.score}
+            </div>
             <div className="pb-1 text-sm text-theme-muted">/ 100</div>
           </div>
-          <div className="mt-3 text-xl font-black text-theme-primary">{summary.title}</div>
-          <p className="mt-2 text-sm leading-6 text-theme-secondary">{summary.description}</p>
-          <div className={cn('mt-5 inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-medium', toneClass(summary.tone))}>
+          <div className="mt-3 text-xl font-black text-theme-primary">
+            {summary.title}
+          </div>
+          {!compact && (
+            <p className="mt-2 text-sm leading-6 text-theme-secondary">
+              {summary.description}
+            </p>
+          )}
+          <div
+            className={cn(
+              'mt-5 inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-medium',
+              toneClass(summary.tone),
+            )}
+          >
             <Activity className="h-4 w-4" />
             {metricScope === 'official' ? '官方口径体检' : '盘中预估体检'}
           </div>
@@ -91,16 +125,34 @@ export function HoldingPortfolioHealthPanel({
 
         <div className="grid gap-3 md:grid-cols-2">
           {summary.signals.map((signal) => (
-            <div key={signal.id} className={cn('rounded-[24px] border p-4', toneClass(signal.tone))}>
+            <div
+              key={signal.id}
+              className={cn(
+                'rounded-[24px] border p-4',
+                toneClass(signal.tone),
+              )}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="shrink-0">{toneIcon(signal.tone)}</span>
-                  <div className="truncate text-sm font-semibold text-theme-primary">{signal.title}</div>
+                  <div className="truncate text-sm font-semibold text-theme-primary">
+                    {signal.title}
+                  </div>
                 </div>
-                {signal.metric && <span className="shrink-0 rounded-full border border-white/15 bg-white/8 px-2 py-0.5 text-[11px]">{signal.metric}</span>}
+                {signal.metric && (
+                  <span className="shrink-0 rounded-full border border-white/15 bg-white/8 px-2 py-0.5 text-[11px]">
+                    {signal.metric}
+                  </span>
+                )}
               </div>
-              <p className="mt-2 text-xs leading-5 text-theme-secondary">{signal.description}</p>
-              {signal.action && <div className="mt-3 text-xs font-medium text-theme-primary">{signal.action}</div>}
+              <p className="mt-2 text-xs leading-5 text-theme-secondary">
+                {signal.description}
+              </p>
+              {signal.action && (
+                <div className="mt-3 text-xs font-medium text-theme-primary">
+                  {signal.action}
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { Activity, ArrowLeft, ChartNoAxesCombined, ShieldCheck, Sparkles, WalletCards } from 'lucide-react'
 import { HeaderFundSearch } from '@/components/header-fund-search'
+import { ScrollReveal, ScrollRevealStack } from '@/components/scroll-reveal'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
 
@@ -89,7 +90,7 @@ export function AuthShell({
       </header>
 
       <main className="container mx-auto px-4 py-10">
-        <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+        <ScrollRevealStack className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <section className="relative overflow-hidden rounded-[32px] border border-[var(--card-border)] glass-strong p-8 sm:p-10">
             <div className="absolute inset-x-0 top-0 h-48 bg-gradient-to-br from-cyan-500/20 via-sky-500/10 to-transparent" />
             <div className="relative space-y-8">
@@ -110,16 +111,15 @@ export function AuthShell({
 
               <div className="grid gap-4 sm:grid-cols-3">
                 {highlights.map(({ title: itemTitle, description: itemDescription, icon: Icon }) => (
-                  <div
-                    key={itemTitle}
-                    className="rounded-2xl border border-[var(--card-border)] bg-[var(--input-bg)]/70 p-5 backdrop-blur"
-                  >
-                    <div className="mb-3 inline-flex rounded-xl bg-cyan-500/15 p-2 text-cyan-300">
-                      <Icon className="h-5 w-5" />
+                  <ScrollReveal key={itemTitle} delay={80} className="h-full">
+                    <div className="h-full rounded-2xl border border-[var(--card-border)] bg-[var(--input-bg)]/70 p-5 backdrop-blur">
+                      <div className="mb-3 inline-flex rounded-xl bg-cyan-500/15 p-2 text-cyan-300">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div className="mb-2 text-base font-semibold text-theme-primary">{itemTitle}</div>
+                      <p className="text-sm leading-6 text-theme-secondary">{itemDescription}</p>
                     </div>
-                    <div className="mb-2 text-base font-semibold text-theme-primary">{itemTitle}</div>
-                    <p className="text-sm leading-6 text-theme-secondary">{itemDescription}</p>
-                  </div>
+                  </ScrollReveal>
                 ))}
               </div>
             </div>
@@ -138,7 +138,7 @@ export function AuthShell({
               {footer}
             </div>
           </section>
-        </div>
+        </ScrollRevealStack>
       </main>
     </div>
   )

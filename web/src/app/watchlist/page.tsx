@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronDown, FileSearch, FileStack, FolderPlus, GripVertical, Layers3, LoaderCircle, Palette, PencilLine, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
+import { ScrollReveal, ScrollRevealStack } from '@/components/scroll-reveal'
 import { VIPAnalysisEntry } from '@/components/vip-analysis-entry'
 import { WatchlistFundCard } from '@/components/watchlist-fund-card'
 import { useCurrentUser } from '@/hooks/use-auth'
@@ -490,7 +491,7 @@ export default function WatchlistPage() {
 
   return (
     <AccountAreaShell title="我的自选" description="按分组整理关注的基金，并快速查看每只基金的实时预估涨跌幅与迷你走势。">
-      <div className="space-y-8">
+      <ScrollRevealStack className="space-y-8">
         {watchlistFeedback && (
           <div
             className={cn(
@@ -1023,13 +1024,18 @@ export default function WatchlistPage() {
                         </div>
                       ) : (
                         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                          {group.funds.map((item) => (
-                            <WatchlistFundCard
+                          {group.funds.map((item, index) => (
+                            <ScrollReveal
                               key={`${group.id}:${item.fund_id}`}
-                              fundId={item.fund_id}
-                              analysis={analysesByFundID[item.fund_id]}
-                              onRemove={() => void removeFundFromGroup(group.id, item.fund_id)}
-                            />
+                              delay={Math.min(index * 70, 280)}
+                              className="h-full"
+                            >
+                              <WatchlistFundCard
+                                fundId={item.fund_id}
+                                analysis={analysesByFundID[item.fund_id]}
+                                onRemove={() => void removeFundFromGroup(group.id, item.fund_id)}
+                              />
+                            </ScrollReveal>
                           ))}
                         </div>
                       )}
@@ -1204,7 +1210,7 @@ export default function WatchlistPage() {
             ]}
           />
         )}
-      </div>
+      </ScrollRevealStack>
     </AccountAreaShell>
   )
 }

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { CheckCircle2, Copy, Crown, ExternalLink, LoaderCircle, ShieldAlert } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
+import { ScrollRevealStack } from '@/components/scroll-reveal'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { VIPRequestError, createVIPOrder, useVIPOrder, useVIPPreview } from '@/hooks/use-vip-preview'
 import type { VIPBillingCycle } from '@/mocks/vip'
@@ -95,7 +96,7 @@ export default function VIPCheckoutPage() {
       title="开通 VIP"
       description="支持微信支付下单与支付状态查询；若支付配置尚未补齐，页面会明确提示缺失项。"
     >
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+      <ScrollRevealStack className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="vip-checkout-shell rounded-[36px] border p-6">
           <div className="mb-6">
             <div className="vip-proof-chip inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs tracking-[0.26em]">
@@ -283,7 +284,7 @@ export default function VIPCheckoutPage() {
             <p className="mt-4 text-sm leading-6 text-theme-secondary">{plan.disclaimer}</p>
           </div>
         </section>
-      </div>
+      </ScrollRevealStack>
     </AccountAreaShell>
   )
 }

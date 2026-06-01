@@ -61,10 +61,12 @@ func (s *stubHoldingsFallbackResolver) ResolveDisplayHoldings(ctx context.Contex
 }
 
 type stubFundSectorStore struct {
-	snapshot        *domain.FundSectorSnapshot
-	snapshotsByFund map[string]*domain.FundSectorSnapshot
-	themeSnapshot   *domain.FundThemeSnapshot
-	themesByFund    map[string]*domain.FundThemeSnapshot
+	snapshot               *domain.FundSectorSnapshot
+	snapshotsByFund        map[string]*domain.FundSectorSnapshot
+	themeSnapshot          *domain.FundThemeSnapshot
+	themesByFund           map[string]*domain.FundThemeSnapshot
+	classificationOverride *domain.FundClassificationOverride
+	classificationOptions  *domain.FundClassificationOptions
 }
 
 type stubAnalysisRankingCandidateProvider struct {
@@ -163,6 +165,35 @@ func (s *stubFundSectorStore) ResolveFundCategory(ctx context.Context, fund *dom
 	}, nil
 }
 
+func (s *stubFundSectorStore) GetClassificationOverride(ctx context.Context, fundID string) (*domain.FundClassificationOverride, error) {
+	if s.classificationOverride == nil {
+		return nil, nil
+	}
+	copyOverride := *s.classificationOverride
+	return &copyOverride, nil
+}
+
+func (s *stubFundSectorStore) UpsertClassificationOverride(ctx context.Context, input service.FundClassificationOverrideInput) (*domain.FundClassificationOverride, error) {
+	s.classificationOverride = &domain.FundClassificationOverride{
+		FundID:            input.FundID,
+		CategoryCode:      input.CategoryCode,
+		PrimarySectorCode: input.PrimarySectorCode,
+		PrimaryThemeCode:  input.PrimaryThemeCode,
+		ManualTags:        append([]string(nil), input.ManualTags...),
+		Note:              input.Note,
+		UpdatedBy:         input.UpdatedBy,
+	}
+	return s.GetClassificationOverride(ctx, input.FundID)
+}
+
+func (s *stubFundSectorStore) ListClassificationOptions(ctx context.Context) (*domain.FundClassificationOptions, error) {
+	if s.classificationOptions != nil {
+		copyOptions := *s.classificationOptions
+		return &copyOptions, nil
+	}
+	return &domain.FundClassificationOptions{}, nil
+}
+
 type fundResponseEnvelope struct {
 	Success bool        `json:"success"`
 	Data    domain.Fund `json:"data"`
@@ -206,9 +237,10 @@ type dashboardResponseEnvelope struct {
 				BoundaryNotice string `json:"boundary_notice"`
 			} `json:"ai_explanation"`
 		} `json:"analysis"`
-		SectorSnapshot *domain.FundSectorSnapshot `json:"sector_snapshot"`
-		ThemeSnapshot  *domain.FundThemeSnapshot  `json:"theme_snapshot"`
-		TimeSeries     []struct {
+		SectorSnapshot         *domain.FundSectorSnapshot         `json:"sector_snapshot"`
+		ThemeSnapshot          *domain.FundThemeSnapshot          `json:"theme_snapshot"`
+		ClassificationOverride *domain.FundClassificationOverride `json:"classification_override"`
+		TimeSeries             []struct {
 			Timestamp     string `json:"timestamp"`
 			ChangePercent string `json:"change_percent"`
 		} `json:"time_series"`
@@ -978,6 +1010,16 @@ func TestGetDashboardAlignsTimeSeriesLastPointWithEstimateSnapshot(t *testing.T)
 				PrimaryThemeCode: "ai_application",
 				PrimaryThemeName: "AI应用",
 			},
+			classificationOverride: &domain.FundClassificationOverride{
+				FundID:            "005827",
+				CategoryCode:      "hybrid",
+				CategoryName:      "混合型",
+				PrimarySectorCode: "consumer_service",
+				PrimarySectorName: "消费服务",
+				PrimaryThemeCode:  "consumption_upgrade",
+				PrimaryThemeName:  "消费升级",
+				ManualTags:        []string{"蓝筹消费", "人工复核"},
+			},
 		},
 	}
 
@@ -1014,6 +1056,12 @@ func TestGetDashboardAlignsTimeSeriesLastPointWithEstimateSnapshot(t *testing.T)
 	if response.Data.ThemeSnapshot == nil || response.Data.ThemeSnapshot.PrimaryThemeCode != "ai_application" {
 		t.Fatalf("theme snapshot = %+v, want ai_application", response.Data.ThemeSnapshot)
 	}
+	if response.Data.ClassificationOverride == nil || response.Data.ClassificationOverride.PrimaryThemeCode != "consumption_upgrade" {
+		t.Fatalf("classification override = %+v, want consumption_upgrade", response.Data.ClassificationOverride)
+	}
+	if len(response.Data.ClassificationOverride.ManualTags) != 2 || response.Data.ClassificationOverride.ManualTags[0] != "蓝筹消费" {
+		t.Fatalf("manual tags = %+v, want 蓝筹消费 first", response.Data.ClassificationOverride.ManualTags)
+	}
 	if response.Data.Analysis == nil {
 		t.Fatalf("analysis should not be nil")
 	}
@@ -1035,6 +1083,52 @@ func TestGetDashboardAlignsTimeSeriesLastPointWithEstimateSnapshot(t *testing.T)
 	lastPoint := response.Data.TimeSeries[len(response.Data.TimeSeries)-1]
 	if got := lastPoint.ChangePercent; got != "-1.6819" {
 		t.Fatalf("last point change percent = %s, want -1.6819", got)
+	}
+}
+
+func TestUpdateClassificationOverrideSavesManualTags(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	sectorStore := &stubFundSectorStore{}
+	handler := &FundHandler{sectorStore: sectorStore}
+
+	router := gin.New()
+	router.PUT("/api/v1/admin/funds/:id/classification", handler.UpdateClassificationOverride)
+
+	body := `{
+		"category_code": "index",
+		"primary_sector_code": "semiconductor",
+		"primary_theme_code": "semiconductor_chip",
+		"manual_tags": ["半导体", "ETF联接"],
+		"note": "名称与穿透持仓需要人工校正"
+	}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/funds/159813/classification", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var response struct {
+		Success bool                               `json:"success"`
+		Data    *domain.FundClassificationOverride `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !response.Success || response.Data == nil {
+		t.Fatalf("response = %+v, want success with override", response)
+	}
+	if response.Data.FundID != "159813" || response.Data.PrimaryThemeCode != "semiconductor_chip" {
+		t.Fatalf("override = %+v, want fund 159813 semiconductor_chip", response.Data)
+	}
+	if len(response.Data.ManualTags) != 2 || response.Data.ManualTags[1] != "ETF联接" {
+		t.Fatalf("manual tags = %+v, want ETF联接 second", response.Data.ManualTags)
+	}
+	if sectorStore.classificationOverride == nil || sectorStore.classificationOverride.Note == "" {
+		t.Fatalf("store override = %+v, want persisted note", sectorStore.classificationOverride)
 	}
 }
 

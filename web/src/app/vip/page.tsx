@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { BarChart3, BookOpenText, Crown, FileStack, ShieldAlert, Sparkles, Wallet } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
+import { ScrollReveal, ScrollRevealStack } from '@/components/scroll-reveal'
 import { useVIPPreview } from '@/hooks/use-vip-preview'
 import { VIP_SAMPLE_REPORT_IDS } from '@/mocks/vip'
 
@@ -38,7 +39,7 @@ export default function VIPPage() {
       title="VIP 智能投研"
       description="围绕自选分组与持仓组合生成结构化研究报告，帮助你从板块、政策、财报和市场走势四个维度理解当下环境。"
     >
-      <div className="space-y-8">
+      <ScrollRevealStack className="space-y-8">
         <section className="vip-hero-panel overflow-hidden rounded-[40px] border p-8 lg:p-10">
           <div className="vip-hero-orb vip-hero-orb-primary" />
           <div className="vip-hero-orb vip-hero-orb-secondary" />
@@ -65,10 +66,12 @@ export default function VIPPage() {
                   { label: '每日组合分析', value: '2 次' },
                   { label: '报告核心价值', value: '看结论' },
                 ].map((item) => (
-                  <div key={item.label} className="vip-stat-card rounded-[24px] border px-4 py-4">
-                    <div className="text-xs tracking-[0.18em] text-theme-muted">{item.label}</div>
-                    <div className="mt-2 text-2xl font-black text-theme-primary">{item.value}</div>
-                  </div>
+                  <ScrollReveal key={item.label} delay={80} className="h-full" variant="scale-in">
+                    <div className="vip-stat-card h-full rounded-[24px] border px-4 py-4">
+                      <div className="text-xs tracking-[0.18em] text-theme-muted">{item.label}</div>
+                      <div className="mt-2 text-2xl font-black text-theme-primary">{item.value}</div>
+                    </div>
+                  </ScrollReveal>
                 ))}
               </div>
 
@@ -143,7 +146,7 @@ export default function VIPPage() {
           </div>
         </section>
 
-        <section className="grid gap-5 lg:grid-cols-3">
+        <ScrollRevealStack className="grid gap-5 lg:grid-cols-3">
           {valueCards.map((card) => {
             const Icon = card.icon
             return (
@@ -156,7 +159,7 @@ export default function VIPPage() {
               </article>
             )
           })}
-        </section>
+        </ScrollRevealStack>
 
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <div className="vip-preview-shell rounded-[32px] border p-6">
@@ -251,7 +254,7 @@ export default function VIPPage() {
             ))}
           </div>
         </section>
-      </div>
+      </ScrollRevealStack>
     </AccountAreaShell>
   )
 }

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"testing"
 
 	"github.com/RomaticDOG/fund/internal/domain"
@@ -74,6 +75,85 @@ func TestMemoryFundRepositorySearchFundsUsesStableRanking(t *testing.T) {
 	}
 	if results[1].ID != "320007" {
 		t.Fatalf("results[1].ID = %s, want 320007", results[1].ID)
+	}
+}
+
+func TestPostgresFundRepositorySearchFundsOnlyReturnsActiveCatalogFunds(t *testing.T) {
+	db, cleanup := openPostgresUserRepoTestDB(t)
+	defer cleanup()
+
+	repo := NewPostgresFundRepository(db)
+	ctx := context.Background()
+	funds := []*domain.Fund{
+		{ID: "000001", Name: "华夏成长混合", CatalogStatus: domain.FundCatalogStatusActive},
+		{ID: "000002", Name: "华夏成长混合(后端)", CatalogStatus: domain.FundCatalogStatusUnavailable},
+		{ID: "002755", Name: "华夏成长旧代码", CatalogStatus: domain.FundCatalogStatusCatalogMissing},
+	}
+	for _, fund := range funds {
+		if err := repo.SaveFund(ctx, fund); err != nil {
+			t.Fatalf("SaveFund(%s) error = %v", fund.ID, err)
+		}
+	}
+
+	results, err := repo.SearchFunds(ctx, "华夏成长", 10)
+	if err != nil {
+		t.Fatalf("SearchFunds(华夏成长) error = %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("len(results) = %d, want 1: %+v", len(results), results)
+	}
+	if results[0].ID != "000001" {
+		t.Fatalf("results[0].ID = %s, want 000001", results[0].ID)
+	}
+
+	results, err = repo.SearchFunds(ctx, "000002", 10)
+	if err != nil {
+		t.Fatalf("SearchFunds(000002) error = %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("len(results) = %d, want 0 for unavailable catalog fund: %+v", len(results), results)
+	}
+
+	missingFund, err := repo.GetFundByID(ctx, "002755")
+	if err != nil {
+		t.Fatalf("GetFundByID(002755) error = %v", err)
+	}
+	if missingFund == nil {
+		t.Fatal("GetFundByID(002755) = nil, want historical catalog_missing fund to remain readable by ID")
+	}
+}
+
+func TestPostgresFundRepositorySaveFundPreservesExistingCatalogStatusWhenUnset(t *testing.T) {
+	db, cleanup := openPostgresUserRepoTestDB(t)
+	defer cleanup()
+
+	repo := NewPostgresFundRepository(db)
+	ctx := context.Background()
+	if err := repo.SaveFund(ctx, &domain.Fund{
+		ID:            "000002",
+		Name:          "华夏成长混合(后端)",
+		CatalogStatus: domain.FundCatalogStatusUnavailable,
+	}); err != nil {
+		t.Fatalf("SaveFund(initial) error = %v", err)
+	}
+
+	if err := repo.SaveFund(ctx, &domain.Fund{
+		ID:   "000002",
+		Name: "华夏成长混合(后端)",
+		Type: "混合型",
+	}); err != nil {
+		t.Fatalf("SaveFund(update without catalog status) error = %v", err)
+	}
+
+	fund, err := repo.GetFundByID(ctx, "000002")
+	if err != nil {
+		t.Fatalf("GetFundByID() error = %v", err)
+	}
+	if fund == nil {
+		t.Fatal("GetFundByID() = nil, want saved fund")
+	}
+	if fund.CatalogStatus != domain.FundCatalogStatusUnavailable {
+		t.Fatalf("CatalogStatus = %s, want %s", fund.CatalogStatus, domain.FundCatalogStatusUnavailable)
 	}
 }
 

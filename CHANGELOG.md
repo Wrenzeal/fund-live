@@ -10,12 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **crawler 全量基金目录同步与可用状态治理**
+  - `cmd/crawler` 新增 `--catalog-only`，可配合 `--list all --save-db` 只同步 Eastmoney 基金目录的 code / name / type / catalog status，不逐只抓取详情和持仓。
+  - `funds` 新增 `catalog_status / catalog_synced_at`；目录同步会将正常基金标记为 `active`，将名称含“(后端)”且详情接口不可用的份额标记为 `unavailable`，全量无 `--limit` 同步时将本地历史残留标记为 `catalog_missing`。
+  - 默认基金搜索现在只返回 `active`，但直接按 ID 查询仍保留历史记录，避免影响已有持仓、自选或估值档案。
+  - 2026-06-01 已重新执行全量目录同步并清理本地冗余：上游返回 26,927 条，先标记 `catalog_missing=111`，确认无用户自选/持仓/交易流水/估值档案引用后已备份到 `.omx/backups/manual/catalog-missing-funds-cleanup-20260601-094512.json` 并删除；当前本地 `funds` 表 26,927 条，其中 `active=26,737`、`unavailable=190`、`catalog_missing=0`，`stock_holdings` 为 4,533 条。
+
+- **基金人工分类标签覆盖层**
+  - `fund_classification_overrides` 扩展 `primary_theme_code` 与 `manual_tags_json`，并新增独立 migration，支持管理员补齐系统自动分类不准确的基金。
+  - 新增管理员接口：读取分类字典、读取单只基金人工覆盖、保存主分类 / 主板块 / 主主题 / 人工标签 / 备注。
+  - Dashboard 新增 `classification_override`，前端持仓分类卡可展示“人工校正”标签，并保留自动持仓权重拆解，避免人工标签被误读为真实持仓占比。
+  - 首页与量化详情页的持仓分类卡新增管理员编辑入口；保存后刷新 dashboard 与 analysis，并自动失效该基金旧量化快照。
+
 - **QDII 海外固定行情源配置化与选型文档**
   - 新增 `quote.overseas_source` / `QUOTE_OVERSEAS_SOURCE`，QDII / 海外持仓估值可在 `tencent` 与 `sina` 两个既有 provider 间切换。
   - 默认海外固定源保持 `tencent`，避免影响现有 QDII 估值链路；用户级国内行情源偏好仍不影响海外估值。
   - 新增 `docs/overseas-data-source-selection.md`，记录 Polygon / Alpaca / Twelve Data / Intrinio 的中期选型边界，并明确本轮不接 VIP / 付费官方 API。
 
 - **持仓页待补齐过滤与高频排序**
+  - 持仓页信息架构改为工作台导航：`总览 / 记录 / 持仓 / 风险 / 流水 / 工具` 六个功能块，顶部快捷入口直达记账、持仓列表、风险检查和流水记录；默认不再一次性展开全部长模块。
+  - 各功能块说明文案压缩为短标题与短说明，记录、导入、VIP、流水筛选等操作放回对应功能区，降低首屏文字密度。
+  - 持仓总览补齐“总价值 / 总收益”资产指标：官方口径按已就绪本金计算，盘中口径按已确认份额计算，并展示对应收益率，避免累计收益缺口。
   - 持仓页新增“只看待补齐”过滤器，支持在按基金聚合和分笔明细两种视图下快速定位未确认份额、官方净值未同步或真实口径未就绪的记录。
   - 过滤开启后会显示当前筛选范围和命中数量；无命中时展示空态并可一键恢复全部持仓。
   - 新增排序与筛选面板：支持仓位 / 金额、盈亏、涨跌幅、分笔数、最近录入、量化信号排序，以及盈利/亏损、就绪状态、单笔/多笔筛选；盈亏/涨跌幅跟随“官方口径 / 盘中预估”切换，缺失排序值统一后置。
@@ -38,6 +53,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
 ### Changed
+- **前端主要页面滚动进入动效统一**
+  - 新增 `web/src/components/scroll-reveal.tsx`，将滚动进入监听、渐显、轻微上移/缩放和 stagger 列表动画抽成共享组件，继续使用原生 IntersectionObserver/CSS transition，不新增依赖。
+  - 首页、持仓、自选、想法、公告、登录/注册、VIP 介绍/开通/任务/报告、公告详情、想法详情与持仓流水详情已接入区块级或卡片级滚动渐显。
+  - `analysis-layout.tsx` 现在复用共享滚动 reveal 能力，保留量化详情页/排行榜的 section heading 兼容导出。
+
+- **量化详情页局部布局修正**
+  - 事件信号链与风险拆解改为上下排布，不再在宽屏并排展示。
+  - 涨幅情况、持仓分类、数据口径改为上下排布，降低三块并排造成的拥挤和错位。
+  - 风险拆解中的 CURRENT RISK、风险/事件模块和重点风险提示改为上下层级，并修复重点风险提示列表样式。
+
+- **量化看板与排行榜前端布局重构**
+  - `/analysis/[fundId]` 改为“结论与证据优先”的分段布局：首屏结论、洞察条、建议分布、六维模块、主/反证据、事件风险、结构季报、数据口径与方法限制顺序展示。
+  - `/analysis/rankings` 改为排行榜首屏概览、三类观察池统计、当前首位样本放大展示、分榜列表与压缩口径说明；上方积极池 / 观察池 / 风险池统计卡保留并列展示，下方“结构偏积极 / 最值得观察 / 高风险关注”分榜改为上下排布，避免宽屏并列造成阅读割裂。
+  - 删除旧版重复概览卡和重复方法说明，把结构、数据口径、方法限制分别收敛到压缩模块，降低长页面重复阅读成本。
+  - 新增共享 `analysis-layout.tsx`，统一滚动进入渐显、section heading 与建议分布滚动绘制动效，使用现有 CSS/IntersectionObserver，不新增前端依赖。
+
 - **量化规则结论阈值与审计收口**
   - `analysis_version` 提升到 `baseline_v3`，使旧版量化快照自动失效。
   - 规则主结论与前端标签统一使用阈值口径：`increase >= 55` 才显示“结构偏积极”，`decrease >= 60` 才显示“风险偏高”，否则统一为“适合观察”。
@@ -323,7 +354,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **持仓真实市值 / 今日盈亏 / 总仓汇总正式落地**
   - `GET /api/v1/user/holdings` 已升级为 `items + summary` 结构，单条持仓可返回真实当前市值、今日盈亏、今日涨跌幅
-  - 顶部持仓总览新增总本金、总当前市值、总今日盈亏、总今日涨跌幅四张卡片
+  - 顶部持仓总览新增总本金、总价值、总收益、总今日盈亏、总今日涨跌幅卡片
   - 总仓涨跌幅改为按昨日市值加权计算，不再做简单平均
 
 - **真实口径与盘中预估完全分层**
