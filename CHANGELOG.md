@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the **FundLive** project will be documented in this file.
+All notable changes to the **涨了多少** project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **后端登录与鉴权安全加固**
+  - `AuthService` 新增进程内失败限流：默认 15 分钟窗口内密码登录失败 5 次、注册失败 8 次、Google 登录失败 10 次后返回 `AUTH_RATE_LIMITED` / HTTP 429。
+  - 注册密码策略升级为至少 10 位、包含字母和数字、不能包含空白字符，并拒绝常见弱密码；注册页同步前端提示与预校验。
+  - 认证入口 JSON body 限制为 16KB，降低大请求体滥用风险；新增 handler/service 回归测试覆盖限流、弱密码、Google 邮箱 claim 校验和超大 payload。
+  - 配置新增 `auth_attempt_window_minutes`、`max_password_failures`、`max_register_failures`、`max_google_login_failures` 及对应环境变量覆盖。
+
 - **crawler 全量基金目录同步与可用状态治理**
   - `cmd/crawler` 新增 `--catalog-only`，可配合 `--list all --save-db` 只同步 Eastmoney 基金目录的 code / name / type / catalog status，不逐只抓取详情和持仓。
   - `funds` 新增 `catalog_status / catalog_synced_at`；目录同步会将正常基金标记为 `active`，将名称含“(后端)”且详情接口不可用的份额标记为 `unavailable`，全量无 `--limit` 同步时将本地历史残留标记为 `catalog_missing`。
@@ -53,6 +59,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
 ### Changed
+- **认证错误与生产 Cookie 安全收口**
+  - 登录邮箱格式错误统一按 `INVALID_CREDENTIALS` 处理，不再区分“格式错误 / 账号不存在 / 密码错误”。
+  - 认证默认异常响应改为通用 `Authentication failed`，避免向客户端暴露底层错误原文。
+  - Gin 只信任本机反代代理头，避免客户端伪造代理 IP 绕过认证限流。
+  - 生产 `/etc/fund-live/fundlive.yaml` 已备份并显式写入 `auth.cookie_secure=true` 及认证限流阈值，HTTPS 会话 Cookie 继续保持 HttpOnly + SameSite=Lax。
+
+- **前后端代码优化与重复逻辑收口**
+  - 前端新增 `BrandMark` 共享组件，统一首页、账户中心、社区/公告、用户模块顶部品牌块，避免品牌图标与文案结构继续多处复制。
+  - 后端 `fund_search.go` 收口基金搜索文本归一化，并在 scored match 中预计算排序用 ID / 名称，减少排序阶段重复 trim，同时保持既有搜索优先级。
+
+- **浏览器标签页与首页品牌副标题更新**
+  - root metadata title / Open Graph title 改为 `FundLive - 你的基金估值系统`。
+  - 新增并优化 `BrowserTitleTicker`，当浏览器标签标题较长且用户未开启 reduced motion 时，以更高频字符步进循环滚动 title，并在每轮完整标题后短暂停顿，降低低帧率跳动感。
+  - 首页左上角主标题保持“涨了多少”，副标题改为 `FundLive - 实时基金估值`。
+  - `/favicon.svg` 继续使用蓝色线性心电/活跃度图标，透明背景下只保留中间线条；`app/favicon.ico` 作为兼容 fallback。
+
+- **自选页编辑分组按钮修复**
+  - `/watchlist` 分组卡片不再整卡设置 `draggable`，分组排序改为只能从“拖拽排序”手柄发起，避免父级拖拽抢占内部“编辑分组”按钮点击事件。
+  - “编辑分组”按钮会阻止拖拽事件冒泡，并增加点击高亮/弹跳反馈；编辑弹窗新增背景淡入与面板进入动画，并继续尊重 `prefers-reduced-motion`。
+
+- **后端 Go 版本基线升级到 1.26.3**
+  - `go.mod` 已从 `go 1.25.8` 升级到 `go 1.26.3`，CI 的 `actions/setup-go` 会继续通过 `go-version-file: go.mod` 跟随新版本。
+  - 已按 Go 1.26 release notes 扫描后端受影响点：项目未使用 `net/http/httputil.ReverseProxy.Director`、`image/jpeg` 位级断言、`go/ast.BasicLit.ValueEnd`、自定义 `crypto/rand.Reader` 或相关 `GODEBUG` 兼容开关；现有 `crypto/rand` 仅用于 token/nonce，`httptest` 仅用于常规 handler 测试，因此无需配套代码改造。
+  - 本机工具链 `go1.26.3 linux/amd64` 已用于运行后端测试与构建验证。
+
+- **前端依赖漏洞修复**
+  - `next` 与 `eslint-config-next` 升级到 `16.2.7`，修复 Next 16.1.x 暴露的 request smuggling、Server Components DoS、middleware/proxy bypass、SSRF、XSS 与 cache poisoning 等 npm audit 告警。
+  - 由于当前 Next 16.2.7 包声明仍固定 `postcss@8.4.31`，新增 `overrides.postcss=8.5.15`，让 Next 实际解析到安全 PostCSS 补丁版本，避免 npm 建议降级到不兼容的 Next 9。
+  - 前端依赖树已验证 `npm audit` 为 0 漏洞，并通过 lint 与 production build。
+
+- **生产访问 HTTPS 与部署端口收口**
+  - 已在运行环境为 `fund.wrenzeal.top` 启用 Let's Encrypt HTTPS，HTTP 80 自动 301 跳转到 HTTPS 443。
+  - Nginx 保持页面/静态资源走 Next.js `127.0.0.1:13069`，`/api/` 与 `/health` 直连 Go 后端 `127.0.0.1:13896`，避免健康检查落到前端代理后再回退 8080。
+  - `scripts/deploy-backend.sh` 与 self-hosted workflow 的默认后端健康检查改为 `http://127.0.0.1:13896/health`。
+  - `scripts/deploy-backend.sh` 在 `/etc/fund-live/fundlive.yaml` 存在时会写入 systemd drop-in，确保后端以 `FUNDLIVE_CONFIG=/etc/fund-live/fundlive.yaml` 读取生产端口配置。
+  - `scripts/deploy-frontend.sh` 默认注入 `BACKEND_URL=http://127.0.0.1:13896` 到 PM2 运行时，避免后续前端部署后同源 API 代理回退到 `127.0.0.1:8080`。
+
+- **自选页分组管理下拉交互修复**
+  - `/watchlist` 分组管理里的“目标分组”触发器与下拉面板改为不透明主题背景，并将菜单改为 portal 固定弹层，避免选项视觉重叠时点击穿透到下方按钮。
+  - 分组选择下方的基金搜索结果改为 portal/fixed 浮层下拉，不再在卡片内联展开撑高整个分组管理区域，并复用不透明主题背景与轻量进入动画。
+
 - **前端主要页面滚动进入动效统一**
   - 新增 `web/src/components/scroll-reveal.tsx`，将滚动进入监听、渐显、轻微上移/缩放和 stagger 列表动画抽成共享组件，继续使用原生 IntersectionObserver/CSS transition，不新增依赖。
   - 首页、持仓、自选、想法、公告、登录/注册、VIP 介绍/开通/任务/报告、公告详情、想法详情与持仓流水详情已接入区块级或卡片级滚动渐显。
@@ -740,7 +787,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 若目标 ETF 本地无持仓，会继续按需补抓其详情和持仓数据
 
 - **后端启动与配置方式**
-  - Go 版本固定为 `1.25.8`
+  - Go 版本固定为 `1.26.3`
   - 后端启动默认读取 `fundlive.yaml`，无需每次手动传数据库环境变量
   - 当仓库中基金数量过大时，后台分时采集自动退回默认观察名单，避免服务启动后被全量目录拖慢
 

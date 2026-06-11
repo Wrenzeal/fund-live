@@ -1,14 +1,26 @@
-# FundLive - 实时基金估值系统
+# 涨了多少 - 实时基金估值系统
 
-[![Go](https://img.shields.io/badge/Go-1.25.8-00ADD8?logo=go)](https://golang.org)
+[![Go](https://img.shields.io/badge/Go-1.26.3-00ADD8?logo=go)](https://golang.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16+-000000?logo=next.js)](https://nextjs.org)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4+-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
 
 > 通过基金前十大重仓股和联接基金目标 ETF 的实时行情，计算基金盘中预估涨跌幅，并补全分时走势图。
 
-当前文档对应版本：`2026.6.1-holdings-workspace-tabs`
+当前文档对应版本：`2026.6.4-auth-security-hardening`
 
 ## 开发中更新摘要
+
+- 后端登录与鉴权安全加固已完成：
+  - 邮箱密码登录、注册和 Google 登录失败会进入进程内限流窗口，默认 15 分钟内密码失败 5 次、注册失败 8 次、Google 登录失败 10 次后返回 429
+  - 注册密码策略从“至少 8 位”升级为“至少 10 位、包含字母和数字、不能包含空白字符”，并拒绝常见弱密码；注册页同步提示与前端预校验
+  - 登录接口错误信息进一步收敛：登录邮箱格式错误不再与账号不存在区分，认证内部异常不再把底层错误原文返回给客户端
+  - 三个认证入口限制 JSON body 最大 16KB，减少大请求体攻击面；后端 Gin 只信任本机反代代理头，避免登录限流按伪造 IP 绕过
+  - 生产 `/etc/fund-live/fundlive.yaml` 已显式开启 `auth.cookie_secure=true`，HTTPS 下会话 Cookie 走 Secure + HttpOnly + SameSite=Lax
+
+- 前后端代码优化与重复逻辑收口已完成：
+  - 前端新增共享 `BrandMark` 组件，统一首页、账户中心、社区/公告、用户模块顶部品牌块，减少重复 JSX 与图标样式分叉风险
+  - 后端基金搜索排序工具收口查询归一化与排序字段预计算，减少匹配/排序阶段重复 `trim/lower` 处理，并保持既有搜索优先级不变
+  - 本轮不改接口、不改量化评分语义、不新增依赖，属于低风险结构优化
 
 - 基金目录可用状态治理已落地：
   - `funds` 新增 `catalog_status / catalog_synced_at`，区分默认可搜索的 `active`、目录存在但详情不可用的 `unavailable`、已不在最新上游目录中的 `catalog_missing`
@@ -64,6 +76,33 @@
   - 持仓总览已补齐“总价值 / 总收益”核心资产指标；官方口径按已就绪本金计算，盘中口径按已确认份额计算，并在卡片说明中展示收益率，避免用户只能看到今日盈亏却看不到累计收益
   - 新增“只看待补齐”过滤器，可在聚合视图和分笔视图中快速定位未确认份额、官方净值未同步或真实口径未就绪的持仓
   - 新增排序与筛选面板：支持仓位 / 金额、盈亏、涨跌幅、分笔数、最近录入、量化信号排序，以及盈利/亏损、就绪状态、单笔/多笔筛选；盈亏/涨跌幅跟随“官方口径 / 盘中预估”切换，缺失值自动后置
+
+- 浏览器标签页与首页品牌副标题已更新：
+  - 浏览器标签页标题与 Open Graph 标题改为 `FundLive - 你的基金估值系统`
+  - 新增并优化轻量客户端标签标题滚动：标题较长且用户未开启 `prefers-reduced-motion` 时，浏览器标签 title 会以更高频字符步进循环滚动，并在每轮标题完整展示后短暂停顿
+  - 首页左上角主标题继续保持“涨了多少”，其下副标题改为 `FundLive - 实时基金估值`
+  - Favicon 使用与页面左上角品牌一致的蓝色线性心电/活跃度图标，SVG 为主图标、ICO 为兼容 fallback
+
+- 自选页分组管理修复：
+  - “目标分组”下拉触发器和下拉面板改为不透明主题背景；下拉菜单改为 portal 固定弹层，避免选项与下方按钮重叠时点击穿透
+  - 分组选择下方的基金搜索结果改为 portal/fixed 浮层下拉，不再在分组管理卡片内撑开整个 div，并补充轻量展开动画
+  - “编辑分组”按钮点击无反应问题已修复：分组排序改为只能从“拖拽排序”手柄触发，不再让整张分组卡片抢占内部按钮事件；编辑按钮与编辑弹窗已补点击/进入动画
+
+- 后端 Go 版本基线已升级：
+  - `go.mod` 已切到 `go 1.26.3`，本机工具链为 `go1.26.3 linux/amd64`
+  - 已复核 Go 1.26 release notes 中常见受影响点，本项目后端未使用需要迁移的 `ReverseProxy.Director`、jpeg 位级输出断言、`go/ast.BasicLit.ValueEnd` 或自定义 `crypto/rand.Reader`
+  - CI 继续通过 `go-version-file: go.mod` 自动读取版本，后端部署脚本继续调用系统 `go build`，生产机需确保 Go 工具链已升级到 1.26.3 或兼容 1.26 系列
+
+- 前端依赖漏洞已修复：
+  - `next` 与 `eslint-config-next` 已升级到 `16.2.7`
+  - 因当前 Next 16.2.7 包声明仍固定 `postcss@8.4.31`，前端使用 `overrides.postcss=8.5.15` 覆盖到安全补丁版本
+  - `npm audit` 已验证为 `found 0 vulnerabilities`，并通过 lint 与 production build
+
+- 生产访问与 HTTPS 已恢复：
+  - `fund.wrenzeal.top` 当前已启用 Let's Encrypt HTTPS，HTTP 会 301 跳转到 HTTPS
+  - Nginx 线上入口：443 -> Next.js 前端 `127.0.0.1:13069`，`/api/` 与 `/health` -> Go 后端 `127.0.0.1:13896`
+  - 前端 PM2 运行时必须设置 `BACKEND_URL=http://127.0.0.1:13896`，否则 Next.js 同源代理会回退到 `127.0.0.1:8080` 并造成 `/health` 或本地代理接口 500
+  - 部署脚本与 self-hosted workflow 的默认后端健康检查已切到 `http://127.0.0.1:13896/health`
 
 ## 2026.4.27 更新摘要
 
@@ -292,7 +331,7 @@
 
 ## 项目简介
 
-公募基金净值通常按日更新，盘中无法直接看到当日变化。FundLive 的目标是：
+公募基金净值通常按日更新，盘中无法直接看到当日变化。“涨了多少”的目标是：
 
 - 搜索基金并查看盘中实时预估涨跌幅
 - 支持普通基金和 ETF 联接基金
@@ -451,6 +490,10 @@ auth:
   cookie_secure: false
   session_ttl_hours: 720
   google_client_id: your-google-client-id.apps.googleusercontent.com
+  auth_attempt_window_minutes: 15
+  max_password_failures: 5
+  max_register_failures: 8
+  max_google_login_failures: 10
 
 payment:
   wechat_pay:
@@ -479,6 +522,9 @@ payment:
 - `database.auto_migrate` 默认建议保持 `false`；启动时会执行受控 SQL migration，并将结果记录到 `schema_migrations`
 - 全新的空 PostgreSQL 库现在也可以直接依赖受控 SQL migration 完成核心表初始化，一般不再需要临时开启 `database.auto_migrate=true`
 - 请不要把真实数据库密码提交到仓库；本地 `fundlive.yaml` 建议仅保留在开发机，不纳入版本控制
+- `auth.cookie_secure` 本地 HTTP 可保持 `false`，生产 HTTPS 必须设为 `true`，否则浏览器会话 Cookie 不会强制走安全通道
+- `auth.auth_attempt_window_minutes` 与三类 `max_*_failures` 控制登录/注册/Google 登录失败限流；也可通过 `AUTH_ATTEMPT_WINDOW_MINUTES`、`AUTH_MAX_PASSWORD_FAILURES`、`AUTH_MAX_REGISTER_FAILURES`、`AUTH_MAX_GOOGLE_LOGIN_FAILURES` 覆盖
+- 注册密码至少 10 个字符，必须同时包含字母和数字，不能包含空白字符，并会拒绝常见弱密码；认证接口 JSON body 最大 16KB
 - 如果要启用 Google 登录，后端需要配置 `auth.google_client_id` 或环境变量 `GOOGLE_CLIENT_ID`
 - 前端启用 Google 登录时，需要在 `web/.env.local` 中配置 `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
 - 如果要启用微信支付，需要补齐 `payment.wechat_pay` 下的商户号、应用 ID、商户私钥、商户证书序列号、API v3 Key 和回调地址
@@ -495,7 +541,7 @@ go version
 
 要求：
 
-- Go `1.25.8`
+- Go `1.26.3`
 - 一个可连接的 PostgreSQL 实例
 
 ### 2. 配置数据库
@@ -548,7 +594,7 @@ go run ./cmd/server
 
 启动后接口地址：
 
-- `http://localhost:8080/health`
+- `http://localhost:8080/health`（本地默认；生产当前为 `http://127.0.0.1:13896/health`）
 - `http://localhost:8080/api/v1/fund/search?q=005827`
 - `http://localhost:8080/api/v1/auth/me`
 
@@ -567,10 +613,11 @@ npm run dev
 说明：
 
 - 前端默认通过同源 `/api/v1/*` 代理路由把请求转发到后端
-- 如果后端不在 `127.0.0.1:8080`，请在启动前端前设置：
+- 如果后端不在 `127.0.0.1:8080`，请在启动前端前设置；生产当前后端端口为 `13896`：
 
 ```bash
 BACKEND_URL=http://your-backend-host:8080 npm run dev
+# 生产 PM2 示例：BACKEND_URL=http://127.0.0.1:13896 npm run start -- -p 13069
 ```
 
 - 如果要在前端显示 Google 登录按钮，请额外配置：
@@ -578,6 +625,32 @@ BACKEND_URL=http://your-backend-host:8080 npm run dev
 ```bash
 cd /root/workspace/fund/web
 echo 'NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com' >> .env.local
+```
+
+## 生产访问与部署要点
+
+当前线上入口：
+
+- 域名：`https://fund.wrenzeal.top/`
+- Nginx：80 仅做 HTTPS 跳转，443 提供正式访问
+- 前端：Next.js / PM2 `fund-live-frontend`，本地端口 `13069`
+- 后端：systemd `fund-live-backend`，当前运行端口 `13896`，生产配置文件 `/etc/fund-live/fundlive.yaml`
+- 健康检查：公网 `https://fund.wrenzeal.top/health`，本机 `http://127.0.0.1:13896/health`
+
+运维约束：
+
+- 前端运行时必须带 `BACKEND_URL=http://127.0.0.1:13896`，因为 Next.js `/api/v1/*` / `/health` 代理会在未配置时回退到 `127.0.0.1:8080`。
+- 后端 systemd 运行时应带 `FUNDLIVE_CONFIG=/etc/fund-live/fundlive.yaml`；部署脚本会在该文件存在时自动写入 systemd drop-in。
+- Nginx 需要保留 `/api/` 与 `/health` 直连后端，页面与静态资源走 `127.0.0.1:13069`。
+- HTTPS 证书由 Certbot / Let's Encrypt 管理，证书续期 timer 应保持 active。
+- 每次部署后至少验证：`https://fund.wrenzeal.top/`、`https://fund.wrenzeal.top/health`、`https://fund.wrenzeal.top/api/v1/market/status`。
+
+```bash
+# 后端部署默认健康检查已指向 13896
+./scripts/deploy-backend.sh
+
+# 前端部署默认把 BACKEND_URL 注入 PM2 运行时
+BACKEND_URL=http://127.0.0.1:13896 ./scripts/deploy-frontend.sh
 ```
 
 ## API 概览
@@ -670,11 +743,18 @@ echo 'NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.
 - 首页未登录时显示“登录 / 注册”入口
 - 首页已登录时显示“头像 + 用户名”账户菜单，并支持退出登录
 
+### 登录安全基线
+- 注册密码要求至少 10 位，包含字母和数字，且不能包含空白字符；前端会预校验，后端仍是最终判定方。
+- 邮箱密码登录、注册和 Google 登录失败会进入 15 分钟限流窗口，超过阈值返回 `429 AUTH_RATE_LIMITED`。
+- 生产环境必须使用 HTTPS，并保持 `auth.cookie_secure=true`；Cookie 同时启用 HttpOnly 与 SameSite=Lax。
+- 后端只信任本机反代代理头，认证入口限制 16KB JSON body；多后端实例时应补充共享限流或 WAF 规则。
+
 ### Google 登录配置
 后端 `fundlive.yaml`：
 
 ```yaml
 auth:
+  cookie_secure: true
   google_client_id: your-google-client-id.apps.googleusercontent.com
 ```
 

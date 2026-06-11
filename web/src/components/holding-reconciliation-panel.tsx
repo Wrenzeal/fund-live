@@ -205,16 +205,16 @@ export function HoldingReconciliationPanel({
             </div>
             <div className="rounded-[24px] border border-[var(--card-border)] bg-[var(--input-bg)]/54 p-4">
               <div className="text-sm font-semibold text-theme-primary">
-                差异历史第一版
+                差异历史
               </div>
               <p className="mt-1 text-xs leading-5 text-theme-muted">
-                先从校正流水里还原最近几次“校正前 →
-                当前值”，完整影响链可进入流水详情继续查看。
+                这里展示最近几次“校正前 →
+                当前值”的变化，更多明细可进入流水详情查看。
               </p>
               <div className="mt-3 space-y-2">
                 {correctionHistory.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-[var(--card-border)] px-3 py-3 text-xs text-theme-muted">
-                    暂无校正流水；后续每次校正都会在这里留下对账痕迹。
+                    暂无校正记录；完成校正后会在这里留下对账痕迹。
                   </div>
                 ) : (
                   correctionHistory.map((transaction) => (

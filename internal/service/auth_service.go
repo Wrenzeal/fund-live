@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"net/mail"
 	"strings"
+	"sync"
 	"time"
+	"unicode"
 
 	"github.com/RomaticDOG/fund/internal/domain"
 	"golang.org/x/crypto/bcrypt"
@@ -18,7 +20,8 @@ import (
 
 var (
 	ErrInvalidEmail           = errors.New("invalid email")
-	ErrWeakPassword           = errors.New("password must be at least 8 characters")
+	ErrWeakPassword           = errors.New("password must be at least 10 characters, include letters and numbers, and contain no spaces")
+	ErrAuthRateLimited        = errors.New("too many authentication attempts; please try again later")
 	ErrEmailAlreadyRegistered = errors.New("email already registered")
 	ErrInvalidCredentials     = errors.New("invalid credentials")
 	ErrInvalidSession         = errors.New("invalid session")
@@ -30,24 +33,32 @@ var (
 
 // AuthConfig controls session and password authentication behavior.
 type AuthConfig struct {
-	CookieName           string
-	CookieSecure         bool
-	SessionTTL           time.Duration
-	SessionTouchInterval time.Duration
-	BcryptCost           int
-	GoogleClientID       string
-	DefaultQuoteSource   domain.QuoteSource
+	CookieName             string
+	CookieSecure           bool
+	SessionTTL             time.Duration
+	SessionTouchInterval   time.Duration
+	BcryptCost             int
+	GoogleClientID         string
+	DefaultQuoteSource     domain.QuoteSource
+	AuthAttemptWindow      time.Duration
+	MaxPasswordFailures    int
+	MaxRegisterFailures    int
+	MaxGoogleLoginFailures int
 }
 
 // DefaultAuthConfig returns the default authentication configuration.
 func DefaultAuthConfig() AuthConfig {
 	return AuthConfig{
-		CookieName:           "fundlive_session",
-		CookieSecure:         false,
-		SessionTTL:           30 * 24 * time.Hour,
-		SessionTouchInterval: 5 * time.Minute,
-		BcryptCost:           bcrypt.DefaultCost,
-		DefaultQuoteSource:   domain.QuoteSourceSina,
+		CookieName:             "fundlive_session",
+		CookieSecure:           false,
+		SessionTTL:             30 * 24 * time.Hour,
+		SessionTouchInterval:   5 * time.Minute,
+		BcryptCost:             bcrypt.DefaultCost,
+		DefaultQuoteSource:     domain.QuoteSourceSina,
+		AuthAttemptWindow:      15 * time.Minute,
+		MaxPasswordFailures:    5,
+		MaxRegisterFailures:    8,
+		MaxGoogleLoginFailures: 10,
 	}
 }
 
@@ -58,6 +69,7 @@ type AuthService struct {
 	googleVerifier GoogleIDTokenVerifier
 	config         AuthConfig
 	now            func() time.Time
+	rateLimiter    *authAttemptLimiter
 }
 
 // NewAuthService creates a new AuthService.
@@ -66,19 +78,32 @@ func NewAuthService(
 	sessionRepo domain.UserSessionRepository,
 	config AuthConfig,
 ) *AuthService {
+	defaults := DefaultAuthConfig()
 	if config.CookieName == "" {
-		config.CookieName = DefaultAuthConfig().CookieName
+		config.CookieName = defaults.CookieName
 	}
 	if config.SessionTTL <= 0 {
-		config.SessionTTL = DefaultAuthConfig().SessionTTL
+		config.SessionTTL = defaults.SessionTTL
 	}
 	if config.SessionTouchInterval <= 0 {
-		config.SessionTouchInterval = DefaultAuthConfig().SessionTouchInterval
+		config.SessionTouchInterval = defaults.SessionTouchInterval
 	}
 	if config.BcryptCost == 0 {
-		config.BcryptCost = DefaultAuthConfig().BcryptCost
+		config.BcryptCost = defaults.BcryptCost
 	}
-	config.DefaultQuoteSource = domain.ResolveQuoteSource(config.DefaultQuoteSource, DefaultAuthConfig().DefaultQuoteSource)
+	if config.AuthAttemptWindow <= 0 {
+		config.AuthAttemptWindow = defaults.AuthAttemptWindow
+	}
+	if config.MaxPasswordFailures <= 0 {
+		config.MaxPasswordFailures = defaults.MaxPasswordFailures
+	}
+	if config.MaxRegisterFailures <= 0 {
+		config.MaxRegisterFailures = defaults.MaxRegisterFailures
+	}
+	if config.MaxGoogleLoginFailures <= 0 {
+		config.MaxGoogleLoginFailures = defaults.MaxGoogleLoginFailures
+	}
+	config.DefaultQuoteSource = domain.ResolveQuoteSource(config.DefaultQuoteSource, defaults.DefaultQuoteSource)
 
 	return &AuthService{
 		userRepo:       userRepo,
@@ -86,6 +111,7 @@ func NewAuthService(
 		googleVerifier: newGoogleIDTokenVerifier(config.GoogleClientID),
 		config:         config,
 		now:            time.Now,
+		rateLimiter:    newAuthAttemptLimiter(config.AuthAttemptWindow),
 	}
 }
 
@@ -93,12 +119,21 @@ func NewAuthService(
 func (s *AuthService) RegisterWithPassword(ctx context.Context, input domain.PasswordRegistrationInput, meta domain.SessionMetadata) (*domain.AuthSessionResult, error) {
 	email, err := normalizeEmail(input.Email)
 	if err != nil {
+		if rateErr := s.checkRateLimit(authAttemptKindRegister, meta, ""); rateErr != nil {
+			return nil, rateErr
+		}
+		s.recordAuthFailure(authAttemptKindRegister, meta, "")
 		return nil, err
 	}
 
-	password := strings.TrimSpace(input.Password)
-	if len(password) < 8 {
-		return nil, ErrWeakPassword
+	if err := s.checkRateLimit(authAttemptKindRegister, meta, email); err != nil {
+		return nil, err
+	}
+
+	password := input.Password
+	if err := validatePasswordStrength(password); err != nil {
+		s.recordAuthFailure(authAttemptKindRegister, meta, email)
+		return nil, err
 	}
 
 	existing, err := s.userRepo.GetUserByEmail(ctx, email)
@@ -106,6 +141,7 @@ func (s *AuthService) RegisterWithPassword(ctx context.Context, input domain.Pas
 		return nil, err
 	}
 	if existing != nil {
+		s.recordAuthFailure(authAttemptKindRegister, meta, email)
 		return nil, ErrEmailAlreadyRegistered
 	}
 
@@ -132,6 +168,7 @@ func (s *AuthService) RegisterWithPassword(ctx context.Context, input domain.Pas
 		return nil, err
 	}
 
+	s.clearAuthFailures(authAttemptKindRegister, meta, email)
 	return s.createSession(ctx, user, meta)
 }
 
@@ -139,6 +176,13 @@ func (s *AuthService) RegisterWithPassword(ctx context.Context, input domain.Pas
 func (s *AuthService) LoginWithPassword(ctx context.Context, input domain.PasswordLoginInput, meta domain.SessionMetadata) (*domain.AuthSessionResult, error) {
 	email, err := normalizeEmail(input.Email)
 	if err != nil {
+		if rateErr := s.checkRateLimit(authAttemptKindPassword, meta, ""); rateErr != nil {
+			return nil, rateErr
+		}
+		s.recordAuthFailure(authAttemptKindPassword, meta, "")
+		return nil, ErrInvalidCredentials
+	}
+	if err := s.checkRateLimit(authAttemptKindPassword, meta, email); err != nil {
 		return nil, err
 	}
 
@@ -147,10 +191,12 @@ func (s *AuthService) LoginWithPassword(ctx context.Context, input domain.Passwo
 		return nil, err
 	}
 	if user == nil || user.PasswordHash == "" {
+		s.recordAuthFailure(authAttemptKindPassword, meta, email)
 		return nil, ErrInvalidCredentials
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)); err != nil {
+		s.recordAuthFailure(authAttemptKindPassword, meta, email)
 		return nil, ErrInvalidCredentials
 	}
 
@@ -161,6 +207,7 @@ func (s *AuthService) LoginWithPassword(ctx context.Context, input domain.Passwo
 		return nil, err
 	}
 
+	s.clearAuthFailures(authAttemptKindPassword, meta, email)
 	return s.createSession(ctx, user, meta)
 }
 
@@ -169,15 +216,22 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, input domain.GoogleLo
 	if s.googleVerifier == nil {
 		return nil, ErrGoogleLoginDisabled
 	}
+	if err := s.checkRateLimit(authAttemptKindGoogle, meta, ""); err != nil {
+		return nil, err
+	}
 
 	claims, err := s.googleVerifier.VerifyIDToken(ctx, input.IDToken)
 	if err != nil {
+		s.recordAuthFailure(authAttemptKindGoogle, meta, "")
 		return nil, err
 	}
 	if !claims.EmailVerified {
+		s.recordAuthFailure(authAttemptKindGoogle, meta, "")
 		return nil, ErrGoogleEmailNotVerified
 	}
-	if claims.Email == "" {
+	email, err := normalizeEmail(claims.Email)
+	if err != nil {
+		s.recordAuthFailure(authAttemptKindGoogle, meta, "")
 		return nil, ErrInvalidGoogleToken
 	}
 
@@ -187,7 +241,7 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, input domain.GoogleLo
 	}
 
 	if user == nil {
-		user, err = s.userRepo.GetUserByEmail(ctx, claims.Email)
+		user, err = s.userRepo.GetUserByEmail(ctx, email)
 		if err != nil {
 			return nil, err
 		}
@@ -197,8 +251,8 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, input domain.GoogleLo
 	if user == nil {
 		user = &domain.User{
 			ID:                   generateID("usr"),
-			Email:                claims.Email,
-			DisplayName:          sanitizeDisplayName(claims.Name, claims.Email),
+			Email:                email,
+			DisplayName:          sanitizeDisplayName(claims.Name, email),
 			AvatarURL:            strings.TrimSpace(claims.Picture),
 			PreferredQuoteSource: s.config.DefaultQuoteSource,
 			GoogleSub:            claims.Subject,
@@ -209,8 +263,8 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, input domain.GoogleLo
 			UpdatedAt:            now,
 		}
 	} else {
-		user.Email = claims.Email
-		user.DisplayName = sanitizeDisplayName(firstNonEmpty(claims.Name, user.DisplayName), claims.Email)
+		user.Email = email
+		user.DisplayName = sanitizeDisplayName(firstNonEmpty(claims.Name, user.DisplayName), email)
 		if claims.Picture != "" {
 			user.AvatarURL = claims.Picture
 		}
@@ -231,6 +285,7 @@ func (s *AuthService) LoginWithGoogle(ctx context.Context, input domain.GoogleLo
 		return nil, err
 	}
 
+	s.clearAuthFailures(authAttemptKindGoogle, meta, "")
 	return s.createSession(ctx, user, meta)
 }
 
@@ -313,6 +368,180 @@ func (s *AuthService) createSession(ctx context.Context, user *domain.User, meta
 		SessionToken: sessionToken,
 		ExpiresAt:    session.ExpiresAt,
 	}, nil
+}
+
+func (s *AuthService) checkRateLimit(kind authAttemptKind, meta domain.SessionMetadata, email string) error {
+	if s.rateLimiter == nil {
+		return nil
+	}
+	if s.rateLimiter.isLimited(s.authAttemptKey(kind, meta, email), s.maxAttemptsFor(kind), s.now()) {
+		return ErrAuthRateLimited
+	}
+	return nil
+}
+
+func (s *AuthService) recordAuthFailure(kind authAttemptKind, meta domain.SessionMetadata, email string) {
+	if s.rateLimiter == nil {
+		return
+	}
+	s.rateLimiter.recordFailure(s.authAttemptKey(kind, meta, email), s.now())
+}
+
+func (s *AuthService) clearAuthFailures(kind authAttemptKind, meta domain.SessionMetadata, email string) {
+	if s.rateLimiter == nil {
+		return
+	}
+	s.rateLimiter.clear(s.authAttemptKey(kind, meta, email))
+}
+
+func (s *AuthService) authAttemptKey(kind authAttemptKind, meta domain.SessionMetadata, email string) string {
+	return string(kind) + "|" + normalizeRateLimitPart(meta.IPAddress) + "|" + normalizeRateLimitPart(email)
+}
+
+func (s *AuthService) maxAttemptsFor(kind authAttemptKind) int {
+	switch kind {
+	case authAttemptKindRegister:
+		return s.config.MaxRegisterFailures
+	case authAttemptKindGoogle:
+		return s.config.MaxGoogleLoginFailures
+	default:
+		return s.config.MaxPasswordFailures
+	}
+}
+
+func normalizeRateLimitPart(raw string) string {
+	part := strings.ToLower(strings.TrimSpace(raw))
+	if part == "" {
+		return "unknown"
+	}
+	return part
+}
+
+func validatePasswordStrength(password string) error {
+	if len([]rune(password)) < 10 {
+		return ErrWeakPassword
+	}
+	lowered := strings.ToLower(password)
+	weakPasswords := map[string]struct{}{
+		"password":    {},
+		"password123": {},
+		"qwerty123":   {},
+		"1234567890":  {},
+		"admin123456": {},
+		"fundlive123": {},
+		"zhang123456": {},
+	}
+	if _, ok := weakPasswords[lowered]; ok {
+		return ErrWeakPassword
+	}
+
+	hasLetter := false
+	hasNumber := false
+	for _, ch := range password {
+		switch {
+		case unicode.IsSpace(ch):
+			return ErrWeakPassword
+		case unicode.IsLetter(ch):
+			hasLetter = true
+		case unicode.IsNumber(ch):
+			hasNumber = true
+		}
+	}
+	if !hasLetter || !hasNumber {
+		return ErrWeakPassword
+	}
+	return nil
+}
+
+type authAttemptKind string
+
+const (
+	authAttemptKindPassword authAttemptKind = "password"
+	authAttemptKindRegister authAttemptKind = "register"
+	authAttemptKindGoogle   authAttemptKind = "google"
+)
+
+type authAttemptLimiter struct {
+	window       time.Duration
+	mu           sync.Mutex
+	attempts     map[string]authAttemptRecord
+	lastPrunedAt time.Time
+}
+
+type authAttemptRecord struct {
+	count       int
+	firstSeenAt time.Time
+}
+
+func newAuthAttemptLimiter(window time.Duration) *authAttemptLimiter {
+	return &authAttemptLimiter{
+		window:   window,
+		attempts: make(map[string]authAttemptRecord),
+	}
+}
+
+func (l *authAttemptLimiter) isLimited(key string, maxAttempts int, now time.Time) bool {
+	if l == nil || maxAttempts <= 0 {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.pruneExpiredLocked(now)
+
+	record, ok := l.attempts[key]
+	if !ok {
+		return false
+	}
+	if now.Sub(record.firstSeenAt) >= l.window {
+		delete(l.attempts, key)
+		return false
+	}
+	return record.count >= maxAttempts
+}
+
+func (l *authAttemptLimiter) recordFailure(key string, now time.Time) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.pruneExpiredLocked(now)
+
+	record, ok := l.attempts[key]
+	if !ok || now.Sub(record.firstSeenAt) >= l.window {
+		l.attempts[key] = authAttemptRecord{count: 1, firstSeenAt: now}
+		return
+	}
+	record.count++
+	l.attempts[key] = record
+}
+
+func (l *authAttemptLimiter) clear(key string) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.attempts, key)
+}
+
+func (l *authAttemptLimiter) pruneExpiredLocked(now time.Time) {
+	if l.window <= 0 {
+		return
+	}
+	pruneInterval := l.window / 2
+	if pruneInterval < time.Minute {
+		pruneInterval = time.Minute
+	}
+	if !l.lastPrunedAt.IsZero() && now.Sub(l.lastPrunedAt) < pruneInterval {
+		return
+	}
+	for key, record := range l.attempts {
+		if now.Sub(record.firstSeenAt) >= l.window {
+			delete(l.attempts, key)
+		}
+	}
+	l.lastPrunedAt = now
 }
 
 func normalizeEmail(raw string) (string, error) {

@@ -33,6 +33,10 @@ auth:
   cookie_secure: false
   session_ttl_hours: 720
   google_client_id: ""
+  auth_attempt_window_minutes: 15
+  max_password_failures: 5
+  max_register_failures: 8
+  max_google_login_failures: 10
 
 payment:
   wechat_pay:

@@ -138,7 +138,7 @@ export default function HoldingTransactionDetailPage() {
 
   if (isUserLoading || isLoading) {
     return (
-      <AccountAreaShell title="流水详情" description="查看单条持仓流水的完整字段、影响链和回滚预览。">
+      <AccountAreaShell title="流水详情" description="查看单条持仓流水、快照变化和回滚预览。">
         <div className="rounded-[36px] border border-[var(--card-border)] p-10 text-center glass">
           <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
           <div className="mt-4 text-sm text-theme-secondary">正在读取流水详情...</div>
@@ -162,7 +162,7 @@ export default function HoldingTransactionDetailPage() {
 
   if (!detail) {
     return (
-      <AccountAreaShell title="流水详情" description="查看单条持仓流水的完整字段、影响链和回滚预览。">
+      <AccountAreaShell title="流水详情" description="查看单条持仓流水、快照变化和回滚预览。">
         <div className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6 text-rose-100">
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -185,7 +185,7 @@ export default function HoldingTransactionDetailPage() {
   const metadataEntries = Object.entries(transaction.metadata ?? {})
 
   return (
-    <AccountAreaShell title="流水详情" description="单条流水完整字段、metadata、当前快照和后续影响链。">
+    <AccountAreaShell title="流水详情" description="查看单条持仓流水、快照变化和回滚预览。">
       <ScrollRevealStack className="space-y-6">
         <Link href="/holdings" className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition hover:border-cyan-300/35 hover:text-theme-primary">
           <ArrowLeft className="h-4 w-4" /> 返回持仓页
@@ -207,7 +207,7 @@ export default function HoldingTransactionDetailPage() {
               </div>
               <h1 className="mt-4 truncate text-3xl font-black text-theme-primary">{transaction.fund?.name || transaction.fund_id}</h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-theme-secondary">
-                {transaction.note || '这条流水没有备注。详情页只做追溯、对账和回滚影响预览，不会自动修改当前持仓快照。'}
+                {transaction.note || '这条流水没有备注。你可以在这里核对明细和回滚影响。'}
               </p>
             </div>
             <div className="rounded-[26px] border border-cyan-300/18 bg-cyan-400/10 px-5 py-4 text-right">
@@ -229,7 +229,7 @@ export default function HoldingTransactionDetailPage() {
           <div className="rounded-[30px] border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
             <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-amber-100">
               <Clock3 className="h-3.5 w-3.5" />
-              影响链
+              影响明细
             </div>
             <div className="mt-4 space-y-3">
               {(detail.impact_chain ?? []).map((item, index) => (
@@ -285,7 +285,7 @@ export default function HoldingTransactionDetailPage() {
           <div className="rounded-[30px] border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
             <div className="inline-flex items-center gap-2 rounded-full border border-violet-400/25 bg-violet-400/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-violet-100">
               <FileText className="h-3.5 w-3.5" />
-              Metadata
+              附加信息
             </div>
             <div className="mt-4 space-y-2">
               {metadataEntries.length === 0 ? (
@@ -304,7 +304,7 @@ export default function HoldingTransactionDetailPage() {
           <div className="rounded-[30px] border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-cyan-100">
               <History className="h-3.5 w-3.5" />
-              后续流水
+              之后流水
             </div>
             <div className="mt-4 space-y-3">
               {(detail.subsequent_transactions ?? []).length === 0 ? (

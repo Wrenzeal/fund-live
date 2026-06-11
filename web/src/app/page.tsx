@@ -14,11 +14,12 @@ import { IntradayChart } from '@/components/intraday-chart'
 import { HoldingsTable } from '@/components/holdings-table'
 import { TargetETFHoldingsCard } from '@/components/target-etf-holdings-card'
 import { ThemeSwitcher } from '@/components/theme-switcher'
+import { BrandMark } from '@/components/brand-mark'
 import { MarketStatusIndicator } from '@/components/market-status-indicator'
 import { FundLoadingIndicator } from '@/components/loading-indicator'
 import { UserAccountMenu } from '@/components/user-account-menu'
 import { ScrollReveal, ScrollRevealStack } from '@/components/scroll-reveal'
-import { Activity, AlertTriangle, BarChart3, TrendingUp, Clock, RefreshCw, X } from 'lucide-react'
+import { AlertTriangle, BarChart3, TrendingUp, Clock, RefreshCw, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // 默认基金 ID
@@ -236,18 +237,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-4">
             {/* Logo */}
-            <Link href="/" className="flex items-center gap-3">
-              <div className="relative">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20">
-                  <Activity className="h-6 w-6" />
-                </div>
-                <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 opacity-30 blur" />
-              </div>
-              <div>
-                <div className="text-lg font-bold gradient-text">FundLive</div>
-                <div className="text-xs text-theme-muted">实时基金估值</div>
-              </div>
-            </Link>
+            <BrandMark subtitle="FundLive - 实时基金估值" />
 
             {/* Search */}
             <div className="flex-1 max-w-md hidden md:block">
@@ -597,7 +587,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
         <div className="container mx-auto px-4 py-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-theme-muted">
             <div>
-              <span className="gradient-text font-semibold">FundLive</span>
+              <span className="gradient-text font-semibold">涨了多少</span>
               {' '}© 2024 - 2026. 实时基金估值系统
             </div>
             <div className="flex items-center gap-4">

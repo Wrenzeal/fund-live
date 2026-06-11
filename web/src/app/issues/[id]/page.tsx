@@ -94,7 +94,7 @@ export default function IssueDetailPage() {
     return (
       <SiteShell
         title="想法详情"
-        description="查看这条公开想法的完整内容和当前处理状态。"
+        description="查看这条想法的内容和处理进度。"
         eyebrowLabel="IDEA DETAIL"
         EyebrowIcon={WandSparkles}
       >
@@ -110,7 +110,7 @@ export default function IssueDetailPage() {
     return (
       <SiteShell
         title="想法详情"
-        description="查看这条公开想法的完整内容和当前处理状态。"
+        description="查看这条想法的内容和处理进度。"
         eyebrowLabel="IDEA DETAIL"
         EyebrowIcon={WandSparkles}
       >
@@ -131,7 +131,7 @@ export default function IssueDetailPage() {
   return (
     <SiteShell
       title="想法详情"
-      description="查看这条公开想法的完整内容和当前处理状态。"
+      description="查看这条想法的内容和处理进度。"
       eyebrowLabel="IDEA DETAIL"
       EyebrowIcon={WandSparkles}
     >
@@ -268,7 +268,7 @@ export default function IssueDetailPage() {
             </div>
           ) : (
             <div className="rounded-[24px] border border-dashed border-[var(--card-border)] px-5 py-5 text-sm leading-7 text-theme-secondary">
-              管理员暂未公开回复这条想法，当前只同步了处理状态。
+              这条想法暂未收到公开回复。
             </div>
           )}
         </section>
@@ -278,7 +278,7 @@ export default function IssueDetailPage() {
             <div className="flex items-start gap-3 text-amber-100">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
               <div className="text-sm leading-6">
-                当前页面对所有用户公开展示，只有管理员账号可以修改处理状态并发布官方回复。
+                这条想法会公开展示；处理状态和官方回复由管理员维护。
               </div>
             </div>
           </section>

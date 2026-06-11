@@ -303,7 +303,7 @@ function AnalysisHeroVisual({
               {analysis.summary}
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-theme-secondary">
-              看板优先展示“结论 → 主证据 → 风险限制 → 事件链路”。规则明细仍保留在下方，但不再让用户先面对完整判定列表。
+              看板优先展示结论、主证据、风险限制和事件脉络，详细评分放在下方展开查看。
             </p>
 
             <div className="mt-5 grid items-stretch gap-3 sm:grid-cols-2">
@@ -510,11 +510,11 @@ function MethodCompactCard({ analysis }: { analysis?: FundAnalysis }) {
       />
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm leading-6 text-theme-secondary">
-          量化看板以规则评分为主：先统一估值、持仓、分类与事件快照，再输出建议分布、模块分与证据链。AI 解释层只增强可读性，不改写评分或风险等级。
+          量化看板会统一估值、持仓、分类与事件快照，再输出观察分布、模块分与证据链；解释说明不会改写评分或风险等级。
         </div>
         <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
           {mergedLimits.length === 0 ? (
-            <EmptyInline text="当前没有额外可信度扣分或解释层限制。" />
+            <EmptyInline text="当前没有额外可信度扣分或限制说明。" />
           ) : (
             <div className="space-y-2">
               {mergedLimits.map((item, index) => (
@@ -790,8 +790,8 @@ function EvidenceFocusGrid({ analysis }: { analysis?: FundAnalysis }) {
       <div className="glass flex h-full min-h-[18rem] flex-col rounded-3xl p-5 md:p-6">
         <SectionHeading
           icon={<Sparkles className="h-4 w-4 text-fuchsia-200" />}
-          title="AI解释层"
-          description="只做解释和归因，不改规则评分。"
+          title="解释说明"
+          description="补充结论归因，不改评分。"
         />
         {ai ? (
           <div className="mt-4 flex flex-1 flex-col justify-center space-y-3">
@@ -810,7 +810,7 @@ function EvidenceFocusGrid({ analysis }: { analysis?: FundAnalysis }) {
           </div>
         ) : (
           <div className="flex flex-1 items-center">
-            <EmptyPanel text="当前没有 AI 解释层输出；规则评分与证据仍可独立查看。" />
+            <EmptyPanel text="当前没有补充解释；评分与证据仍可查看。" />
           </div>
         )}
       </div>

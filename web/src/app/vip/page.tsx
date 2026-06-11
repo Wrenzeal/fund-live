@@ -15,12 +15,12 @@ const valueCards = [
   },
   {
     title: '组合分析',
-    description: '面向全部持仓组合输出结构化报告、风险等级和操作建议，帮助你避免只盯单一基金。',
+    description: '从全部持仓出发，整理组合报告、风险等级和观察要点。',
     icon: Wallet,
   },
   {
     title: '真实引用',
-    description: '报告保留来源列表与引用摘要，为后续真实版接入资讯源和审计链路预留展示结构。',
+    description: '报告展示来源列表与引用摘要，方便核对信息依据。',
     icon: BookOpenText,
   },
 ]
@@ -28,7 +28,7 @@ const valueCards = [
 const workflowSteps = [
   '选择自选分组或持仓组合作为分析对象',
   '提交异步分析任务，系统开始整理宏观、政策、财报与市场信息',
-  '在任务中心查看进度，完成后进入报告详情页阅读结论与建议',
+  '在任务中心查看进度，完成后进入报告详情页阅读结论',
 ]
 
 export default function VIPPage() {
@@ -36,8 +36,8 @@ export default function VIPPage() {
 
   return (
     <AccountAreaShell
-      title="VIP 智能投研"
-      description="围绕自选分组与持仓组合生成结构化研究报告，帮助你从板块、政策、财报和市场走势四个维度理解当下环境。"
+      title="VIP 投研报告"
+      description="围绕自选分组与持仓组合整理报告，帮助你从板块、政策、财报和市场走势四个维度理解当下环境。"
     >
       <ScrollRevealStack className="space-y-8">
         <section className="vip-hero-panel overflow-hidden rounded-[40px] border p-8 lg:p-10">
@@ -47,7 +47,7 @@ export default function VIPPage() {
             <div className="space-y-6">
               <div className="vip-proof-chip inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs tracking-[0.28em]">
                 <Crown className="h-3.5 w-3.5" />
-                VIP INTELLIGENCE
+                VIP REPORT
               </div>
 
               <div className="space-y-4">
@@ -56,7 +56,7 @@ export default function VIPPage() {
                   <span className="block vip-premium-gradient">升级成看结论</span>
                 </h2>
                 <p className="max-w-2xl text-base leading-7 text-theme-secondary">
-                  FundLive VIP 会把自选分组和持仓组合转换成结构化研究报告。你不用再手动拼接新闻、政策、财报和板块走势，重点只看真正影响你当下决策的内容。
+                  涨了多少 VIP 会围绕自选分组和持仓组合整理研究报告，把新闻、政策、财报和板块走势放在同一页里查看。
                 </p>
               </div>
 
@@ -88,7 +88,7 @@ export default function VIPPage() {
                   className="vip-secondary-cta inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-medium"
                 >
                   <FileStack className="h-4 w-4" />
-                  查看示例报告
+                  查看报告样例
                 </Link>
               </div>
             </div>
@@ -133,7 +133,7 @@ export default function VIPPage() {
                 <div className="mt-3 space-y-3 text-sm text-theme-secondary">
                   <div>每交易日 2 次板块分析</div>
                   <div>每交易日 2 次组合分析</div>
-                  <div>异步生成完整报告</div>
+                  <div>生成完整报告</div>
                   <div>带风险提示和引用来源</div>
                 </div>
                 {membership.isVip && (
@@ -164,7 +164,7 @@ export default function VIPPage() {
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <div className="vip-preview-shell rounded-[32px] border p-6">
             <div className="mb-5">
-              <div className="text-xs tracking-[0.22em] text-theme-muted">报告示例</div>
+              <div className="text-xs tracking-[0.22em] text-theme-muted">报告样例</div>
               <div className="mt-2 text-2xl font-bold text-theme-primary">你将看到怎样的报告</div>
             </div>
 
@@ -178,9 +178,9 @@ export default function VIPPage() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="vip-value-card rounded-[24px] border p-5">
-                  <div className="text-sm font-semibold text-theme-primary">操作建议</div>
+                  <div className="text-sm font-semibold text-theme-primary">观察要点</div>
                   <div className="mt-3 text-3xl font-black text-up">低吸</div>
-                  <div className="mt-2 text-sm text-theme-secondary">建议仓位区间：5%-10%</div>
+                  <div className="mt-2 text-sm text-theme-secondary">参考区间：5%-10%</div>
                 </div>
                 <div className="vip-value-card rounded-[24px] border p-5">
                   <div className="text-sm font-semibold text-theme-primary">风险等级</div>
@@ -245,7 +245,7 @@ export default function VIPPage() {
           <div className="mt-3 grid gap-4 md:grid-cols-3">
             {[
               '有自选分组，想优先看主导板块节奏的用户',
-              '有持仓组合，想获得结构化结论和操作提示的用户',
+              '有持仓组合，想定期查看组合报告的用户',
               '不想每天自己拼新闻、财报和市场数据的用户',
             ].map((item) => (
               <div key={item} className="rounded-[24px] border border-[var(--card-border)] bg-[var(--input-bg)]/70 px-4 py-4 text-sm leading-6 text-theme-secondary">

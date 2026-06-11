@@ -408,7 +408,7 @@ export function FundSectorCard({
               value={formState.note}
               onChange={(event) => setFormState((current) => ({ ...current, note: event.target.value }))}
               rows={2}
-              placeholder="记录为什么需要人工校正，便于后续复核。"
+              placeholder="记录人工校正原因，便于日后复核。"
               className="w-full resize-none rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-theme-primary outline-none transition focus:border-cyan-400/60"
             />
           </label>

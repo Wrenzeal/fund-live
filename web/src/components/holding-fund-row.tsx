@@ -952,7 +952,7 @@ export function HoldingFundRow({
           {form.sourcePlatform && (
             <div className="mt-3 rounded-[20px] border border-cyan-400/15 bg-cyan-400/8 px-4 py-3 text-xs leading-5 text-theme-muted">
               {HOLDING_SOURCE_OPTIONS.find((option) => option.value === form.sourcePlatform)?.description}
-              ；来源会写入当前持仓和本次校正流水，方便后续筛选与对账。
+              ；来源会写入持仓和校正流水，便于筛选与对账。
             </div>
           )}
 
@@ -1078,7 +1078,7 @@ export function HoldingFundRow({
             />
             <span>
               <span className="block font-semibold text-theme-primary">红利再投</span>
-              <span className="mt-1 block text-xs leading-5 text-theme-muted">开启后必须填写新增份额，系统会增加当前持仓份额；关闭时只记录现金分红流水。</span>
+              <span className="mt-1 block text-xs leading-5 text-theme-muted">开启后必须填写新增份额；保存后会增加持仓份额。关闭时只记录现金分红流水。</span>
             </span>
           </label>
 

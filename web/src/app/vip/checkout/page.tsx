@@ -94,7 +94,7 @@ export default function VIPCheckoutPage() {
   return (
     <AccountAreaShell
       title="开通 VIP"
-      description="支持微信支付下单与支付状态查询；若支付配置尚未补齐，页面会明确提示缺失项。"
+      description="选择开通周期并完成微信支付，支付状态会在页面内更新。"
     >
       <ScrollRevealStack className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="vip-checkout-shell rounded-[36px] border p-6">
@@ -145,7 +145,7 @@ export default function VIPCheckoutPage() {
           </div>
 
           <div className="vip-urgency-banner mt-6 rounded-[28px] border p-5 text-sm leading-6 text-theme-secondary">
-            当前页面已接入微信支付 Native 下单与订单状态查询。若你还没有补齐商户配置，页面会直接提示“支付未配置”，不会再静默回退。
+            当前支持微信支付下单与订单状态查询；若暂未开通支付，页面会直接提示原因。
           </div>
         </section>
 
@@ -234,7 +234,7 @@ export default function VIPCheckoutPage() {
             ) : membership.isVip ? (
               <div className="mt-6 space-y-3">
                 <div className="rounded-[24px] border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-50">
-                  当前账号已处于 VIP 状态。你可以直接前往任务中心，或重置当前状态后重新体验开通过程。
+                  当前账号已处于 VIP 状态。你可以直接前往任务中心，或重新体验开通流程后重新体验开通过程。
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <Link
@@ -248,7 +248,7 @@ export default function VIPCheckoutPage() {
                     onClick={() => void resetPreview()}
                     className="vip-secondary-cta rounded-2xl border px-5 py-3 text-sm font-medium"
                   >
-                    重置当前状态
+                    重新体验开通流程
                   </button>
                 </div>
               </div>
@@ -279,7 +279,7 @@ export default function VIPCheckoutPage() {
           <div className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6">
             <div className="flex items-center gap-3 text-theme-primary">
               <ShieldAlert className="h-5 w-5" />
-              <div className="text-lg font-bold">风险与服务提示</div>
+              <div className="text-lg font-bold">服务说明</div>
             </div>
             <p className="mt-4 text-sm leading-6 text-theme-secondary">{plan.disclaimer}</p>
           </div>

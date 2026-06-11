@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronDown, FileSearch, FileStack, FolderPlus, GripVertical, Layers3, LoaderCircle, Palette, PencilLine, Plus, Sparkles, Trash2, X } from 'lucide-react'
@@ -16,6 +17,7 @@ import { VIP_SAMPLE_REPORT_IDS, type VIPTaskType } from '@/mocks/vip'
 import { cn } from '@/lib/utils'
 
 type GroupViewMode = 'all' | 'focused'
+type FloatingMenuRect = { left: number; top: number; width: number; maxHeight: number }
 
 const GROUP_ACCENT_OPTIONS = [
   { value: 'cyan', label: '清爽蓝', shell: 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100', dot: 'bg-cyan-300' },
@@ -48,9 +50,15 @@ export default function WatchlistPage() {
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(new Set())
   const [animatingNavGroupId, setAnimatingNavGroupId] = useState<string | null>(null)
   const [animatingCollapseGroupId, setAnimatingCollapseGroupId] = useState<string | null>(null)
+  const [animatingEditGroupId, setAnimatingEditGroupId] = useState<string | null>(null)
   const [animatingViewMode, setAnimatingViewMode] = useState<GroupViewMode | null>(null)
   const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false)
+  const [groupMenuRect, setGroupMenuRect] = useState<FloatingMenuRect | null>(null)
+  const groupMenuButtonRef = useRef<HTMLButtonElement | null>(null)
   const [fundQuery, setFundQuery] = useState('')
+  const [isFundSearchMenuOpen, setIsFundSearchMenuOpen] = useState(false)
+  const [fundSearchMenuRect, setFundSearchMenuRect] = useState<FloatingMenuRect | null>(null)
+  const fundSearchInputRef = useRef<HTMLInputElement | null>(null)
   const [isCreatingGroup, setIsCreatingGroup] = useState(false)
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
   const [editingGroupName, setEditingGroupName] = useState('')
@@ -67,8 +75,11 @@ export default function WatchlistPage() {
   const groupSectionRefs = useRef<Record<string, HTMLElement | null>>({})
   const navAnimationTimerRef = useRef<number | null>(null)
   const collapseAnimationTimerRef = useRef<number | null>(null)
+  const editAnimationTimerRef = useRef<number | null>(null)
   const viewModeAnimationTimerRef = useRef<number | null>(null)
-  const { results } = useFundSearch(fundQuery)
+  const { results, isLoading: isFundSearchLoading } = useFundSearch(fundQuery)
+  const visibleFundResults = useMemo(() => results.slice(0, 5), [results])
+  const shouldShowFundSearchMenu = isFundSearchMenuOpen && fundQuery.trim().length >= 2
   const watchlistFundIDs = useMemo(
     () => Array.from(new Set(watchlistGroups.flatMap((group) => group.funds.map((item) => item.fund_id)).filter(Boolean))),
     [watchlistGroups]
@@ -92,6 +103,82 @@ export default function WatchlistPage() {
 
     return ordered
   }, [localGroupOrderIds, watchlistGroups])
+
+  useEffect(() => {
+    if (!isGroupMenuOpen) {
+      setGroupMenuRect(null)
+      return
+    }
+
+    const updateGroupMenuRect = () => {
+      const trigger = groupMenuButtonRef.current
+      if (!trigger) {
+        setGroupMenuRect(null)
+        return
+      }
+
+      const rect = trigger.getBoundingClientRect()
+      const viewportPadding = 16
+      const menuGap = 12
+      const availableWidth = Math.max(240, window.innerWidth - viewportPadding * 2)
+      const width = Math.min(rect.width, availableWidth)
+      const left = Math.min(
+        Math.max(rect.left, viewportPadding),
+        Math.max(viewportPadding, window.innerWidth - width - viewportPadding)
+      )
+      const top = Math.min(rect.bottom + menuGap, window.innerHeight - viewportPadding)
+      const maxHeight = Math.max(160, Math.min(288, window.innerHeight - top - viewportPadding))
+
+      setGroupMenuRect({ left, top, width, maxHeight })
+    }
+
+    updateGroupMenuRect()
+    window.addEventListener('resize', updateGroupMenuRect)
+    window.addEventListener('scroll', updateGroupMenuRect, true)
+
+    return () => {
+      window.removeEventListener('resize', updateGroupMenuRect)
+      window.removeEventListener('scroll', updateGroupMenuRect, true)
+    }
+  }, [isGroupMenuOpen])
+
+  useEffect(() => {
+    if (!shouldShowFundSearchMenu) {
+      setFundSearchMenuRect(null)
+      return
+    }
+
+    const updateFundSearchMenuRect = () => {
+      const trigger = fundSearchInputRef.current
+      if (!trigger) {
+        setFundSearchMenuRect(null)
+        return
+      }
+
+      const rect = trigger.getBoundingClientRect()
+      const viewportPadding = 16
+      const menuGap = 10
+      const availableWidth = Math.max(240, window.innerWidth - viewportPadding * 2)
+      const width = Math.min(rect.width, availableWidth)
+      const left = Math.min(
+        Math.max(rect.left, viewportPadding),
+        Math.max(viewportPadding, window.innerWidth - width - viewportPadding)
+      )
+      const top = Math.min(rect.bottom + menuGap, window.innerHeight - viewportPadding)
+      const maxHeight = Math.max(160, Math.min(320, window.innerHeight - top - viewportPadding))
+
+      setFundSearchMenuRect({ left, top, width, maxHeight })
+    }
+
+    updateFundSearchMenuRect()
+    window.addEventListener('resize', updateFundSearchMenuRect)
+    window.addEventListener('scroll', updateFundSearchMenuRect, true)
+
+    return () => {
+      window.removeEventListener('resize', updateFundSearchMenuRect)
+      window.removeEventListener('scroll', updateFundSearchMenuRect, true)
+    }
+  }, [shouldShowFundSearchMenu])
 
   const selectedGroup = useMemo(
     () => orderedWatchlistGroups.find((group) => group.id === selectedGroupID) ?? null,
@@ -181,6 +268,9 @@ export default function WatchlistPage() {
       if (collapseAnimationTimerRef.current !== null) {
         window.clearTimeout(collapseAnimationTimerRef.current)
       }
+      if (editAnimationTimerRef.current !== null) {
+        window.clearTimeout(editAnimationTimerRef.current)
+      }
       if (viewModeAnimationTimerRef.current !== null) {
         window.clearTimeout(viewModeAnimationTimerRef.current)
       }
@@ -208,6 +298,17 @@ export default function WatchlistPage() {
     collapseAnimationTimerRef.current = window.setTimeout(() => {
       setAnimatingCollapseGroupId((current) => current === groupID ? null : current)
       collapseAnimationTimerRef.current = null
+    }, 560)
+  }
+
+  const triggerEditAnimation = (groupID: string) => {
+    if (editAnimationTimerRef.current !== null) {
+      window.clearTimeout(editAnimationTimerRef.current)
+    }
+    setAnimatingEditGroupId(groupID)
+    editAnimationTimerRef.current = window.setTimeout(() => {
+      setAnimatingEditGroupId((current) => current === groupID ? null : current)
+      editAnimationTimerRef.current = null
     }, 560)
   }
 
@@ -330,7 +431,10 @@ export default function WatchlistPage() {
   }
 
   const openGroupEditor = (group: WatchlistGroup) => {
+    triggerEditAnimation(group.id)
     setWatchlistFeedback(null)
+    setIsGroupMenuOpen(false)
+    setIsFundSearchMenuOpen(false)
     setEditingGroupId(group.id)
     setEditingGroupName(group.name)
     setEditingGroupDescription(group.description || '')
@@ -588,8 +692,9 @@ export default function WatchlistPage() {
             </div>
 
             <div className="space-y-4">
-              <div className="relative">
+              <div className={cn('relative', isGroupMenuOpen && 'z-[80]')}>
                 <button
+                  ref={groupMenuButtonRef}
                   type="button"
                   onClick={() => {
                     if (watchlistGroups.length === 0) return
@@ -597,7 +702,7 @@ export default function WatchlistPage() {
                   }}
                   disabled={watchlistGroups.length === 0}
                   className={cn(
-                    'watchlist-select-shell group relative block w-full overflow-hidden rounded-[24px] border border-[var(--input-border)] bg-[var(--input-bg)]/90 px-4 py-3 text-left transition-all duration-200',
+                    'watchlist-select-shell group relative block w-full overflow-hidden rounded-[24px] border border-[var(--input-border)] px-4 py-3 text-left transition-all duration-200',
                     'hover:border-cyan-400/35 hover:bg-[var(--input-bg)] focus:outline-none focus-visible:border-cyan-400/55 focus-visible:bg-[var(--input-bg)] focus-visible:shadow-[0_14px_30px_rgba(34,211,238,0.12)]',
                     'disabled:cursor-not-allowed disabled:opacity-70',
                     isGroupMenuOpen && 'border-cyan-400/55 bg-[var(--input-bg)] shadow-[0_14px_30px_rgba(34,211,238,0.12)]'
@@ -629,11 +734,16 @@ export default function WatchlistPage() {
                   </div>
                 </button>
 
-                {isGroupMenuOpen && (
+                {isGroupMenuOpen && groupMenuRect && typeof document !== 'undefined' && createPortal(
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => setIsGroupMenuOpen(false)} />
-                    <div className="absolute left-0 right-0 top-full z-50 mt-3 overflow-hidden rounded-[24px] border border-cyan-400/22 bg-[var(--card-bg)]/98 p-2 shadow-[0_24px_60px_rgba(2,8,23,0.42)] backdrop-blur-xl">
-                      <div className="max-h-72 space-y-1 overflow-y-auto">
+                    <div className="fixed inset-0 z-[80] cursor-default" onClick={() => setIsGroupMenuOpen(false)} />
+                    <div
+                      className="watchlist-select-dropdown pointer-events-auto fixed z-[90] overflow-hidden rounded-[24px] border border-cyan-400/22 p-2 shadow-[0_24px_60px_rgba(2,8,23,0.42)]"
+                      style={{ left: groupMenuRect.left, top: groupMenuRect.top, width: groupMenuRect.width }}
+                      role="listbox"
+                      aria-label="目标分组"
+                    >
+                      <div className="space-y-1 overflow-y-auto" style={{ maxHeight: groupMenuRect.maxHeight }}>
                         <button
                           type="button"
                           onClick={() => {
@@ -641,7 +751,7 @@ export default function WatchlistPage() {
                             setIsGroupMenuOpen(false)
                           }}
                           className={cn(
-                            'flex w-full items-start justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors',
+                            'relative z-10 flex w-full items-start justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors',
                             !selectedGroup
                               ? 'bg-cyan-500/14 text-cyan-100'
                               : 'text-theme-secondary hover:bg-[var(--input-bg)] hover:text-theme-primary'
@@ -667,7 +777,7 @@ export default function WatchlistPage() {
                                 setIsGroupMenuOpen(false)
                               }}
                               className={cn(
-                                'flex w-full items-start justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors',
+                                'relative z-10 flex w-full items-start justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors',
                                 active
                                   ? 'bg-cyan-500/14 text-cyan-100'
                                   : 'text-theme-secondary hover:bg-[var(--input-bg)] hover:text-theme-primary'
@@ -687,37 +797,86 @@ export default function WatchlistPage() {
                         })}
                       </div>
                     </div>
-                  </>
+                  </>,
+                  document.body
                 )}
               </div>
 
-              <input
-                value={fundQuery}
-                onChange={(event) => setFundQuery(event.target.value)}
-                placeholder="搜索基金代码或名称"
-                className="auth-input w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-theme-primary outline-none placeholder:text-theme-muted"
-              />
+              <div className="relative">
+                <input
+                  ref={fundSearchInputRef}
+                  value={fundQuery}
+                  onChange={(event) => {
+                    setFundQuery(event.target.value)
+                    setIsFundSearchMenuOpen(true)
+                  }}
+                  onFocus={() => setIsFundSearchMenuOpen(true)}
+                  onBlur={() => {
+                    window.setTimeout(() => setIsFundSearchMenuOpen(false), 120)
+                  }}
+                  placeholder="搜索基金代码或名称"
+                  className="auth-input w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-theme-primary outline-none placeholder:text-theme-muted"
+                  role="combobox"
+                  aria-haspopup="listbox"
+                  aria-expanded={shouldShowFundSearchMenu}
+                  aria-controls="watchlist-fund-search-results"
+                  aria-autocomplete="list"
+                />
 
-              <div className="space-y-2">
-                {results.slice(0, 5).map((fund) => (
-                  <button
-                    key={fund.id}
-                    type="button"
-                    disabled={!selectedGroup}
-                    onClick={() => {
-                      if (!selectedGroup) return
-                      void addFundToGroup(selectedGroup.id, fund.id)
-                      setFundQuery('')
-                    }}
-                    className="flex w-full items-center justify-between rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-left transition-colors hover:border-cyan-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+                {shouldShowFundSearchMenu && fundSearchMenuRect && typeof document !== 'undefined' && createPortal(
+                  <div
+                    id="watchlist-fund-search-results"
+                    className="watchlist-select-dropdown pointer-events-auto fixed z-[90] overflow-hidden rounded-[24px] border border-cyan-400/22 p-2 shadow-[0_24px_60px_rgba(2,8,23,0.42)]"
+                    style={{ left: fundSearchMenuRect.left, top: fundSearchMenuRect.top, width: fundSearchMenuRect.width }}
+                    role="listbox"
+                    aria-label="基金搜索结果"
                   >
-                    <div>
-                      <div className="text-sm font-medium text-theme-primary">{fund.name}</div>
-                      <div className="mt-1 text-xs text-theme-muted">{fund.id}</div>
+                    <div className="space-y-1 overflow-y-auto" style={{ maxHeight: fundSearchMenuRect.maxHeight }}>
+                      {isFundSearchLoading ? (
+                        <div className="flex items-center gap-2 rounded-[18px] px-4 py-3 text-sm text-theme-secondary">
+                          <LoaderCircle className="h-4 w-4 animate-spin text-cyan-300" />
+                          正在搜索基金...
+                        </div>
+                      ) : visibleFundResults.length > 0 ? (
+                        visibleFundResults.map((fund) => (
+                          <button
+                            key={fund.id}
+                            type="button"
+                            disabled={!selectedGroup}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => {
+                              if (!selectedGroup) return
+                              void addFundToGroup(selectedGroup.id, fund.id)
+                              setFundQuery('')
+                              setIsFundSearchMenuOpen(false)
+                            }}
+                            className={cn(
+                              'relative z-10 flex w-full items-center justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors',
+                              selectedGroup
+                                ? 'text-theme-secondary hover:bg-[var(--input-bg)] hover:text-theme-primary'
+                                : 'cursor-not-allowed text-theme-muted opacity-70'
+                            )}
+                            role="option"
+                            aria-selected={false}
+                          >
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium text-theme-primary">{fund.name}</div>
+                              <div className="mt-1 text-xs text-theme-muted">
+                                {fund.id}{selectedGroup ? ` · 加入 ${selectedGroup.name}` : ' · 请先选择目标分组'}
+                              </div>
+                            </div>
+                            <Plus className={cn('h-4 w-4 shrink-0', selectedGroup ? 'text-cyan-300' : 'text-theme-muted')} />
+                          </button>
+                        ))
+                      ) : (
+                        <div className="rounded-[18px] px-4 py-3 text-sm text-theme-secondary">
+                          暂无匹配基金，请尝试基金代码或更完整名称。
+                        </div>
+                      )}
                     </div>
-                    <Plus className="h-4 w-4 text-cyan-300" />
-                  </button>
-                ))}
+                  </div>,
+                  document.body
+                )}
               </div>
             </div>
           </section>
@@ -908,38 +1067,50 @@ export default function WatchlistPage() {
                   const isDragging = draggingGroupId === group.id
                   const isDragOver = dragOverGroupId === group.id && draggingGroupId !== group.id
                   return (
-                    <section
-                      key={group.id}
-                      ref={(node) => {
-                        groupSectionRefs.current[group.id] = node
-                      }}
-                      draggable={reorderEnabled}
-                      onDragStart={(event) => handleGroupDragStart(event, group.id)}
-                      onDragOver={(event) => handleGroupDragOver(event, group.id)}
-                      onDrop={() => void handleGroupDrop(group.id)}
-                      onDragEnd={() => {
-                        setDraggingGroupId(null)
+	                    <section
+	                      key={group.id}
+	                      ref={(node) => {
+	                        groupSectionRefs.current[group.id] = node
+	                      }}
+	                      onDragOver={(event) => handleGroupDragOver(event, group.id)}
+	                      onDrop={() => void handleGroupDrop(group.id)}
+	                      onDragEnd={() => {
+	                        setDraggingGroupId(null)
                         setDragOverGroupId(null)
                       }}
                       id={`watchlist-group-${group.id}`}
                       style={{ scrollMarginTop: 'var(--account-shell-anchor-offset, 112px)' }}
-                      className={cn(
-                        'rounded-[32px] border border-[var(--card-border)] p-6 glass transition-all duration-200',
-                        reorderEnabled && 'cursor-grab active:cursor-grabbing',
-                        isDragging && 'scale-[0.99] border-cyan-400/35 shadow-[0_20px_40px_rgba(34,211,238,0.12)] opacity-80',
-                        isDragOver && 'border-cyan-400/40 shadow-[0_18px_34px_rgba(34,211,238,0.10)]'
-                      )}
+	                      className={cn(
+	                        'rounded-[32px] border border-[var(--card-border)] p-6 glass transition-all duration-200',
+	                        isDragging && 'scale-[0.99] border-cyan-400/35 shadow-[0_20px_40px_rgba(34,211,238,0.12)] opacity-80',
+	                        isDragOver && 'border-cyan-400/40 shadow-[0_18px_34px_rgba(34,211,238,0.10)]'
+	                      )}
                     >
                       <div className={`mb-6 rounded-[28px] bg-gradient-to-r ${watchlistAccentToClass(group.accent)} p-5`}>
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
-                              {reorderEnabled && (
-                                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--input-border)] bg-[var(--input-bg)]/70 px-2 py-1 text-[11px] text-theme-muted">
-                                  <GripVertical className="h-3.5 w-3.5" />
-                                  拖拽排序
-                                </span>
-                              )}
+	                              {reorderEnabled && (
+	                                <button
+	                                  type="button"
+	                                  draggable
+	                                  onDragStart={(event) => handleGroupDragStart(event, group.id)}
+	                                  onDragEnd={() => {
+	                                    setDraggingGroupId(null)
+	                                    setDragOverGroupId(null)
+	                                  }}
+	                                  className={cn(
+	                                    'group/drag inline-flex cursor-grab select-none items-center gap-1 rounded-full border border-[var(--input-border)] bg-[var(--input-bg)]/70 px-2 py-1 text-[11px] text-theme-muted transition-all duration-200 active:cursor-grabbing',
+	                                    'hover:border-cyan-400/35 hover:bg-cyan-400/10 hover:text-theme-primary',
+	                                    isDragging && 'border-cyan-400/45 bg-cyan-400/14 text-cyan-100 action-button-pop'
+	                                  )}
+	                                  aria-label={`拖拽调整 ${group.name} 的排序`}
+	                                  title="拖拽调整排序"
+	                                >
+	                                  <GripVertical className="h-3.5 w-3.5 transition-transform duration-200 group-hover/drag:scale-110" />
+	                                  拖拽排序
+	                                </button>
+	                              )}
                               <div className="text-2xl font-black text-theme-primary">{group.name}</div>
                               {isFocused && (
                                 <span className="rounded-full border border-cyan-400/35 bg-cyan-400/10 px-2 py-1 text-[11px] tracking-[0.18em] text-cyan-200">
@@ -957,18 +1128,25 @@ export default function WatchlistPage() {
                           </div>
 
                           <div className="flex flex-wrap items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => openGroupEditor(group)}
-                              disabled={deletingGroupID !== null || savingGroupId === group.id}
-                              className={cn(
-                                'group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition-all duration-200',
-                                'hover:-translate-y-0.5 hover:border-cyan-400/35 hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)] active:scale-[0.985]',
-                                'disabled:cursor-not-allowed disabled:opacity-70'
-                              )}
-                            >
-                              <span className="action-button-shine" />
-                              <PencilLine className="relative z-10 h-4 w-4 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110" />
+	                            <button
+	                              type="button"
+	                              draggable={false}
+	                              onMouseDown={(event) => event.stopPropagation()}
+	                              onDragStart={(event) => event.preventDefault()}
+	                              onClick={(event) => {
+	                                event.stopPropagation()
+	                                openGroupEditor(group)
+	                              }}
+	                              disabled={deletingGroupID !== null || savingGroupId === group.id}
+	                              className={cn(
+	                                'group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition-all duration-200',
+	                                'hover:-translate-y-0.5 hover:border-cyan-400/35 hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)] active:scale-[0.985]',
+	                                'disabled:cursor-not-allowed disabled:opacity-70',
+	                                animatingEditGroupId === group.id && 'action-button-pop border-cyan-400/40 bg-cyan-500/12 text-theme-primary'
+	                              )}
+	                            >
+	                              <span className="action-button-shine" />
+	                              <PencilLine className="relative z-10 h-4 w-4 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110" />
                               <span className="relative z-10">编辑分组</span>
                             </button>
                             <button
@@ -1047,11 +1225,11 @@ export default function WatchlistPage() {
           )}
         </div>
 
-        {editingGroupId && (
-          <>
-            <div className="fixed inset-0 z-[70] bg-slate-950/62 backdrop-blur-sm" onClick={closeGroupEditor} />
-            <div className="fixed inset-0 z-[71] flex items-center justify-center px-4 py-6">
-              <div className="w-full max-w-2xl rounded-[32px] border border-[var(--card-border)] bg-[var(--card-bg)]/95 p-6 shadow-[0_28px_80px_rgba(2,8,23,0.40)] backdrop-blur-xl">
+	        {editingGroupId && (
+	          <>
+	            <div className="watchlist-editor-backdrop fixed inset-0 z-[70] bg-slate-950/62 backdrop-blur-sm" onClick={closeGroupEditor} />
+	            <div className="pointer-events-none fixed inset-0 z-[71] flex items-center justify-center px-4 py-6">
+	              <div className="watchlist-editor-panel pointer-events-auto w-full max-w-2xl rounded-[32px] border border-[var(--card-border)] bg-[var(--card-bg)]/95 p-6 shadow-[0_28px_80px_rgba(2,8,23,0.40)] backdrop-blur-xl">
                 <div className="mb-6 flex items-start justify-between gap-4">
                   <div>
                     <div className="text-xs tracking-[0.24em] text-cyan-300">编辑分组</div>
@@ -1188,7 +1366,7 @@ export default function WatchlistPage() {
                 variant: 'secondary',
               },
               {
-                label: latestCompletedTask?.reportId ? '查看最近报告' : '查看示例报告',
+                label: latestCompletedTask?.reportId ? '查看最近报告' : '查看报告样例',
                 href: latestCompletedTask?.reportId
                   ? `/vip/reports/${latestCompletedTask.reportId}`
                   : `/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultSector}`,
@@ -1202,7 +1380,7 @@ export default function WatchlistPage() {
                 variant: 'primary',
               },
               {
-                label: '查看示例报告',
+                label: '查看报告样例',
                 href: `/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultSector}`,
                 variant: 'secondary',
                 icon: <FileStack className="h-4 w-4" />,

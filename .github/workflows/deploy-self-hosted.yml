@@ -59,7 +59,7 @@ jobs:
         if: ${{ inputs.deploy_target == 'backend' || inputs.deploy_target == 'both' }}
         env:
           BACKEND_SERVICE_NAME: ${{ vars.BACKEND_SERVICE_NAME || 'fund-live-backend' }}
-          BACKEND_HEALTHCHECK_URL: ${{ vars.BACKEND_HEALTHCHECK_URL || 'http://127.0.0.1:8080/health' }}
+          BACKEND_HEALTHCHECK_URL: ${{ vars.BACKEND_HEALTHCHECK_URL || 'http://127.0.0.1:13896/health' }}
           BACKEND_BINARY_RELATIVE_PATH: ${{ vars.BACKEND_BINARY_RELATIVE_PATH || 'target/bin/fund-live-backend' }}
         run: ./scripts/deploy-backend.sh
 
@@ -70,6 +70,7 @@ jobs:
           FRONTEND_PM2_NAME: ${{ vars.FRONTEND_PM2_NAME || 'fund-live-frontend' }}
           FRONTEND_PORT: ${{ vars.FRONTEND_PORT || '13069' }}
           FRONTEND_HEALTHCHECK_URL: ${{ vars.FRONTEND_HEALTHCHECK_URL || 'http://127.0.0.1:13069' }}
+          BACKEND_URL: ${{ vars.BACKEND_URL || 'http://127.0.0.1:13896' }}
           FRONTEND_KEEP_RELEASES: ${{ vars.FRONTEND_KEEP_RELEASES || '5' }}
           FRONTEND_RELEASE_LABEL: ${{ inputs.frontend_release_label }}
         run: ./scripts/deploy-frontend.sh

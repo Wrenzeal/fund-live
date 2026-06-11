@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { Activity, ArrowLeft, ChartNoAxesCombined, ShieldCheck, Sparkles, WalletCards } from 'lucide-react'
+import { ArrowLeft, ChartNoAxesCombined, ShieldCheck, Sparkles, WalletCards } from 'lucide-react'
+import { BrandMark } from '@/components/brand-mark'
 import { HeaderFundSearch } from '@/components/header-fund-search'
 import { ScrollReveal, ScrollRevealStack } from '@/components/scroll-reveal'
 import { ThemeSwitcher } from '@/components/theme-switcher'
@@ -18,17 +19,17 @@ interface AuthShellProps {
 const highlights = [
   {
     title: '盘中估值',
-    description: '保留现有实时估值与分时曲线能力，登录后扩展到你的个人视角。',
+    description: '查看实时估值、分时曲线和常用基金动态。',
     icon: ChartNoAxesCombined,
   },
   {
     title: '自选清单',
-    description: '后续会把高频基金沉淀到你的账号里，而不是绑在当前浏览器。',
+    description: '把常看的基金保存到账号，换设备也能继续查看。',
     icon: WalletCards,
   },
   {
     title: '用户持仓',
-    description: '支持按账号保存你自己的持仓修正与观察配置，便于长期追踪。',
+    description: '保存持仓记录和校正信息，方便长期跟踪。',
     icon: ShieldCheck,
   },
 ]
@@ -56,18 +57,7 @@ export function AuthShell({
                 返回首页
               </Link>
 
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20">
-                    <Activity className="h-6 w-6" />
-                  </div>
-                  <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 opacity-30 blur" />
-                </div>
-                <div>
-                  <div className="text-lg font-bold gradient-text">FundLive</div>
-                  <div className="text-xs text-theme-muted">账户中心</div>
-                </div>
-              </div>
+              <BrandMark subtitle="账户中心" href={null} />
             </div>
 
             <div className="hidden max-w-md flex-1 md:block">

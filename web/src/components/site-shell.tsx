@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, ArrowUp, Bell, Bug, ChevronRight, Home, type LucideIcon } from 'lucide-react'
+import { ArrowUp, Bell, Bug, ChevronRight, Home, type LucideIcon } from 'lucide-react'
+import { BrandMark } from '@/components/brand-mark'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { UserAccountMenu } from '@/components/user-account-menu'
 import { useMobileTopSection } from '@/hooks/use-mobile-top-section'
@@ -40,18 +41,7 @@ export function SiteShell({
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <Link href="/" className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20">
-                    <Activity className="h-6 w-6" />
-                  </div>
-                  <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 opacity-30 blur" />
-                </div>
-                <div>
-                  <div className="text-lg font-bold gradient-text">FundLive</div>
-                  <div className="text-xs text-theme-muted">社区与公告</div>
-                </div>
-              </Link>
+              <BrandMark subtitle="社区与公告" />
 
               <div className="hidden items-center gap-2 text-sm text-theme-muted lg:flex">
                 <ChevronRight className="h-4 w-4" />

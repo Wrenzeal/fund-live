@@ -2,7 +2,7 @@
 
 ## Source of truth
 - Status: Active
-- Last refreshed: 2026-06-01
+- Last refreshed: 2026-06-04
 - Primary product surfaces: Fund home `/`, analysis detail `/analysis/[fundId]`, analysis rankings `/analysis/rankings`, holdings `/holdings`, watchlist `/watchlist`, VIP pages.
 - Evidence reviewed:
   - `web/src/app/analysis/[fundId]/page-client.tsx`
@@ -27,6 +27,7 @@
   - Make analysis pages readable in layers: conclusion first, then evidence, events, risks, and raw data.
   - Keep rule-based scores auditable and visually scannable.
   - Let administrators correct inaccurate fund classification labels without hiding the automatic holdings-derived exposure.
+  - Keep login and account-protected data surfaces resistant to common brute-force, oversized payload, and cookie transport risks.
 - Non-goals:
   - Do not present analysis as a direct buy/sell instruction.
   - Do not hide data limitations behind AI copy.
@@ -76,6 +77,10 @@
 - Tradeoffs:
   - Visual motion is useful for comprehension, but must remain lightweight and not require extra dependencies.
   - Dense financial data is necessary, but each section needs a clear job and non-overlapping copy.
+  - Overlay menus and dropdowns must use opaque surfaces, not translucent glass, when page content can sit directly behind the menu; if a menu can overlap sibling buttons or search results would otherwise expand a management card, render it in a high-level portal/fixed layer to prevent click-through and layout jumps.
+  - Watchlist group sorting should start only from the explicit drag handle; do not make the entire group card draggable because it can steal clicks from edit/delete/collapse actions.
+- Production access must keep HTTPS as the public entry: HTTP redirects to HTTPS, page traffic goes to the Next.js frontend, and `/api/` plus `/health` route directly to the Go backend.
+- Authentication UX should explain password requirements before submission; backend remains the source of truth and must return generic login failures plus explicit rate-limit feedback.
 
 ## Visual language
 - Color: Theme-variable based dark/classic/cyber system; cyan for neutral/data, rose for positive A-share style, emerald for defensive/negative or risk-down contexts, amber for warnings/limitations.
@@ -83,7 +88,7 @@
 - Spacing/layout rhythm: Max width around `max-w-7xl`; use 5–6 unit vertical section rhythm; avoid too many four-column grids on content-heavy panels.
 - Shape/radius/elevation: Rounded cards (`rounded-2xl` / `rounded-3xl`) with glass surfaces; avoid stacking heavy shadows on every nested card.
 - Motion: Native CSS transitions and IntersectionObserver scroll reveal; major long pages should use shared `ScrollReveal` / `ScrollRevealStack`; respect `motion-reduce` utilities.
-- Imagery/iconography: Lucide icons for section identity; icons should clarify semantics, not decorate every line.
+- Imagery/iconography: Lucide icons for section identity; icons should clarify semantics, not decorate every line. Browser favicon should use the blue line-only activity mark on transparent background, with SVG preferred and ICO as fallback. Browser tab title should read `FundLive - 你的基金估值系统`; if it is too long, use a lightweight document-title ticker that respects reduced motion, avoids low-frame jumps with sub-second character steps, and pauses briefly when the full title is visible. The visible home wordmark stays “涨了多少”, and its subtitle should read `FundLive - 实时基金估值`.
 
 ## Components
 - Existing components to reuse:
@@ -95,6 +100,7 @@
   - `FundAnalysisBadge`
   - `FundAnalysisEventHint`
 - New/changed components:
+  - Shared brand helper: `BrandMark` in `web/src/components/brand-mark.tsx`; reuse it for top-left brand blocks instead of duplicating logo icon, wordmark, and subtitle JSX.
   - Shared motion helpers: `ScrollReveal`, `ScrollRevealStack`, `useLazyReveal` in `web/src/components/scroll-reveal.tsx`.
   - Shared analysis helpers: `AnalysisReveal`, `AnalysisSectionHeading`, `useLazyReveal` in `web/src/components/analysis-layout.tsx` now delegate reveal behavior to `scroll-reveal.tsx`.
   - `FundSectorCard` now consumes `classification_override`, displays manual correction chips/tags, and exposes an administrator-only inline editor for category, sector, theme, tags, and note.
@@ -104,6 +110,12 @@
   - Empty: show concise empty panels; avoid repeating method copy.
   - Warning/limitations: amber tone and explicit text.
 - Token/component ownership: Keep route-local helper components until reuse across pages is proven; do not introduce a new component library layer.
+
+## Auth and security UX
+- Register password copy must match backend policy: at least 10 characters, include letters and numbers, and contain no whitespace.
+- Login failures should not disclose whether an email format, account existence, or password check failed; use generic invalid credentials in UI.
+- Rate-limited authentication should surface as a temporary wait/retry state, not as a permanent account error.
+- Production session cookies must be Secure + HttpOnly + SameSite=Lax under HTTPS; local HTTP can keep Secure disabled only for development.
 
 ## Accessibility
 - Target standard: Practical WCAG AA intent for contrast and semantic readability.
@@ -141,6 +153,7 @@
 - Design-token constraints: Reuse existing `glass`, `text-theme-*`, `var(--card-*)`, and accent utility patterns.
 - Performance constraints: No new frontend dependency for motion; use IntersectionObserver and CSS transitions.
 - Compatibility constraints: Keep backend API payloads and analysis semantics unchanged unless separately planned.
+- Deployment constraints: production frontend runtime must set `BACKEND_URL` to the actual backend listener (`http://127.0.0.1:13896` in the current server), and deployment health checks must target the same backend port.
 - Classification constraints: Manual classification labels are an overlay; never present manual tags as automatic holdings weights, and keep automatic sector/theme breakdown visible.
 - Test/screenshot expectations: At minimum run `npm run lint` and `npm run build`; for high-risk visual changes, capture browser screenshots or run visual QA when available.
 

@@ -329,7 +329,7 @@ export function HoldingActivityTimeline({
     }
 
     const reason = window.prompt(
-      '确认自动冲正？系统会先作废原流水，再按安全规则更新当前持仓快照。请输入原因：',
+      '确认冲正？原流水会作废，并按安全规则更新持仓快照。请输入原因：',
       '确认该流水录错，自动冲正',
     )
     if (reason === null) {
@@ -558,7 +558,7 @@ export function HoldingActivityTimeline({
                   : '这条流水仅支持人工校正建议'}
               </div>
               <div className="mt-1 text-xs leading-5 text-theme-secondary">
-                自动冲正只在没有后续有效流水、且当前快照可安全计算时开放；系统会保留原流水作废痕迹和冲正记录。
+                没有之后流水且账面可核对时，才可一键冲正；原流水和冲正记录都会保留。
               </div>
             </div>
             {rollbackPreview.can_apply_automatically && onApplyRollback && (

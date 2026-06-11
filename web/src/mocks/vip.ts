@@ -103,8 +103,8 @@ export interface VIPReport {
 
 export const VIP_PLAN: VIPPlan = {
   code: 'vip',
-  name: 'FundLive VIP',
-  subtitle: '面向基金投资者的智能投研服务',
+  name: '涨了多少 VIP',
+  subtitle: '面向基金投资者的组合报告服务',
   billingOptions: [
     {
       cycle: 'monthly',
@@ -124,12 +124,12 @@ export const VIP_PLAN: VIPPlan = {
     '每交易日 2 次板块分析',
     '每交易日 2 次组合分析',
     '带引用来源的结构化分析报告',
-    '异步生成，不阻塞自选与持仓主流程',
+    '生成报告时不影响自选与持仓查看',
   ],
   rights: [
     '从宏观、政策、财报、市场走势四个维度给出整理后的研究结论',
     '对自选分组识别主导板块并生成板块分析',
-    '对持仓组合输出结构化结论、风险等级与操作建议',
+    '对持仓组合输出报告摘要、风险等级与观察要点',
     '支持在任务中心查看报告生成进度与历史任务状态',
   ],
   disclaimer: '投资有风险，以下能力与报告内容仅供参考，不构成任何投资建议。',
@@ -140,7 +140,7 @@ export const VIP_DAILY_QUOTA = {
   portfolioAnalysis: 2,
 } as const
 
-const defaultDisclaimer = '投资有风险，报告内容基于公开信息与模拟数据整理，仅供参考，不构成投资建议。'
+const defaultDisclaimer = '投资有风险，报告内容仅供参考，不构成投资建议。'
 
 export const VIP_SAMPLE_REPORTS: VIPReport[] = [
   {
@@ -180,7 +180,7 @@ export const VIP_SAMPLE_REPORTS: VIPReport[] = [
       content: '国内政策口径仍偏向“新质生产力、先进制造、算力基础设施”，方向层面没有逆风。',
       bullets: [
         '科技创新和工业升级仍是中期政策主线。',
-        '若后续产业扶持细则落地，算力、设备与工业软件板块弹性可能更强。',
+        '若产业扶持细则落地，算力、设备与工业软件板块弹性可能更强。',
       ],
     },
     earnings: {
@@ -209,7 +209,7 @@ export const VIP_SAMPLE_REPORTS: VIPReport[] = [
         id: 'source-sector-1',
         title: '沪深两市成交额与板块强度日报',
         type: 'market',
-        publisher: 'FundLive Market Feed',
+        publisher: '涨了多少 Market Feed',
         publishedAt: '2026-04-04T10:20:00+08:00',
         url: 'https://example.com/market-daily',
         snippet: '成长风格继续占优，AI 与高端制造链维持高活跃度。',
@@ -255,7 +255,7 @@ export const VIP_SAMPLE_REPORTS: VIPReport[] = [
       action: '观望',
       positionRange: '0%-5%',
       conditions: [
-        '若后续财报持续改善，可逐步提升跟踪仓位。',
+        '若财报持续改善，可逐步提升跟踪仓位。',
         '若板块出现放量突破，再考虑从观望转向低吸。',
       ],
     },
@@ -299,7 +299,7 @@ export const VIP_SAMPLE_REPORTS: VIPReport[] = [
         id: 'source-med-1',
         title: '医药板块交易热度追踪',
         type: 'market',
-        publisher: 'FundLive Market Feed',
+        publisher: '涨了多少 Market Feed',
         publishedAt: '2026-04-04T10:50:00+08:00',
         url: 'https://example.com/market-med',
         snippet: '板块回暖但量能尚未充分放大，风格偏修复。',
@@ -382,7 +382,7 @@ export const VIP_SAMPLE_REPORTS: VIPReport[] = [
         id: 'source-port-1',
         title: '组合持仓风格拆解',
         type: 'market',
-        publisher: 'FundLive Portfolio Feed',
+        publisher: '涨了多少 Portfolio Feed',
         publishedAt: '2026-04-04T13:20:00+08:00',
         url: 'https://example.com/portfolio-style',
         snippet: '组合当前成长暴露高于防御暴露，医药承担风格平衡作用。',

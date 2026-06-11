@@ -201,7 +201,7 @@ export default function IssuesPage() {
       setTitle('')
       setBody('')
       setFormType('bug')
-      setFeedback('想法已经送达。管理员会先接收，再更新处理状态。')
+      setFeedback('想法已经送达，我们会尽快查看。')
       await refresh()
     } catch (requestError) {
       setFeedback(requestError instanceof Error ? requestError.message : '想法发送失败，请稍后重试。')
@@ -213,7 +213,7 @@ export default function IssuesPage() {
   return (
     <SiteShell
       title="我有想法！"
-      description="这里是面向所有用户公开的想法区。你可以查看别人已经提出的问题、功能诉求和改进建议；登录后还可以把自己的想法发出来。"
+      description="查看大家提交的问题和功能诉求；登录后也可以留下你的想法。"
       eyebrowLabel="IDEA BOARD"
       EyebrowIcon={WandSparkles}
     >

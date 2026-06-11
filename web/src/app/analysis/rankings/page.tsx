@@ -300,7 +300,7 @@ function MethodNote() {
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <p className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4 text-sm leading-6 text-theme-secondary">
           <Sparkles className="mb-2 h-4 w-4 text-cyan-200" />
-          榜单复用独立 analysis 快照；完整证据、AI 边界、事件链和限制说明仍以详情页为准。
+          榜单汇总近期分析快照；完整证据、事件和限制说明请查看详情页。
         </p>
         <p className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4 text-sm leading-6 text-theme-secondary">
           <ShieldAlert className="mb-2 h-4 w-4 text-amber-200" />

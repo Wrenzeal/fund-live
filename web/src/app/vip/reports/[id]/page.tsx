@@ -38,7 +38,7 @@ export default function VIPReportDetailPage() {
     return (
       <AccountAreaShell
         title="VIP 报告详情"
-        description="查看结构化研究报告，包括摘要结论、操作建议、风险提示以及引用来源。"
+        description="查看报告摘要、观察要点、风险提示和引用来源。"
       >
         <div className="rounded-[36px] border border-[var(--card-border)] p-10 glass text-center">
           <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
@@ -52,7 +52,7 @@ export default function VIPReportDetailPage() {
     return (
       <AccountAreaShell
         title="VIP 报告详情"
-        description="查看结构化研究报告，包括摘要结论、操作建议、风险提示以及引用来源。"
+        description="查看报告摘要、观察要点、风险提示和引用来源。"
       >
         <section className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6">
           <div className="flex items-start gap-3 text-theme-primary">
@@ -60,7 +60,7 @@ export default function VIPReportDetailPage() {
             <div>
               <div className="text-lg font-bold">报告不存在或当前账号无权查看</div>
               <p className="mt-2 text-sm leading-6 text-theme-secondary">
-                {error instanceof Error ? error.message : '请返回任务中心，或查看系统内置示例报告。'}
+                {error instanceof Error ? error.message : '请返回任务中心，或查看报告样例。'}
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
                 <Link
@@ -74,7 +74,7 @@ export default function VIPReportDetailPage() {
                   href={`/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultSector}`}
                   className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-theme-primary"
                 >
-                  查看示例报告
+                  查看报告样例
                 </Link>
               </div>
             </div>
@@ -89,7 +89,7 @@ export default function VIPReportDetailPage() {
   return (
     <AccountAreaShell
       title="VIP 报告详情"
-      description="查看结构化研究报告，包括摘要结论、操作建议、风险提示以及引用来源。"
+      description="查看报告摘要、观察要点、风险提示和引用来源。"
     >
       <ScrollRevealStack className="space-y-8">
         <section className="rounded-[36px] border border-[var(--card-border)] p-8 glass">
@@ -169,9 +169,9 @@ export default function VIPReportDetailPage() {
 
           <div className="space-y-6">
             <article className="rounded-[32px] border border-cyan-500/25 bg-cyan-500/10 p-6">
-              <div className="text-xs tracking-[0.22em] text-cyan-300">操作建议</div>
+              <div className="text-xs tracking-[0.22em] text-cyan-300">观察要点</div>
               <div className="mt-3 text-3xl font-black text-theme-primary">{report.advice.action}</div>
-              <div className="mt-2 text-sm text-theme-secondary">建议仓位区间：{report.advice.positionRange}</div>
+              <div className="mt-2 text-sm text-theme-secondary">参考区间：{report.advice.positionRange}</div>
               <div className="mt-5 space-y-3">
                 {report.advice.conditions.map((condition) => (
                   <div key={condition} className="rounded-[22px] border border-[var(--card-border)] bg-[var(--input-bg)]/60 px-4 py-4 text-sm leading-6 text-theme-secondary">
@@ -246,7 +246,7 @@ export default function VIPReportDetailPage() {
             href={`/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultSector}`}
             className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-theme-primary"
           >
-            查看另一份示例报告
+            查看另一份报告样例
           </Link>
         </section>
       </ScrollRevealStack>

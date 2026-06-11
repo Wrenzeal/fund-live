@@ -25,6 +25,10 @@ export default function RegisterPage() {
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
+    if ([...password].length < 10 || !/\p{L}/u.test(password) || !/\p{N}/u.test(password) || /\s/u.test(password)) {
+      setError('密码至少 10 位，并且需要同时包含字母和数字，不能包含空格')
+      return
+    }
     setIsSubmitting(true)
 
     void (async () => {
@@ -43,7 +47,7 @@ export default function RegisterPage() {
     <AuthShell
       eyebrow="创建账户"
       title="注册账户"
-      description="账户创建后会立即建立登录态，方便后续接入自选基金、持仓修正和 Google 自动注册。"
+      description="创建账户后即可保存自选基金、持仓记录和个人设置。"
       footer={(
         <div className="flex items-center justify-between gap-4">
           <span>已经有账号？</span>
@@ -95,10 +99,11 @@ export default function RegisterPage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               className="auth-input w-full bg-transparent text-theme-primary outline-none placeholder:text-theme-muted"
-              placeholder="至少 8 位密码"
+              placeholder="至少 10 位，包含字母和数字"
               required
             />
           </div>
+          <span className="text-xs text-theme-muted">用于保护持仓与自选数据，建议不要复用其他网站密码。</span>
         </label>
 
         {error && (

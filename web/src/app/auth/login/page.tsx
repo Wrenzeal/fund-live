@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ArrowRight, Loader2, LockKeyhole, Mail } from 'lucide-react'
 import { AuthShell } from '@/components/auth-shell'
 import { GoogleSignInButton } from '@/components/google-sign-in-button'
@@ -40,7 +40,7 @@ export default function LoginPage() {
     })()
   }
 
-  const handleGoogleLogin = async (credential: string) => {
+  const handleGoogleLogin = useCallback(async (credential: string) => {
     setError(null)
     setIsGoogleSubmitting(true)
 
@@ -53,13 +53,13 @@ export default function LoginPage() {
     } finally {
       setIsGoogleSubmitting(false)
     }
-  }
+  }, [mutate, router])
 
   return (
     <AuthShell
       eyebrow="密码登录"
       title="登录账户"
-      description="先接通邮箱密码登录闭环，后续会在同一入口追加 Google 登录和自动注册。"
+      description="登录后即可同步自选基金、持仓记录和个性化设置。"
       footer={(
         <div className="flex items-center justify-between gap-4">
           <span>还没有账号？</span>
@@ -104,7 +104,7 @@ export default function LoginPage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               className="auth-input w-full bg-transparent text-theme-primary outline-none placeholder:text-theme-muted"
-              placeholder="至少 8 位密码"
+              placeholder="请输入账户密码"
               required
             />
           </div>

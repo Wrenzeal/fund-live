@@ -194,6 +194,7 @@ func main() {
 		fundHandler.SetAnalysisRankingCandidateProvider(estimateCapabilityService)
 	}
 	authHandler := handler.NewAuthHandler(authService, authConfig.CookieName, authConfig.CookieSecure)
+	authHandler.SetGoogleWebClientID(authConfig.GoogleClientID)
 	userHandler := handler.NewUserHandler(userPreferenceService, userRepo, defaultQuoteSource)
 	issueHandler := handler.NewIssueHandler(issueService)
 	announcementHandler := handler.NewAnnouncementHandler(announcementService)
@@ -202,6 +203,9 @@ func main() {
 	// Setup Gin router
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
+	if err := router.SetTrustedProxies([]string{"127.0.0.1", "::1"}); err != nil {
+		log.Fatalf("❌ Failed to configure trusted proxies: %v", err)
+	}
 	allowedOrigins := loadCORSAllowedOrigins(fileCfg)
 
 	// Apply middleware
@@ -216,7 +220,7 @@ func main() {
 			"status":       "ok",
 			"timestamp":    time.Now().Unix(),
 			"service":      "FundLive API",
-			"version":      "2026.4.27",
+			"version":      "2026.6.4-auth-security-hardening",
 			"storage_mode": storageMode,
 		})
 	})
@@ -226,6 +230,7 @@ func main() {
 	{
 		auth := v1.Group("/auth")
 		{
+			auth.GET("/config", authHandler.Config)
 			auth.POST("/register", authHandler.Register)
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/google", authHandler.GoogleLogin)
@@ -468,6 +473,18 @@ func loadAuthConfig(fileCfg *appconfig.Config) service.AuthConfig {
 		if fileCfg.Auth.GoogleClientID != "" {
 			cfg.GoogleClientID = fileCfg.Auth.GoogleClientID
 		}
+		if fileCfg.Auth.AuthAttemptWindowMinutes > 0 {
+			cfg.AuthAttemptWindow = time.Duration(fileCfg.Auth.AuthAttemptWindowMinutes) * time.Minute
+		}
+		if fileCfg.Auth.MaxPasswordFailures > 0 {
+			cfg.MaxPasswordFailures = fileCfg.Auth.MaxPasswordFailures
+		}
+		if fileCfg.Auth.MaxRegisterFailures > 0 {
+			cfg.MaxRegisterFailures = fileCfg.Auth.MaxRegisterFailures
+		}
+		if fileCfg.Auth.MaxGoogleLoginFailures > 0 {
+			cfg.MaxGoogleLoginFailures = fileCfg.Auth.MaxGoogleLoginFailures
+		}
 	}
 
 	if env := os.Getenv("AUTH_COOKIE_NAME"); env != "" {
@@ -485,6 +502,26 @@ func loadAuthConfig(fileCfg *appconfig.Config) service.AuthConfig {
 	}
 	if env := os.Getenv("GOOGLE_CLIENT_ID"); env != "" {
 		cfg.GoogleClientID = env
+	}
+	if env := os.Getenv("AUTH_ATTEMPT_WINDOW_MINUTES"); env != "" {
+		if minutes, err := strconv.Atoi(env); err == nil && minutes > 0 {
+			cfg.AuthAttemptWindow = time.Duration(minutes) * time.Minute
+		}
+	}
+	if env := os.Getenv("AUTH_MAX_PASSWORD_FAILURES"); env != "" {
+		if attempts, err := strconv.Atoi(env); err == nil && attempts > 0 {
+			cfg.MaxPasswordFailures = attempts
+		}
+	}
+	if env := os.Getenv("AUTH_MAX_REGISTER_FAILURES"); env != "" {
+		if attempts, err := strconv.Atoi(env); err == nil && attempts > 0 {
+			cfg.MaxRegisterFailures = attempts
+		}
+	}
+	if env := os.Getenv("AUTH_MAX_GOOGLE_LOGIN_FAILURES"); env != "" {
+		if attempts, err := strconv.Atoi(env); err == nil && attempts > 0 {
+			cfg.MaxGoogleLoginFailures = attempts
+		}
 	}
 
 	return cfg

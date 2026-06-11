@@ -142,14 +142,14 @@ export default function AnnouncementsPage() {
             </section>
 
             <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
-              <div className="text-xs tracking-[0.22em] text-theme-muted">管理提示</div>
-              <div className="mt-2 text-2xl font-bold text-theme-primary">公告策略</div>
+              <div className="text-xs tracking-[0.22em] text-theme-muted">发布说明</div>
+              <div className="mt-2 text-2xl font-bold text-theme-primary">公告发布</div>
               <div className="mt-5 space-y-4 text-sm leading-7 text-theme-secondary">
                 <div className="rounded-[22px] border border-[var(--card-border)] bg-[var(--input-bg)]/60 p-4">
                   手动公告适合发布维护通知、临时说明和运营信息。
                 </div>
                 <div className="rounded-[22px] border border-[var(--card-border)] bg-[var(--input-bg)]/60 p-4">
-                  `CHANGELOG` 导入适合把已经整理好的版本更新同步为站内公告。
+                  也可以从 `CHANGELOG` 导入已整理好的版本更新。
                 </div>
                 <div className="rounded-[22px] border border-[var(--card-border)] bg-[var(--input-bg)]/60 p-4">
                   登录用户会在存在未读公告时收到弹窗提醒，并可手动标记已读。

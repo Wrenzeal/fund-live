@@ -769,7 +769,7 @@ export default function HoldingsPage() {
   return (
     <AccountAreaShell
       title="我的持仓账本"
-      description="用 30 秒记录一笔仓位，后续自动补齐确认净值、真实盈亏、量化风险与组合分析入口。"
+      description="快速记录仓位，查看净值确认、真实盈亏、风险提醒和组合分析。"
     >
       <ScrollRevealStack className="space-y-8">
         {feedback && <HoldingFeedbackBanner feedback={feedback} />}
@@ -786,7 +786,7 @@ export default function HoldingsPage() {
               </div>
               <div className="mt-2 text-xs text-theme-muted">
                 {holdings.length === 0
-                  ? '先记录一笔，后面自动补齐净值、份额和盈亏。'
+                  ? '先记录一笔持仓，再查看净值、份额和盈亏。'
                   : `${metricScope === 'official' ? '官方口径' : '盘中预估'} · ${viewMode === 'aggregate' ? '按基金' : '分笔明细'}`}
               </div>
             </div>
@@ -1178,7 +1178,7 @@ export default function HoldingsPage() {
                         {
                           label: latestCompletedTask?.reportId
                             ? '查看最近报告'
-                            : '查看示例报告',
+                            : '查看报告样例',
                           href: latestCompletedTask?.reportId
                             ? `/vip/reports/${latestCompletedTask.reportId}`
                             : `/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultPortfolio}`,
@@ -1193,7 +1193,7 @@ export default function HoldingsPage() {
                           variant: 'primary',
                         },
                         {
-                          label: '查看示例报告',
+                          label: '查看报告样例',
                           href: `/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultPortfolio}`,
                           variant: 'secondary',
                           icon: <FileStack className="h-4 w-4" />,

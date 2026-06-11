@@ -111,7 +111,7 @@ export function VIPAnalysisEntry({
               className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-theme-secondary opacity-80"
             >
               <LockKeyhole className="h-4 w-4" />
-              VIP 功能预留中
+              暂未开放
             </button>
           )}
         </div>

@@ -11,11 +11,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const maxAuthRequestBodyBytes int64 = 16 * 1024
+
 // AuthHandler handles authentication-related HTTP requests.
 type AuthHandler struct {
-	authService  domain.AuthenticationService
-	cookieName   string
-	cookieSecure bool
+	authService       domain.AuthenticationService
+	cookieName        string
+	cookieSecure      bool
+	googleWebClientID string
 }
 
 // NewAuthHandler creates a new AuthHandler instance.
@@ -25,6 +28,13 @@ func NewAuthHandler(authService domain.AuthenticationService, cookieName string,
 		cookieName:   cookieName,
 		cookieSecure: cookieSecure,
 	}
+}
+
+// SetGoogleWebClientID configures the public Google Web Client ID exposed to the frontend.
+// The value is not a secret; it lets browser builds render Google Identity Services even
+// when NEXT_PUBLIC_GOOGLE_CLIENT_ID was not injected at build time.
+func (h *AuthHandler) SetGoogleWebClientID(clientID string) {
+	h.googleWebClientID = clientID
 }
 
 type registerRequest struct {
@@ -42,22 +52,31 @@ type googleLoginRequest struct {
 	IDToken string `json:"id_token"`
 }
 
+type authConfigResponse struct {
+	GoogleClientID     string `json:"google_client_id"`
+	GoogleLoginEnabled bool   `json:"google_login_enabled"`
+}
+
 type authSuccessResponse struct {
 	User      *domain.User `json:"user"`
 	ExpiresAt time.Time    `json:"expires_at"`
 }
 
+// Config returns non-sensitive authentication settings required by the browser.
+func (h *AuthHandler) Config(c *gin.Context) {
+	c.JSON(http.StatusOK, APIResponse{
+		Success: true,
+		Data: authConfigResponse{
+			GoogleClientID:     h.googleWebClientID,
+			GoogleLoginEnabled: h.googleWebClientID != "",
+		},
+	})
+}
+
 // Register creates a new password-based user account and starts a session.
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req registerRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, APIResponse{
-			Success: false,
-			Error: &APIError{
-				Code:    "INVALID_REQUEST",
-				Message: "Invalid register payload",
-			},
-		})
+	if !bindAuthJSON(c, &req, "Invalid register payload") {
 		return
 	}
 
@@ -88,14 +107,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 // Login validates email/password and starts a session.
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req loginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, APIResponse{
-			Success: false,
-			Error: &APIError{
-				Code:    "INVALID_REQUEST",
-				Message: "Invalid login payload",
-			},
-		})
+	if !bindAuthJSON(c, &req, "Invalid login payload") {
 		return
 	}
 
@@ -125,14 +137,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // GoogleLogin verifies a Google ID token and creates or resumes a local account.
 func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 	var req googleLoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, APIResponse{
-			Success: false,
-			Error: &APIError{
-				Code:    "INVALID_REQUEST",
-				Message: "Invalid Google login payload",
-			},
-		})
+	if !bindAuthJSON(c, &req, "Invalid Google login payload") {
 		return
 	}
 
@@ -227,6 +232,33 @@ func requestSessionMetadata(c *gin.Context) domain.SessionMetadata {
 	}
 }
 
+func bindAuthJSON(c *gin.Context, target interface{}, invalidMessage string) bool {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxAuthRequestBodyBytes)
+	if err := c.ShouldBindJSON(target); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			c.JSON(http.StatusRequestEntityTooLarge, APIResponse{
+				Success: false,
+				Error: &APIError{
+					Code:    "REQUEST_TOO_LARGE",
+					Message: "Authentication payload is too large",
+				},
+			})
+			return false
+		}
+
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error: &APIError{
+				Code:    "INVALID_REQUEST",
+				Message: invalidMessage,
+			},
+		})
+		return false
+	}
+	return true
+}
+
 func maxAgeSeconds(expiresAt time.Time) int {
 	seconds := int(time.Until(expiresAt).Seconds())
 	if seconds < 0 {
@@ -241,6 +273,8 @@ func mapAuthError(err error) (int, *APIError) {
 		return http.StatusBadRequest, &APIError{Code: "INVALID_EMAIL", Message: err.Error()}
 	case errors.Is(err, service.ErrWeakPassword):
 		return http.StatusBadRequest, &APIError{Code: "WEAK_PASSWORD", Message: err.Error()}
+	case errors.Is(err, service.ErrAuthRateLimited):
+		return http.StatusTooManyRequests, &APIError{Code: "AUTH_RATE_LIMITED", Message: err.Error()}
 	case errors.Is(err, service.ErrEmailAlreadyRegistered):
 		return http.StatusConflict, &APIError{Code: "EMAIL_ALREADY_REGISTERED", Message: err.Error()}
 	case errors.Is(err, service.ErrInvalidCredentials):
@@ -254,6 +288,6 @@ func mapAuthError(err error) (int, *APIError) {
 	case errors.Is(err, service.ErrInvalidSession), errors.Is(err, service.ErrSessionExpired):
 		return http.StatusUnauthorized, &APIError{Code: "UNAUTHORIZED", Message: err.Error()}
 	default:
-		return http.StatusInternalServerError, &APIError{Code: "AUTH_FAILED", Message: err.Error()}
+		return http.StatusInternalServerError, &APIError{Code: "AUTH_FAILED", Message: "Authentication failed"}
 	}
 }

@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { Activity, ArrowUp, ChevronRight, Crown, Layers3, ShieldAlert, Sparkles, Wallet } from 'lucide-react'
+import { ArrowUp, ChevronRight, Crown, Layers3, ShieldAlert, Sparkles, Wallet } from 'lucide-react'
+import { BrandMark } from '@/components/brand-mark'
 import { HeaderFundSearch } from '@/components/header-fund-search'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { UserAccountMenu } from '@/components/user-account-menu'
@@ -86,18 +87,7 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
         <div className="container mx-auto px-4 py-4">
           <div ref={topBarRef} className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <Link href="/" className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20">
-                    <Activity className="h-6 w-6" />
-                  </div>
-                  <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 opacity-30 blur" />
-                </div>
-                <div>
-                  <div className="text-lg font-bold gradient-text">FundLive</div>
-                  <div className="text-xs text-theme-muted">用户模块</div>
-                </div>
-              </Link>
+              <BrandMark subtitle="用户模块" />
 
               <div className="hidden items-center gap-2 text-sm text-theme-muted lg:flex">
                 <ChevronRight className="h-4 w-4" />

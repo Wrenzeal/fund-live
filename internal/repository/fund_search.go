@@ -21,8 +21,32 @@ type fundSearchMatch struct {
 	containsMgr  bool
 }
 
-func normalizeSearchQuery(raw string) string {
+type scoredFundSearchMatch struct {
+	fund     *domain.Fund
+	match    fundSearchMatch
+	sortID   string
+	sortName string
+}
+
+func normalizeFundSearchText(raw string) string {
 	return strings.ToLower(strings.TrimSpace(raw))
+}
+
+func normalizeSearchQuery(raw string) string {
+	return normalizeFundSearchText(raw)
+}
+
+func trimFundSearchText(raw string) string {
+	return strings.TrimSpace(raw)
+}
+
+func newScoredFundSearchMatch(fund *domain.Fund, match fundSearchMatch) scoredFundSearchMatch {
+	return scoredFundSearchMatch{
+		fund:     fund,
+		match:    match,
+		sortID:   trimFundSearchText(fund.ID),
+		sortName: trimFundSearchText(fund.Name),
+	}
 }
 
 func searchCandidateLimit(limit int) int {
@@ -42,9 +66,9 @@ func classifyFundSearchMatch(fund *domain.Fund, normalizedQuery string) (fundSea
 		return fundSearchMatch{}, false
 	}
 
-	id := strings.ToLower(strings.TrimSpace(fund.ID))
-	name := strings.ToLower(strings.TrimSpace(fund.Name))
-	manager := strings.ToLower(strings.TrimSpace(fund.Manager))
+	id := normalizeFundSearchText(fund.ID)
+	name := normalizeFundSearchText(fund.Name)
+	manager := normalizeFundSearchText(fund.Manager)
 
 	match := fundSearchMatch{
 		exactID:      id == normalizedQuery,
@@ -79,17 +103,12 @@ func betterFundSearchMatch(left, right fundSearchMatch) bool {
 }
 
 func rankAndLimitFunds(candidates []*domain.Fund, query string, limit int) []*domain.Fund {
-	normalizedQuery := normalizeSearchQuery(query)
+	normalizedQuery := normalizeFundSearchText(query)
 	if normalizedQuery == "" || limit <= 0 || len(candidates) == 0 {
 		return []*domain.Fund{}
 	}
 
-	type scoredFund struct {
-		fund  *domain.Fund
-		match fundSearchMatch
-	}
-
-	byID := make(map[string]scoredFund, len(candidates))
+	byID := make(map[string]scoredFundSearchMatch, len(candidates))
 	for _, fund := range candidates {
 		match, ok := classifyFundSearchMatch(fund, normalizedQuery)
 		if !ok {
@@ -98,11 +117,11 @@ func rankAndLimitFunds(candidates []*domain.Fund, query string, limit int) []*do
 
 		existing, exists := byID[fund.ID]
 		if !exists || betterFundSearchMatch(match, existing.match) {
-			byID[fund.ID] = scoredFund{fund: fund, match: match}
+			byID[fund.ID] = newScoredFundSearchMatch(fund, match)
 		}
 	}
 
-	scored := make([]scoredFund, 0, len(byID))
+	scored := make([]scoredFundSearchMatch, 0, len(byID))
 	for _, item := range byID {
 		scored = append(scored, item)
 	}
@@ -118,15 +137,11 @@ func rankAndLimitFunds(candidates []*domain.Fund, query string, limit int) []*do
 			return false
 		}
 
-		leftID := strings.TrimSpace(left.fund.ID)
-		rightID := strings.TrimSpace(right.fund.ID)
-		if leftID != rightID {
-			return leftID < rightID
+		if left.sortID != right.sortID {
+			return left.sortID < right.sortID
 		}
 
-		leftName := strings.TrimSpace(left.fund.Name)
-		rightName := strings.TrimSpace(right.fund.Name)
-		return leftName < rightName
+		return left.sortName < right.sortName
 	})
 
 	if len(scored) > limit {

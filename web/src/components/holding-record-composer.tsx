@@ -148,7 +148,7 @@ export function HoldingRecordComposer({
           </h2>
           {!compact && (
             <p className="mt-2 max-w-3xl text-sm leading-6 text-theme-secondary">
-              只填基金、金额和交易日；后续自动补净值、份额和盈亏。
+              填写基金、金额和交易日，即可开始跟踪净值、份额和盈亏。
             </p>
           )}
         </div>

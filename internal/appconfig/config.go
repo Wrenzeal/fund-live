@@ -46,10 +46,14 @@ type DatabaseConfig struct {
 }
 
 type AuthConfig struct {
-	CookieName      string `yaml:"cookie_name" json:"cookie_name"`
-	CookieSecure    bool   `yaml:"cookie_secure" json:"cookie_secure"`
-	SessionTTLHours int    `yaml:"session_ttl_hours" json:"session_ttl_hours"`
-	GoogleClientID  string `yaml:"google_client_id" json:"google_client_id"`
+	CookieName               string `yaml:"cookie_name" json:"cookie_name"`
+	CookieSecure             bool   `yaml:"cookie_secure" json:"cookie_secure"`
+	SessionTTLHours          int    `yaml:"session_ttl_hours" json:"session_ttl_hours"`
+	GoogleClientID           string `yaml:"google_client_id" json:"google_client_id"`
+	AuthAttemptWindowMinutes int    `yaml:"auth_attempt_window_minutes" json:"auth_attempt_window_minutes"`
+	MaxPasswordFailures      int    `yaml:"max_password_failures" json:"max_password_failures"`
+	MaxRegisterFailures      int    `yaml:"max_register_failures" json:"max_register_failures"`
+	MaxGoogleLoginFailures   int    `yaml:"max_google_login_failures" json:"max_google_login_failures"`
 }
 
 type PaymentConfig struct {
