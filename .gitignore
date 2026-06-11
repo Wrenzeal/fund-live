@@ -3,6 +3,7 @@ target/
 bin/
 build/
 out/
+*.exe
 *.tar.gz
 *.zip
 *.war
@@ -28,6 +29,7 @@ desktop.ini
 *.log
 logs/
 temp/
+.gocache/
 
 # --- 依赖包 (如果是 Node.js 项目) ---
 node_modules/

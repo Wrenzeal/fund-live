@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FundLive Web
 
-## Getting Started
+FundLive 前端应用，基于 Next.js App Router、React、TypeScript 和 Tailwind CSS 构建。完整项目说明请看根目录 [`../README.md`](../README.md)。
 
-First, run the development server:
+FundLive frontend app built with Next.js App Router, React, TypeScript, and Tailwind CSS. See the root [`../README.md`](../README.md) for the full project overview.
+
+## 本地开发 / Local Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+默认访问 / Open: `http://localhost:3000`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 常用命令 / Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npm run build
+npm run start
+```
 
-## Learn More
+## 环境变量 / Environment Variables
 
-To learn more about Next.js, take a look at the following resources:
+```env
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+BACKEND_URL=http://127.0.0.1:8080
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `NEXT_PUBLIC_GOOGLE_CLIENT_ID`：浏览器侧 Google 登录 Client ID。
+- `BACKEND_URL`：Next.js API 代理访问 Go 后端时使用；生产 PM2/systemd 环境需要显式设置。
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `NEXT_PUBLIC_GOOGLE_CLIENT_ID`: browser-side Google Sign-In Client ID.
+- `BACKEND_URL`: Go backend base URL used by the Next.js API proxy; set it explicitly in production runtimes.
