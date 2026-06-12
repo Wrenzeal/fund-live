@@ -1,9 +1,10 @@
 import type { NextRequest } from 'next/server'
 
-const backendBaseUrl =
+const backendBaseUrl = (
   process.env.BACKEND_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
   'http://127.0.0.1:8080'
+).replace(/\/$/, '')
 
 const hopByHopHeaders = new Set([
   'connection',
@@ -31,6 +32,26 @@ export function copyProxyHeaders(source: Headers) {
   return headers
 }
 
+function proxyErrorResponse(targetPath: string, error: unknown) {
+  const message = error instanceof Error ? error.message : 'Unknown proxy error'
+  console.error('[backend-proxy] failed to reach backend', {
+    backendBaseUrl,
+    targetPath,
+    message,
+  })
+
+  return Response.json(
+    {
+      success: false,
+      error: {
+        code: 'BACKEND_UNREACHABLE',
+        message: 'Backend service is unreachable from the frontend runtime.',
+      },
+    },
+    { status: 502 }
+  )
+}
+
 export async function proxyToBackend(request: NextRequest, targetPath: string) {
   const method = request.method.toUpperCase()
   const init: RequestInit = {
@@ -48,12 +69,16 @@ export async function proxyToBackend(request: NextRequest, targetPath: string) {
     }
   }
 
-  const upstreamResponse = await fetch(`${backendBaseUrl}${targetPath}`, init)
-  const responseBody = method === 'HEAD' ? null : await upstreamResponse.arrayBuffer()
+  try {
+    const upstreamResponse = await fetch(`${backendBaseUrl}${targetPath}`, init)
+    const responseBody = method === 'HEAD' ? null : await upstreamResponse.arrayBuffer()
 
-  return new Response(responseBody, {
-    status: upstreamResponse.status,
-    statusText: upstreamResponse.statusText,
-    headers: copyProxyHeaders(upstreamResponse.headers),
-  })
+    return new Response(responseBody, {
+      status: upstreamResponse.status,
+      statusText: upstreamResponse.statusText,
+      headers: copyProxyHeaders(upstreamResponse.headers),
+    })
+  } catch (error) {
+    return proxyErrorResponse(targetPath, error)
+  }
 }

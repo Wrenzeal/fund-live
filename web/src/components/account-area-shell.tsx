@@ -206,7 +206,7 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
                   <p className="mt-2 text-sm leading-6 text-theme-secondary">
                     {isUserLoading
                       ? '请稍候，系统正在读取当前账号信息。'
-                      : 'VIP 功能仍在待办主线中打磨，当前只对管理员开放预览和验收。普通用户不会看到这些页面。'}
+                      : 'VIP 功能当前仅对管理员开放内测访问。普通用户暂时不会看到这些页面。'}
                   </p>
                   {!isUserLoading && !user && (
                     <Link

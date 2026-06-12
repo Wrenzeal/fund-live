@@ -14,17 +14,11 @@ import { useFundAnalyses, useFundSearch } from '@/hooks/use-fund-data'
 import { useUserPortfolio, type WatchlistGroup } from '@/hooks/use-user-portfolio'
 import { useVIPPreview } from '@/hooks/use-vip-preview'
 import { VIP_SAMPLE_REPORT_IDS, type VIPTaskType } from '@/mocks/vip'
+import { GROUP_ACCENT_OPTIONS, type WatchlistAccent, watchlistAccentBadgeClass, watchlistAccentLabel, watchlistAccentToClass } from '@/lib/watchlist-accent'
 import { cn } from '@/lib/utils'
 
 type GroupViewMode = 'all' | 'focused'
 type FloatingMenuRect = { left: number; top: number; width: number; maxHeight: number }
-
-const GROUP_ACCENT_OPTIONS = [
-  { value: 'cyan', label: '清爽蓝', shell: 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100', dot: 'bg-cyan-300' },
-  { value: 'emerald', label: '自然绿', shell: 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100', dot: 'bg-emerald-300' },
-  { value: 'amber', label: '暖金橙', shell: 'border-amber-400/35 bg-amber-500/12 text-amber-100', dot: 'bg-amber-300' },
-  { value: 'fuchsia', label: '紫红调', shell: 'border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100', dot: 'bg-fuchsia-300' },
-] as const
 
 export default function WatchlistPage() {
   const router = useRouter()
@@ -63,7 +57,7 @@ export default function WatchlistPage() {
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
   const [editingGroupName, setEditingGroupName] = useState('')
   const [editingGroupDescription, setEditingGroupDescription] = useState('')
-  const [editingGroupAccent, setEditingGroupAccent] = useState<(typeof GROUP_ACCENT_OPTIONS)[number]['value']>('cyan')
+  const [editingGroupAccent, setEditingGroupAccent] = useState<WatchlistAccent>('cyan')
   const [savingGroupId, setSavingGroupId] = useState<string | null>(null)
   const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null)
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null)
@@ -438,7 +432,7 @@ export default function WatchlistPage() {
     setEditingGroupId(group.id)
     setEditingGroupName(group.name)
     setEditingGroupDescription(group.description || '')
-    setEditingGroupAccent((group.accent as (typeof GROUP_ACCENT_OPTIONS)[number]['value']) || 'cyan')
+    setEditingGroupAccent((group.accent as WatchlistAccent) || 'cyan')
   }
 
   const closeGroupEditor = () => {
@@ -1391,43 +1385,4 @@ export default function WatchlistPage() {
       </ScrollRevealStack>
     </AccountAreaShell>
   )
-}
-
-function watchlistAccentToClass(accent: string) {
-  switch (accent) {
-    case 'emerald':
-      return 'from-emerald-500/30 via-teal-500/15 to-transparent'
-    case 'amber':
-      return 'from-amber-500/25 via-orange-500/15 to-transparent'
-    case 'fuchsia':
-      return 'from-fuchsia-500/25 via-violet-500/15 to-transparent'
-    default:
-      return 'from-cyan-500/30 via-sky-500/20 to-transparent'
-  }
-}
-
-function watchlistAccentLabel(accent: string) {
-  switch (accent) {
-    case 'emerald':
-      return '自然绿'
-    case 'amber':
-      return '暖金橙'
-    case 'fuchsia':
-      return '紫红调'
-    default:
-      return '清爽蓝'
-  }
-}
-
-function watchlistAccentBadgeClass(accent: string) {
-  switch (accent) {
-    case 'emerald':
-      return 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100'
-    case 'amber':
-      return 'border-amber-400/35 bg-amber-500/12 text-amber-100'
-    case 'fuchsia':
-      return 'border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100'
-    default:
-      return 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100'
-  }
 }
