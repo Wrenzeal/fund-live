@@ -59,6 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
 ### Changed
+- **前端设计系统第一批 targeted evolution**
+  - 新增 `Surface`、`StatusBanner`、`EmptyState`、`SectionHeader` 轻量 UI primitives，用于收口重复的 glass 面板、状态提示和空态表达，不引入新 UI 库或动画依赖。
+  - 首页市场状态 / 涨幅贡献卡片、预热 / 集合竞价 / 切换失败提示改为复用统一 primitives；持仓页登录空态、首笔持仓空态、筛选提示和无匹配空态同步收口。
+  - 静态信息页 Hero 与卡片网格改为复用 `Surface`，并移除一处高频 tracking eyebrow 样式；主要页面容器从 `min-h-screen` 调整为 `min-h-[100dvh]`，提升移动端 viewport 稳定性。
+  - 第二批补充 `ActionButton` 轻量 primitive，收口首页顶部导航、静态信息页返回链接、持仓页登录 / 注册入口与筛选空态恢复按钮的 CTA 类名重复，继续保持路由、业务 hook 和表单字段不变。
+  - 第三批抽出 `HoldingsWorkspaceNav`，将持仓页顶部概览、快捷动作、快速开始和工作台 tab 网格下沉为纯展示组件；`holdings/page.tsx` 继续保留 active tab、seed demo、口径/视图状态和业务数据流。
 
 - **前端 redesign 第二轮收口与 Vercel API 域名修复**
   - 静态信息页抽出 `StaticInfoShell` / `StaticInfoHero` / `StaticInfoCardGrid`，让品牌化 404、隐私政策和服务条款复用统一壳层，并为隐私政策 / 服务条款补充页面 metadata。

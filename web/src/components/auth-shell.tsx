@@ -45,7 +45,7 @@ export function AuthShell({
   const { themeType, setThemeType, viewMode, setViewMode } = useUIPreferences()
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-[100dvh]">
       <header className="sticky top-0 z-40 border-b border-[var(--card-border)] glass-strong">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-4">

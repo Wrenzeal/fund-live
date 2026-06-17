@@ -354,7 +354,7 @@ export default function AnalysisRankingsPage() {
   const featuredItem = featuredConfig.items[0]
 
   return (
-    <main className="min-h-screen">
+    <main className="min-h-[100dvh]">
       <div className="container mx-auto max-w-7xl px-4 py-6 md:py-8">
         <div className="space-y-5 md:space-y-6">
           <RevealBlock>

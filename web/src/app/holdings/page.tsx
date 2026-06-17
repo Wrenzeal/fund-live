@@ -1,21 +1,10 @@
 'use client'
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  AlertTriangle,
-  BarChart4,
-  BellRing,
-  CheckCircle2,
-  ClipboardList,
-  FileStack,
-  HeartPulse,
-  History,
-  LoaderCircle,
-  Wallet,
-} from 'lucide-react'
+import { FileStack, Wallet } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
+import { ActionButton } from '@/components/ui/action-button'
 import {
   HoldingFeedbackBanner,
   type HoldingFeedbackMessage,
@@ -27,10 +16,13 @@ import { HoldingPortfolioHealthPanel } from '@/components/holding-portfolio-heal
 import { HoldingReconciliationPanel } from '@/components/holding-reconciliation-panel'
 import { HoldingRecordComposer } from '@/components/holding-record-composer'
 import { HoldingReminderPanel } from '@/components/holding-reminder-panel'
+import { HoldingsWorkspaceNav, type HoldingWorkspaceTab } from '@/components/holdings-workspace-nav'
 import { HoldingsViewControls } from '@/components/holdings-view-controls'
 import { HoldingsList } from '@/components/holdings-list'
 import { HoldingsSummaryMetrics } from '@/components/holdings-summary-metrics'
 import { VIPAnalysisEntry } from '@/components/vip-analysis-entry'
+import { EmptyState } from '@/components/ui/empty-state'
+import { StatusBanner } from '@/components/ui/status-banner'
 import { useCurrentUser } from '@/hooks/use-auth'
 import {
   useFundAnalyses,
@@ -51,7 +43,6 @@ import {
 import { useVIPPreview } from '@/hooks/use-vip-preview'
 import { VIP_SAMPLE_REPORT_IDS } from '@/mocks/vip'
 import type { HoldingSourceFilter } from '@/lib/holding-sources'
-import { cn } from '@/lib/utils'
 import {
   aggregateChangeValue,
   aggregateLatestUpdatedAt,
@@ -79,48 +70,6 @@ import {
 } from '@/lib/holding-display'
 
 type HoldingViewMode = 'aggregate' | 'detail'
-type HoldingWorkspaceTab =
-  | 'summary'
-  | 'record'
-  | 'list'
-  | 'risk'
-  | 'ledger'
-  | 'tools'
-
-const workspaceTabs: Array<{
-  id: HoldingWorkspaceTab
-  label: string
-  description: string
-  icon: typeof Wallet
-}> = [
-  {
-    id: 'summary',
-    label: '总览',
-    description: '价值、收益、对账',
-    icon: Wallet,
-  },
-  {
-    id: 'record',
-    label: '记录',
-    description: '新增/补仓',
-    icon: ClipboardList,
-  },
-  {
-    id: 'list',
-    label: '持仓',
-    description: '排序、筛选、操作',
-    icon: BarChart4,
-  },
-  { id: 'risk', label: '风险', description: '体检和提醒', icon: HeartPulse },
-  {
-    id: 'ledger',
-    label: '流水',
-    description: '买卖、校正、分红',
-    icon: History,
-  },
-  { id: 'tools', label: '工具', description: '批量导入/VIP', icon: BellRing },
-]
-
 export default function HoldingsPage() {
   const router = useRouter()
   const { user, isLoading } = useCurrentUser()
@@ -571,13 +520,6 @@ export default function HoldingsPage() {
       ? `当前仅显示部分就绪或完全未就绪的基金，共 ${activeDisplayCount}/${holdingAggregates.length} 只。`
       : `当前仅显示待确认份额、待同步官方净值或真实口径未就绪的记录，共 ${activeDisplayCount}/${holdings.length} 条。`
   const activeWorkspaceTab = holdings.length === 0 ? 'record' : workspaceTab
-  const quickActions = [
-    { label: '记一笔', tab: 'record' as const, primary: true },
-    { label: '看持仓', tab: 'list' as const },
-    { label: '查风险', tab: 'risk' as const },
-    { label: '看流水', tab: 'ledger' as const },
-  ]
-
   const handleSeedDemo = async () => {
     setFeedback(null)
     setIsSeedingDemo(true)
@@ -729,7 +671,7 @@ export default function HoldingsPage() {
         title="持仓明细"
         description="记录持仓本金，并在官方净值同步后查看真实市值与今日盈亏。"
       >
-        <div className="glass h-64 rounded-[32px] border border-[var(--card-border)]" />
+        <div className="glass h-64 animate-pulse rounded-[32px] border border-[var(--card-border)]" />
       </AccountAreaShell>
     )
   }
@@ -740,28 +682,21 @@ export default function HoldingsPage() {
         title="持仓明细"
         description="记录持仓本金，并在官方净值同步后查看真实市值与今日盈亏。"
       >
-        <div className="glass rounded-[32px] border border-[var(--card-border)] p-8 text-center">
-          <div className="mb-3 text-2xl font-bold text-theme-primary">
-            登录后可查看持仓明细
-          </div>
-          <p className="mx-auto max-w-xl text-sm leading-6 text-theme-secondary">
-            登录后可同步查看和管理你的基金持仓记录。
-          </p>
-          <div className="mt-6 flex justify-center gap-3">
-            <Link
-              href="/auth/login"
-              className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm text-theme-secondary"
-            >
-              去登录
-            </Link>
-            <Link
-              href="/auth/register"
-              className="rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-4 py-3 text-sm font-medium text-white"
-            >
-              去注册
-            </Link>
-          </div>
-        </div>
+        <EmptyState
+          icon={<Wallet className="h-10 w-10" />}
+          title="登录后可查看持仓明细"
+          description="登录后可同步查看和管理你的基金持仓记录。"
+          action={
+            <div className="flex justify-center gap-3">
+              <ActionButton href="/auth/login" variant="subtle">
+                去登录
+              </ActionButton>
+              <ActionButton href="/auth/register" variant="primary">
+                去注册
+              </ActionButton>
+            </div>
+          }
+        />
       </AccountAreaShell>
     )
   }
@@ -777,92 +712,16 @@ export default function HoldingsPage() {
           <HoldingFeedbackBanner feedback={vipFeedback} showIcon={false} />
         )}
 
-        <section className="rounded-[32px] border border-[var(--card-border)] p-5 glass md:p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="text-sm text-theme-muted">持仓工作台</div>
-              <div className="mt-1 text-3xl font-black text-theme-primary">
-                {holdings.length} 条持仓
-              </div>
-              <div className="mt-2 text-xs text-theme-muted">
-                {holdings.length === 0
-                  ? '先记录一笔持仓，再查看净值、份额和盈亏。'
-                  : `${metricScope === 'official' ? '官方口径' : '盘中预估'} · ${viewMode === 'aggregate' ? '按基金' : '分笔明细'}`}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {quickActions.map((action) => (
-                <button
-                  key={action.tab}
-                  type="button"
-                  onClick={() => setWorkspaceTab(action.tab)}
-                  className={cn(
-                    'rounded-2xl border px-4 py-2 text-sm font-medium transition-all duration-200',
-                    activeWorkspaceTab === action.tab
-                      ? 'border-cyan-300/45 bg-cyan-400/14 text-cyan-100 shadow-[0_12px_26px_rgba(34,211,238,0.12)]'
-                      : action.primary
-                        ? 'border-cyan-300/30 bg-cyan-400/10 text-cyan-100 hover:border-cyan-200/45'
-                        : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-300/35 hover:text-theme-primary',
-                  )}
-                >
-                  {action.label}
-                </button>
-              ))}
-              {holdings.length === 0 && (
-                <button
-                  type="button"
-                  onClick={() => void handleSeedDemo()}
-                  disabled={isSeedingDemo}
-                  className={cn(
-                    'group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition-all duration-200',
-                    'hover:-translate-y-0.5 hover:border-cyan-400/45 hover:text-theme-primary',
-                    isSeedingDemo && 'holding-action-button',
-                  )}
-                >
-                  <span className="holding-action-shine" />
-                  {isSeedingDemo ? (
-                    <LoaderCircle className="relative z-10 h-4 w-4 animate-spin" />
-                  ) : (
-                    <BarChart4 className="relative z-10 h-4 w-4" />
-                  )}
-                  <span className="relative z-10">
-                    {isSeedingDemo ? '准备中...' : '快速开始'}
-                  </span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {holdings.length > 0 && (
-            <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-              {workspaceTabs.map((tab) => {
-                const Icon = tab.icon
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setWorkspaceTab(tab.id)}
-                    className={cn(
-                      'rounded-[20px] border p-3 text-left transition-all duration-200',
-                      activeWorkspaceTab === tab.id
-                        ? 'border-cyan-300/45 bg-cyan-400/14 text-cyan-100 shadow-[0_14px_30px_rgba(34,211,238,0.12)]'
-                        : 'border-[var(--card-border)] bg-[var(--card-bg)]/56 text-theme-secondary hover:border-cyan-300/30 hover:text-theme-primary',
-                    )}
-                  >
-                    <div className="flex items-center gap-2 text-sm font-semibold">
-                      <Icon className="h-4 w-4" />
-                      {tab.label}
-                    </div>
-                    <div className="mt-1 text-[11px] text-theme-muted">
-                      {tab.description}
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </section>
+        <HoldingsWorkspaceNav
+          holdingCount={holdings.length}
+          activeTab={activeWorkspaceTab}
+          detailText={holdings.length === 0
+            ? '先记录一笔持仓，再查看净值、份额和盈亏。'
+            : `${metricScope === 'official' ? '官方口径' : '盘中预估'} · ${viewMode === 'aggregate' ? '按基金' : '分笔明细'}`}
+          isSeedingDemo={isSeedingDemo}
+          onTabChange={setWorkspaceTab}
+          onSeedDemo={() => void handleSeedDemo()}
+        />
 
         {activeWorkspaceTab === 'record' && (
           <HoldingRecordComposer
@@ -912,31 +771,15 @@ export default function HoldingsPage() {
         )}
 
         {holdings.length === 0 && activeWorkspaceTab === 'record' && (
-          <div className="rounded-[32px] border border-dashed border-[var(--card-border)] p-8 text-center glass">
-            <Wallet className="mx-auto h-10 w-10 text-theme-muted" />
-            <div className="mt-4 text-xl font-semibold text-theme-primary">
-              记录第一笔后，这里会变成你的持仓驾驶舱
-            </div>
-            <div className="mt-6 grid gap-3 md:grid-cols-3">
-              {[
-                { title: '自动补齐', description: '净值、份额、市值' },
-                { title: '看见风险', description: '量化建议、事件标签' },
-                { title: '形成组合', description: '组合分析入口' },
-              ].map((item) => (
-                <div
-                  key={item.title}
-                  className="rounded-[22px] border border-[var(--card-border)] bg-[var(--input-bg)]/66 px-4 py-4 text-left"
-                >
-                  <div className="text-sm font-semibold text-theme-primary">
-                    {item.title}
-                  </div>
-                  <div className="mt-2 text-xs leading-5 text-theme-secondary">
-                    {item.description}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <EmptyState
+            icon={<Wallet className="h-10 w-10" />}
+            title="记录第一笔后，这里会变成你的持仓驾驶舱"
+            features={[
+              { title: '自动补齐', description: '净值、份额、市值' },
+              { title: '看见风险', description: '量化建议、事件标签' },
+              { title: '形成组合', description: '组合分析入口' },
+            ]}
+          />
         )}
 
         {holdings.length > 0 && activeWorkspaceTab === 'summary' && (
@@ -984,50 +827,47 @@ export default function HoldingsPage() {
             />
 
             {hasActiveFilter && (
-              <div className="mb-6 flex flex-col gap-2 rounded-[22px] border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>
-                    {showIncompleteOnly
-                      ? incompleteFilterDescription
-                      : activeFilterDescription}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowIncompleteOnly(false)
-                    setFilterMode('all')
-                  }}
-                  className="text-left text-xs font-medium text-amber-50 underline-offset-4 hover:underline sm:text-right"
-                >
-                  取消筛选
-                </button>
-              </div>
+              <StatusBanner
+                className="mb-6"
+                tone="warning"
+                action={
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowIncompleteOnly(false)
+                      setFilterMode('all')
+                    }}
+                    className="shrink-0 text-left text-xs font-medium text-amber-50 underline-offset-4 hover:underline sm:text-right"
+                  >
+                    取消筛选
+                  </button>
+                }
+              >
+                {showIncompleteOnly
+                  ? incompleteFilterDescription
+                  : activeFilterDescription}
+              </StatusBanner>
             )}
 
             {hasActiveFilter && activeDisplayCount === 0 ? (
-              <div className="rounded-[32px] border border-dashed border-[var(--card-border)] p-10 text-center glass">
-                <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-300" />
-                <div className="mt-4 text-xl font-semibold text-theme-primary">
-                  当前没有匹配记录
-                </div>
-                <p className="mt-2 text-sm leading-6 text-theme-secondary">
-                  {showIncompleteOnly
-                    ? '当前口径下没有待补齐记录。'
-                    : '取消筛选后可查看全部持仓。'}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowIncompleteOnly(false)
-                    setFilterMode('all')
-                  }}
-                  className="mt-5 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition-colors hover:border-cyan-400/35 hover:text-theme-primary"
-                >
-                  查看全部持仓
-                </button>
-              </div>
+              <EmptyState
+                title="当前没有匹配记录"
+                description={showIncompleteOnly
+                  ? '当前口径下没有待补齐记录。'
+                  : '取消筛选后可查看全部持仓。'}
+                action={
+                  <ActionButton
+                    type="button"
+                    variant="subtle"
+                    onClick={() => {
+                      setShowIncompleteOnly(false)
+                      setFilterMode('all')
+                    }}
+                  >
+                    查看全部持仓
+                  </ActionButton>
+                }
+              />
             ) : (
               <HoldingsList
                 viewMode={viewMode}

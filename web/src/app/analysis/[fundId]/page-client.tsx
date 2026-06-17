@@ -60,7 +60,7 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
   const recommendationItems = buildRecommendationItems(analysis)
 
   return (
-    <main className="min-h-screen">
+    <main className="min-h-[100dvh]">
       <div className="container mx-auto max-w-7xl px-4 py-6 md:py-8">
         <header className="mb-6 overflow-hidden rounded-[2rem] border border-[var(--card-border)] bg-[var(--card-bg)]/45 p-5 shadow-[0_22px_60px_rgba(0,0,0,0.10)] md:p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">

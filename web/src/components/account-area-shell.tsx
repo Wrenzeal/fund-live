@@ -83,7 +83,7 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
   } as CSSProperties
 
   return (
-    <div className="min-h-screen" style={shellStyle}>
+    <div className="min-h-[100dvh]" style={shellStyle}>
       <header ref={headerRef} className="sticky top-0 z-50 border-b border-[var(--card-border)] glass-strong">
         <div className="container mx-auto px-4 py-4">
           <div ref={topBarRef} className="flex items-center justify-between gap-4">

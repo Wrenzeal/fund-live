@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useFundAnalysis, useFundDashboard, useFundHoldings, useTimeSeries } from '@/hooks/use-fund-data'
@@ -20,7 +19,10 @@ import { FundLoadingIndicator } from '@/components/loading-indicator'
 import { UserAccountMenu } from '@/components/user-account-menu'
 import { ScrollReveal, ScrollRevealStack } from '@/components/scroll-reveal'
 import { SiteFooter } from '@/components/site-footer'
-import { AlertTriangle, BarChart3, TrendingUp, Clock, RefreshCw, X } from 'lucide-react'
+import { ActionButton } from '@/components/ui/action-button'
+import { Surface } from '@/components/ui/surface'
+import { StatusBanner } from '@/components/ui/status-banner'
+import { BarChart3, TrendingUp, Clock, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // 默认基金 ID
@@ -226,7 +228,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
       : getSessionLabel(marketStatus.session)
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-[100dvh]">
       {/* 基金切换全屏加载指示器 */}
       <FundLoadingIndicator
         isVisible={isFundSwitching}
@@ -251,17 +253,9 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
                 { href: '/announcements', label: '更新公告' },
                 { href: '/analysis/rankings', label: '量化排行榜' },
               ].map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'group relative overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-theme-secondary transition-all duration-200',
-                    'hover:-translate-y-0.5 hover:border-cyan-400/35 hover:bg-cyan-400/10 hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)] active:scale-[0.97]'
-                  )}
-                >
-                  <span className="action-button-shine" />
-                  <span className="relative z-10">{item.label}</span>
-                </Link>
+                <ActionButton key={item.href} href={item.href} variant="subtle" size="sm">
+                  {item.label}
+                </ActionButton>
               ))}
             </nav>
 
@@ -315,36 +309,23 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
       {/* Main Content */}
       <main id="main-content" className="container mx-auto px-4 py-8">
         {selectionError && (
-          <div className="mb-6 flex items-start justify-between gap-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{selectionError}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSelectionError(null)}
-              className="text-amber-100/70 transition-colors hover:text-amber-100"
-              aria-label="关闭错误提示"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+          <StatusBanner className="mb-6" tone="warning" onDismiss={() => setSelectionError(null)}>
+            {selectionError}
+          </StatusBanner>
         )}
         {warmupNotice && !isCallAuction && (
-          <div className="mb-6 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-50">
-            <div className="flex items-start gap-3">
-              <RefreshCw className={cn('mt-0.5 h-4 w-4 shrink-0', isDashboardWarming ? 'animate-spin' : '')} />
-              <span>{warmupNotice}</span>
-            </div>
-          </div>
+          <StatusBanner
+            className="mb-6"
+            tone="info"
+            icon={<RefreshCw className={cn('h-4 w-4', isDashboardWarming ? 'animate-spin' : '')} />}
+          >
+            {warmupNotice}
+          </StatusBanner>
         )}
         {isCallAuction && (
-          <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-            <div className="flex items-start gap-3">
-              <Clock className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>集合竞价中，等待 09:30 开盘后更新基金数据。</span>
-            </div>
-          </div>
+          <StatusBanner className="mb-6" tone="warning" icon={<Clock className="h-4 w-4" />}>
+            集合竞价中，等待 09:30 开盘后更新基金数据。
+          </StatusBanner>
         )}
         {/* 加载过渡状态指示 */}
         {isPending && (
@@ -385,7 +366,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
               {/* Quick Stats */}
               <div className="space-y-4">
                 {/* Trading Status Card */}
-                <div className="glass rounded-2xl p-6">
+                <Surface padding="md" radius="md">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="p-2 rounded-lg bg-cyan-500/20">
                       <BarChart3 className="w-5 h-5 text-cyan-400" />
@@ -445,10 +426,10 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
                       </span>
                     </div>
                   </div>
-                </div>
+                </Surface>
 
                 {/* Top Contributors */}
-                <div className="glass rounded-2xl p-6">
+                <Surface padding="md" radius="md">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="p-2 rounded-lg bg-[var(--accent-up)]/20">
                       <TrendingUp className="w-5 h-5 text-up" />
@@ -532,7 +513,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
                       </p>
                     )}
                   </div>
-                </div>
+                </Surface>
               </div>
             </div>
 
