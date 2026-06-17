@@ -1,8 +1,12 @@
-import Link from 'next/link'
-import { ArrowLeft, Database, LockKeyhole, ShieldCheck } from 'lucide-react'
+import type { Metadata } from 'next'
+import { Database, LockKeyhole, ShieldCheck } from 'lucide-react'
 
-import { BrandMark } from '@/components/brand-mark'
-import { SiteFooter } from '@/components/site-footer'
+import { StaticInfoCardGrid, StaticInfoHero, StaticInfoShell } from '@/components/static-info-page'
+
+export const metadata: Metadata = {
+  title: '隐私政策 | FundLive',
+  description: '了解 FundLive 为提供基金观察、自选、持仓和账号安全能力而保存和使用的信息。',
+}
 
 const sections = [
   {
@@ -24,40 +28,13 @@ const sections = [
 
 export default function PrivacyPage() {
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="border-b border-[var(--card-border)] glass-strong">
-        <div className="container mx-auto flex items-center justify-between gap-4 px-4 py-4">
-          <BrandMark subtitle="隐私政策" />
-          <Link href="/" className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2.5 text-sm text-theme-primary">
-            <ArrowLeft className="h-4 w-4" />
-            返回首页
-          </Link>
-        </div>
-      </header>
-
-      <main id="main-content" className="container mx-auto flex-1 px-4 py-10">
-        <section className="rounded-[36px] border border-[var(--card-border)] p-8 glass-strong md:p-10">
-          <p className="text-sm font-medium tracking-[0.22em] text-theme-muted">PRIVACY</p>
-          <h1 className="mt-4 text-4xl font-bold tracking-tight text-theme-primary">隐私政策</h1>
-          <p className="mt-4 max-w-3xl text-base leading-7 text-theme-secondary">
-            FundLive 是面向个人基金观察的工具。我们尽量只收集提供功能所必需的数据，并把敏感配置和登录状态与前端展示隔离。
-          </p>
-        </section>
-
-        <section className="mt-8 grid gap-5 md:grid-cols-3">
-          {sections.map(({ title, body, icon: Icon }) => (
-            <article key={title} className="rounded-[28px] border border-[var(--card-border)] p-6 glass">
-              <div className="inline-flex rounded-2xl bg-cyan-500/12 p-3 text-cyan-200">
-                <Icon className="h-5 w-5" />
-              </div>
-              <h2 className="mt-5 text-xl font-semibold text-theme-primary">{title}</h2>
-              <p className="mt-3 text-sm leading-6 text-theme-secondary">{body}</p>
-            </article>
-          ))}
-        </section>
-      </main>
-
-      <SiteFooter compact />
-    </div>
+    <StaticInfoShell subtitle="隐私政策">
+      <StaticInfoHero
+        eyebrow="隐私与数据"
+        title="隐私政策"
+        description="FundLive 是面向个人基金观察的工具。我们尽量只收集提供功能所必需的数据，并把敏感配置和登录状态与前端展示隔离。"
+      />
+      <StaticInfoCardGrid cards={sections} />
+    </StaticInfoShell>
   )
 }

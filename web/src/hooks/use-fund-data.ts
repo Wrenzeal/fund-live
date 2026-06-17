@@ -3,9 +3,9 @@
 import { useEffect, useEffectEvent } from 'react'
 import useSWR, { SWRConfiguration } from 'swr'
 import { useMarketTradingState } from './use-market-status'
+import { API_BASE_URL } from '@/lib/api-base-url'
 
 // API 基础 URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 export interface ResponseMeta {
     data_source?: string

@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 function issueTypeMeta(type: 'bug' | 'feature' | 'improvement') {
   switch (type) {
     case 'bug':
-      return { label: 'Bug', className: 'border-rose-500/25 bg-rose-500/10 text-rose-200' }
+      return { label: '问题反馈', className: 'border-rose-500/25 bg-rose-500/10 text-rose-200' }
     case 'feature':
       return { label: '功能诉求', className: 'border-cyan-500/25 bg-cyan-500/10 text-cyan-200' }
     default:
@@ -58,7 +58,7 @@ export default function IssueDetailPage() {
     try {
       await updateIssueStatus(issue.id, status)
       await refresh()
-      setFeedback({ type: 'success', message: '想法处理状态已更新。' })
+      setFeedback({ type: 'success', message: '反馈处理状态已更新。' })
     } catch (requestError) {
       setFeedback({
         type: 'error',
@@ -93,9 +93,9 @@ export default function IssueDetailPage() {
   if (isLoading) {
     return (
       <SiteShell
-        title="想法详情"
-        description="查看这条想法的内容和处理进度。"
-        eyebrowLabel="IDEA DETAIL"
+        title="反馈详情"
+        description="查看这条反馈的内容和处理进度。"
+        eyebrowLabel="反馈详情"
         EyebrowIcon={WandSparkles}
       >
         <div className="rounded-[32px] border border-[var(--card-border)] p-10 glass text-center">
@@ -109,13 +109,13 @@ export default function IssueDetailPage() {
   if (!issue) {
     return (
       <SiteShell
-        title="想法详情"
-        description="查看这条想法的内容和处理进度。"
-        eyebrowLabel="IDEA DETAIL"
+        title="反馈详情"
+        description="查看这条反馈的内容和处理进度。"
+        eyebrowLabel="反馈详情"
         EyebrowIcon={WandSparkles}
       >
         <div className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6 text-sm text-rose-100">
-          {error instanceof Error ? error.message : '这条想法不存在。'}
+          {error instanceof Error ? error.message : '这条反馈不存在。'}
         </div>
       </SiteShell>
     )
@@ -130,9 +130,9 @@ export default function IssueDetailPage() {
 
   return (
     <SiteShell
-      title="想法详情"
-      description="查看这条想法的内容和处理进度。"
-      eyebrowLabel="IDEA DETAIL"
+      title="反馈详情"
+      description="查看这条反馈的内容和处理进度。"
+      eyebrowLabel="反馈详情"
       EyebrowIcon={WandSparkles}
     >
       <ScrollRevealStack className="space-y-6">
@@ -142,7 +142,7 @@ export default function IssueDetailPage() {
             className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-theme-primary"
           >
             <ArrowLeft className="h-4 w-4" />
-            返回我有想法！
+            返回反馈与想法
           </Link>
         </div>
 
@@ -268,7 +268,7 @@ export default function IssueDetailPage() {
             </div>
           ) : (
             <div className="rounded-[24px] border border-dashed border-[var(--card-border)] px-5 py-5 text-sm leading-7 text-theme-secondary">
-              这条想法暂未收到公开回复。
+              这条反馈暂未收到公开回复。
             </div>
           )}
         </section>
@@ -278,7 +278,7 @@ export default function IssueDetailPage() {
             <div className="flex items-start gap-3 text-amber-100">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
               <div className="text-sm leading-6">
-                这条想法会公开展示；处理状态和官方回复由管理员维护。
+                这条反馈会公开展示；处理状态和官方回复由管理员维护。
               </div>
             </div>
           </section>

@@ -21,14 +21,14 @@ interface SiteShellProps {
 
 const tabs = [
   { href: '/', label: '首页', icon: Home },
-  { href: '/issues', label: '我有想法！', icon: Bug },
+  { href: '/issues', label: '反馈与想法', icon: Bug },
   { href: '/announcements', label: '更新公告', icon: Bell },
 ]
 
 export function SiteShell({
   title,
   description,
-  eyebrowLabel = 'COMMUNITY BOARD',
+  eyebrowLabel = '社区动态',
   EyebrowIcon = Bug,
   children,
 }: SiteShellProps) {

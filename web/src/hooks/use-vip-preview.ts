@@ -2,6 +2,7 @@
 
 import useSWR from 'swr'
 import { useCurrentUser } from '@/hooks/use-auth'
+import { API_BASE_URL } from '@/lib/api-base-url'
 import {
   VIP_DAILY_QUOTA,
   VIP_PLAN,
@@ -16,7 +17,6 @@ import {
   getVIPSampleReportByID,
 } from '@/mocks/vip'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 interface ApiEnvelope<T> {
   success: boolean

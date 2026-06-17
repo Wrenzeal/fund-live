@@ -247,7 +247,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
 
             <nav className="hidden items-center gap-2 xl:flex">
               {[
-                { href: '/issues', label: '我有想法！' },
+                { href: '/issues', label: '反馈与想法' },
                 { href: '/announcements', label: '更新公告' },
                 { href: '/analysis/rankings', label: '量化排行榜' },
               ].map((item) => (

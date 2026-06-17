@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import useSWR, { mutate as globalMutate } from 'swr'
+import { API_BASE_URL } from '@/lib/api-base-url'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 const STATUS_KEY = `${API_BASE_URL}/api/v1/market/status`
 const STATUS_FALLBACK_REFRESH_MS = 5 * 60 * 1000
 

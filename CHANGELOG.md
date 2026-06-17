@@ -60,6 +60,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **前端 redesign 第二轮收口与 Vercel API 域名修复**
+  - 静态信息页抽出 `StaticInfoShell` / `StaticInfoHero` / `StaticInfoCardGrid`，让品牌化 404、隐私政策和服务条款复用统一壳层，并为隐私政策 / 服务条款补充页面 metadata。
+  - 社区反馈入口从“我有想法！”统一收口为“反馈与想法”，去掉感叹号和英文 eyebrow；反馈列表与详情页用户可见文案不再暴露 `Issue` / `IDEA`。
+  - 前端新增 `api-base-url` helper：浏览器默认继续请求同源 `/api/v1/*`，若误把 `NEXT_PUBLIC_API_URL` 配成前端域名 `https://fund.wrenzeal.top` 会回退同源代理，避免绕回前端域名或破坏 Cookie 登录。
+  - Vercel Route Handler 的后端代理在 Vercel 环境下默认 fallback 到 `https://api.fund.wrenzeal.top`；正式生产仍应显式设置 `BACKEND_URL=https://api.fund.wrenzeal.top`。
+  - `docs/vercel-frontend-deploy.md` 与 `web/README.md` 已补充 Vercel 环境变量、API 子域 DNS/Nginx/TLS 要求，以及不要把 `BACKEND_URL` 填成前端域名的说明。
+
 - **自选页浮层复杂度收口**
   - 新增 `FloatingListbox` 复用组件，统一 fixed portal 下拉的定位、滚动/resize 监听、遮罩关闭、listbox 容器与最大高度计算。
   - `/watchlist` 的目标分组下拉与基金搜索结果下拉改为复用该组件，删除页面内重复的 rect state、resize/scroll effect 与 `createPortal` 样板，同时保留原有选择、搜索、禁用和可访问性语义。

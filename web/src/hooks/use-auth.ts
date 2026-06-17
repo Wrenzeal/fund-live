@@ -1,8 +1,8 @@
 'use client'
 
 import useSWR from 'swr'
+import { API_BASE_URL } from '@/lib/api-base-url'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 export type QuoteSource = 'sina' | 'tencent'
 

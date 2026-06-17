@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { API_BASE_URL } from '@/lib/api-base-url'
 
 interface GoogleSignInButtonProps {
   onCredential: (credential: string) => void | Promise<void>
@@ -20,7 +21,6 @@ interface ApiEnvelope<T> {
   }
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 const GOOGLE_SCRIPT_ID = 'google-identity-services'
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''
 

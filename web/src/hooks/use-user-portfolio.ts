@@ -5,8 +5,8 @@ import useSWR from 'swr'
 import { useMarketTradingState } from '@/hooks/use-market-status'
 import type { Fund, FundEstimate } from '@/hooks/use-fund-data'
 import type { HoldingSourceFilter } from '@/lib/holding-sources'
+import { API_BASE_URL } from '@/lib/api-base-url'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 export interface WatchlistFundEntry {
   fund_id: string

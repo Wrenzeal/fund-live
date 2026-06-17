@@ -1,8 +1,8 @@
 'use client'
 
 import useSWR from 'swr'
+import { API_BASE_URL } from '@/lib/api-base-url'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 export type IssueType = 'bug' | 'feature' | 'improvement'
 export type IssueStatus = 'pending' | 'accepted' | 'completed'
@@ -43,7 +43,7 @@ export class IssueRequestError extends Error {
   constructor(message: string, code?: string) {
     super(message)
     this.name = 'IssueRequestError'
-    this.code = code || 'ISSUE_REQUEST_FAILED'
+    this.code = code || 'FEEDBACK_REQUEST_FAILED'
   }
 }
 
@@ -53,7 +53,7 @@ async function fetchIssues<T>(url: string): Promise<T> {
   })
   const json = await res.json() as ApiEnvelope<T>
   if (!res.ok || !json.success || typeof json.data === 'undefined') {
-    throw new IssueRequestError(json.error?.message || 'Issue request failed', json.error?.code)
+    throw new IssueRequestError(json.error?.message || '反馈请求失败', json.error?.code)
   }
   return json.data
 }
@@ -70,7 +70,7 @@ async function requestIssues<T>(path: string, init?: RequestInit): Promise<T | n
 
   const json = await res.json() as ApiEnvelope<T>
   if (!res.ok || !json.success) {
-    throw new IssueRequestError(json.error?.message || 'Issue request failed', json.error?.code)
+    throw new IssueRequestError(json.error?.message || '反馈请求失败', json.error?.code)
   }
   return json.data ?? null
 }

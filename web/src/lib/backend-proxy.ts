@@ -1,10 +1,10 @@
 import type { NextRequest } from 'next/server'
 
-const backendBaseUrl = (
-  process.env.BACKEND_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  'http://127.0.0.1:8080'
-).replace(/\/$/, '')
+import { PRODUCTION_API_BASE_URL, resolveBackendBaseUrl } from '@/lib/api-base-url'
+
+const fallbackBackendBaseUrl = process.env.VERCEL ? PRODUCTION_API_BASE_URL : 'http://127.0.0.1:8080'
+
+const backendBaseUrl = resolveBackendBaseUrl(process.env.BACKEND_URL, fallbackBackendBaseUrl)
 
 const hopByHopHeaders = new Set([
   'connection',

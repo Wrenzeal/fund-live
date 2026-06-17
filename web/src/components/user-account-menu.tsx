@@ -212,8 +212,8 @@ export function UserAccountMenu() {
                     <Bug className="h-4 w-4" />
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-theme-primary">我有想法！</div>
-                    <div className="text-xs text-theme-muted">把 bug、功能诉求和改进建议发出来</div>
+                    <div className="text-sm font-medium text-theme-primary">反馈与想法</div>
+                    <div className="text-xs text-theme-muted">把问题、功能诉求和改进建议发出来</div>
                   </div>
                 </Link>
 

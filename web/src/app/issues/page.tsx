@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 
 const issueTypes: { id: '' | IssueType; label: string }[] = [
   { id: '', label: '全部类型' },
-  { id: 'bug', label: 'Bug' },
+  { id: 'bug', label: '问题反馈' },
   { id: 'feature', label: '功能诉求' },
   { id: 'improvement', label: '改进建议' },
 ]
@@ -201,10 +201,10 @@ export default function IssuesPage() {
       setTitle('')
       setBody('')
       setFormType('bug')
-      setFeedback('想法已经送达，我们会尽快查看。')
+      setFeedback('反馈已经送达，我们会尽快查看。')
       await refresh()
     } catch (requestError) {
-      setFeedback(requestError instanceof Error ? requestError.message : '想法发送失败，请稍后重试。')
+      setFeedback(requestError instanceof Error ? requestError.message : '反馈发送失败，请稍后重试。')
     } finally {
       setIsSubmitting(false)
     }
@@ -212,15 +212,15 @@ export default function IssuesPage() {
 
   return (
     <SiteShell
-      title="我有想法！"
-      description="查看大家提交的问题和功能诉求；登录后也可以留下你的想法。"
-      eyebrowLabel="IDEA BOARD"
+      title="反馈与想法"
+      description="查看大家提交的问题、功能诉求和改进建议；登录后也可以留下你的反馈。"
+      eyebrowLabel="反馈入口"
       EyebrowIcon={WandSparkles}
     >
       <div className="space-y-8">
         <ScrollRevealStack className="grid gap-5 lg:grid-cols-4" stagger={65}>
           {[
-            { label: '当前想法', value: counts.total, accent: 'text-cyan-300' },
+            { label: '反馈总数', value: counts.total, accent: 'text-cyan-300' },
             { label: '待接收', value: counts.pending, accent: 'text-amber-300' },
             { label: '处理中', value: counts.accepted, accent: 'text-cyan-300' },
             { label: '已完成', value: counts.completed, accent: 'text-emerald-300' },
@@ -254,7 +254,7 @@ export default function IssuesPage() {
                 options={issueTypes.map((option) => ({
                   id: option.id,
                   label: option.label,
-                  hint: option.id ? `只看 ${option.label} 相关想法` : '查看所有类型的想法',
+                  hint: option.id ? `只看 ${option.label} 相关反馈` : '查看所有类型的反馈',
                 }))}
                 isOpen={openSelect === 'filter-type'}
                 onToggle={() => setOpenSelect((current) => current === 'filter-type' ? null : 'filter-type')}
@@ -282,16 +282,16 @@ export default function IssuesPage() {
             {isLoading ? (
               <div className="rounded-[32px] border border-[var(--card-border)] p-10 glass text-center">
                 <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
-                <div className="mt-4 text-sm text-theme-secondary">正在加载 Issue 列表...</div>
+                <div className="mt-4 text-sm text-theme-secondary">正在加载反馈列表...</div>
               </div>
             ) : error ? (
               <div className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6 text-sm text-rose-100">
-                {error instanceof Error ? error.message : '加载 Issue 失败'}
+                {error instanceof Error ? error.message : '加载反馈失败'}
               </div>
             ) : issues.length === 0 ? (
               <div className="rounded-[32px] border border-dashed border-[var(--card-border)] p-10 text-center glass">
                 <AlertTriangle className="mx-auto h-8 w-8 text-theme-muted" />
-                <div className="mt-4 text-xl font-semibold text-theme-primary">暂时没有匹配的 Issue</div>
+                <div className="mt-4 text-xl font-semibold text-theme-primary">暂时没有匹配的反馈</div>
                 <p className="mt-2 text-sm leading-6 text-theme-secondary">
                   你可以调整筛选条件，或者登录后提交一个新的反馈。
                 </p>
@@ -341,8 +341,8 @@ export default function IssuesPage() {
 
           <ScrollReveal className="space-y-6" delay={80}>
             <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
-              <div className="text-xs tracking-[0.22em] text-theme-muted">想法投递</div>
-              <div className="mt-2 text-2xl font-bold text-theme-primary">发出一个新的想法</div>
+              <div className="text-xs tracking-[0.22em] text-theme-muted">反馈投递</div>
+              <div className="mt-2 text-2xl font-bold text-theme-primary">提交一条新的反馈</div>
               <p className="mt-3 text-sm leading-6 text-theme-secondary">
                 登录后可以提交你碰到的问题、想要的功能，或者觉得值得优化的地方。管理员会统一接收并处理。
               </p>
@@ -350,7 +350,7 @@ export default function IssuesPage() {
               {!user ? (
                 <div className="mt-6 rounded-[24px] border border-amber-500/20 bg-amber-500/10 p-5">
                   <div className="text-sm leading-6 text-amber-50/90">
-                    你可以先公开浏览所有 Issue。若要提交新的反馈，请先登录账号。
+                    你可以先公开浏览所有反馈。若要提交新的反馈，请先登录账号。
                   </div>
                   <div className="mt-4 flex flex-wrap gap-3">
                     <Link
@@ -370,7 +370,7 @@ export default function IssuesPage() {
               ) : (
                 <div className="mt-6 space-y-4">
                   <IdeaSelect
-                    label="想法类型"
+                    label="反馈类型"
                     value={formType}
                     options={issueTypes.filter((item) => item.id).map((option) => ({
                       id: option.id as IssueType,
@@ -410,7 +410,7 @@ export default function IssuesPage() {
                   {feedback && (
                     <div className={cn(
                       'rounded-[22px] border px-4 py-3 text-sm leading-6',
-                      feedback.includes('已提交')
+                      feedback.includes('送达')
                         ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100'
                         : 'border-rose-500/20 bg-rose-500/10 text-rose-100'
                     )}>
@@ -431,7 +431,7 @@ export default function IssuesPage() {
                   >
                     <span className="action-button-shine" />
                     <CheckCircle2 className="relative z-10 h-4 w-4 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110" />
-                    <span className="relative z-10">{isSubmitting ? '发送中...' : '想法发送'}</span>
+                    <span className="relative z-10">{isSubmitting ? '发送中...' : '发送反馈'}</span>
                   </button>
                 </div>
               )}
