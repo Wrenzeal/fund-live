@@ -171,7 +171,7 @@ export default function VIPReportDetailPage() {
             <article className="rounded-[32px] border border-cyan-500/25 bg-cyan-500/10 p-6">
               <div className="text-xs tracking-[0.22em] text-cyan-300">观察要点</div>
               <div className="mt-3 text-3xl font-black text-theme-primary">{report.advice.action}</div>
-              <div className="mt-2 text-sm text-theme-secondary">参考区间：{report.advice.positionRange}</div>
+              <div className="mt-2 text-sm text-theme-secondary">证据状态：{report.advice.positionRange}</div>
               <div className="mt-5 space-y-3">
                 {report.advice.conditions.map((condition) => (
                   <div key={condition} className="rounded-[22px] border border-[var(--card-border)] bg-[var(--input-bg)]/60 px-4 py-4 text-sm leading-6 text-theme-secondary">

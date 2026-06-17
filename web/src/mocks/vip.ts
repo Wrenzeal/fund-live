@@ -60,7 +60,7 @@ export interface VIPReportSource {
 }
 
 export interface VIPAdvice {
-  action: '建仓' | '观望' | '低吸' | '减仓' | '止盈'
+  action: '重点跟踪' | '保持观察' | '风险复核' | '暂缓判断' | '组合复核'
   positionRange: string
   conditions: string[]
 }
@@ -104,7 +104,7 @@ export interface VIPReport {
 export const VIP_PLAN: VIPPlan = {
   code: 'vip',
   name: '涨了多少 VIP',
-  subtitle: '面向基金投资者的组合报告服务',
+  subtitle: '面向基金观察者的证据整理服务',
   billingOptions: [
     {
       cycle: 'monthly',
@@ -127,12 +127,12 @@ export const VIP_PLAN: VIPPlan = {
     '生成报告时不影响自选与持仓查看',
   ],
   rights: [
-    '从宏观、政策、财报、市场走势四个维度给出整理后的研究结论',
+    '从宏观、政策、财报、市场走势四个维度整理观察证据',
     '对自选分组识别主导板块并生成板块分析',
-    '对持仓组合输出报告摘要、风险等级与观察要点',
+    '对持仓组合输出报告摘要、风险等级与复核要点',
     '支持在任务中心查看报告生成进度与历史任务状态',
   ],
-  disclaimer: '投资有风险，以下能力与报告内容仅供参考，不构成任何投资建议。',
+  disclaimer: '投资有风险，以下能力与报告内容仅用于数据整理和风险观察，不构成任何投资建议、交易指令或收益承诺。',
 }
 
 export const VIP_DAILY_QUOTA = {
@@ -140,7 +140,7 @@ export const VIP_DAILY_QUOTA = {
   portfolioAnalysis: 2,
 } as const
 
-const defaultDisclaimer = '投资有风险，报告内容仅供参考，不构成投资建议。'
+const defaultDisclaimer = '投资有风险，报告内容仅用于数据整理和风险观察，不构成投资建议、交易指令或收益承诺。'
 
 export const VIP_SAMPLE_REPORTS: VIPReport[] = [
   {
@@ -152,7 +152,7 @@ export const VIP_SAMPLE_REPORTS: VIPReport[] = [
     coverageWindow: '近 24 小时市场与公开资讯',
     riskLevel: 'medium',
     summary: {
-      headline: 'AI 算力与高端制造链条热度仍在，但短线交易拥挤度提升，适合偏低吸而非追高。',
+      headline: 'AI 算力与高端制造链条热度仍在，但短线交易拥挤度提升，需要优先复核成交和兑现风险。',
       bullets: [
         '外围科技资产维持偏强，风险偏好并未明显退潮。',
         '国内政策层面对先进制造和算力基础设施的支持方向仍然清晰。',
@@ -160,11 +160,11 @@ export const VIP_SAMPLE_REPORTS: VIPReport[] = [
       ],
     },
     advice: {
-      action: '低吸',
-      positionRange: '5%-10%',
+      action: '重点跟踪',
+      positionRange: '高波动 / 中等可信',
       conditions: [
-        '若板块回撤后量能未明显失真，可分批低吸。',
-        '若单日涨幅过大且北向资金流入放缓，优先观望而非追涨。',
+        '若板块回撤后量能未明显失真，可继续跟踪核心持仓的基本面变化。',
+        '若单日涨幅过大且资金流入放缓，应下调短线热度判断的可信度。',
       ],
     },
     macro: {
@@ -252,11 +252,11 @@ export const VIP_SAMPLE_REPORTS: VIPReport[] = [
       ],
     },
     advice: {
-      action: '观望',
-      positionRange: '0%-5%',
+      action: '保持观察',
+      positionRange: '中等风险 / 待确认',
       conditions: [
-        '若财报持续改善，可逐步提升跟踪仓位。',
-        '若板块出现放量突破，再考虑从观望转向低吸。',
+        '若财报持续改善，可提高跟踪优先级。',
+        '若板块出现放量突破，再提高跟踪优先级并复核来源强度。',
       ],
     },
     macro: {
@@ -325,7 +325,7 @@ export const VIP_SAMPLE_REPORTS: VIPReport[] = [
     coverageWindow: '近 24 小时市场、财报与公开资讯',
     riskLevel: 'medium',
     summary: {
-      headline: '组合当前处于“成长驱动 + 医药修复”并存阶段，适合维持平衡偏积极而非极端押注。',
+      headline: '组合当前处于“成长驱动 + 医药修复”并存阶段，需要同时复核集中度、回撤和修复持续性。',
       bullets: [
         '成长基金贡献弹性，但波动也更大。',
         '医药仓位为组合提供一定风格平衡，但修复节奏仍偏慢。',
@@ -333,11 +333,11 @@ export const VIP_SAMPLE_REPORTS: VIPReport[] = [
       ],
     },
     advice: {
-      action: '低吸',
-      positionRange: '5%-10%',
+      action: '组合复核',
+      positionRange: '中等风险 / 证据较完整',
       conditions: [
-        '若市场维持高成交且成长方向未明显退潮，可分批增配。',
-        '若核心基金连续快速拉升，则优先等待回撤后再补仓。',
+        '若市场维持高成交且成长方向未明显退潮，可继续跟踪组合弹性来源。',
+        '若核心基金连续快速拉升，应优先复核估值拥挤度和回撤风险。',
       ],
     },
     macro: {

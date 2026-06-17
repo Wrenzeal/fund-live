@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Geist, Noto_Sans_SC, JetBrains_Mono } from "next/font/google";
 import { BrowserTitleTicker } from "@/components/browser-title-ticker";
 import { GlobalAnnouncementDialog } from "@/components/global-announcement-dialog";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const geist = Geist({
+  variable: "--font-geist",
   subsets: ["latin"],
+});
+
+const notoSansSC = Noto_Sans_SC({
+  variable: "--font-noto-sans-sc",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
 const jetbrainsMono = JetBrains_Mono({
@@ -27,11 +33,13 @@ export const metadata: Metadata = {
       { url: "/favicon.ico", sizes: "any" },
     ],
     shortcut: "/favicon.ico",
+    apple: "/favicon.svg",
   },
   openGraph: {
     title: browserTitle,
     description: "盘中实时计算基金预估涨跌幅",
     type: "website",
+    siteName: "涨了多少 · FundLive",
     locale: "zh_CN",
   },
 };
@@ -46,12 +54,13 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="alternate icon" href="/favicon.ico" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
+        className={`${geist.variable} ${notoSansSC.variable} ${jetbrainsMono.variable} antialiased`}
       >
         <BrowserTitleTicker title={browserTitle} />
+        <a className="skip-link" href="#main-content">跳到主要内容</a>
         <GlobalAnnouncementDialog />
         {children}
       </body>

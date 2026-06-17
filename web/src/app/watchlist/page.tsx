@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
-import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronDown, FileSearch, FileStack, FolderPlus, GripVertical, Layers3, LoaderCircle, Palette, PencilLine, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
+import { FloatingListbox } from '@/components/floating-listbox'
 import { ScrollReveal, ScrollRevealStack } from '@/components/scroll-reveal'
 import { VIPAnalysisEntry } from '@/components/vip-analysis-entry'
 import { WatchlistFundCard } from '@/components/watchlist-fund-card'
@@ -18,8 +18,6 @@ import { GROUP_ACCENT_OPTIONS, type WatchlistAccent, watchlistAccentBadgeClass, 
 import { cn } from '@/lib/utils'
 
 type GroupViewMode = 'all' | 'focused'
-type FloatingMenuRect = { left: number; top: number; width: number; maxHeight: number }
-
 export default function WatchlistPage() {
   const router = useRouter()
   const { user, isLoading } = useCurrentUser()
@@ -47,11 +45,9 @@ export default function WatchlistPage() {
   const [animatingEditGroupId, setAnimatingEditGroupId] = useState<string | null>(null)
   const [animatingViewMode, setAnimatingViewMode] = useState<GroupViewMode | null>(null)
   const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false)
-  const [groupMenuRect, setGroupMenuRect] = useState<FloatingMenuRect | null>(null)
   const groupMenuButtonRef = useRef<HTMLButtonElement | null>(null)
   const [fundQuery, setFundQuery] = useState('')
   const [isFundSearchMenuOpen, setIsFundSearchMenuOpen] = useState(false)
-  const [fundSearchMenuRect, setFundSearchMenuRect] = useState<FloatingMenuRect | null>(null)
   const fundSearchInputRef = useRef<HTMLInputElement | null>(null)
   const [isCreatingGroup, setIsCreatingGroup] = useState(false)
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
@@ -97,82 +93,6 @@ export default function WatchlistPage() {
 
     return ordered
   }, [localGroupOrderIds, watchlistGroups])
-
-  useEffect(() => {
-    if (!isGroupMenuOpen) {
-      setGroupMenuRect(null)
-      return
-    }
-
-    const updateGroupMenuRect = () => {
-      const trigger = groupMenuButtonRef.current
-      if (!trigger) {
-        setGroupMenuRect(null)
-        return
-      }
-
-      const rect = trigger.getBoundingClientRect()
-      const viewportPadding = 16
-      const menuGap = 12
-      const availableWidth = Math.max(240, window.innerWidth - viewportPadding * 2)
-      const width = Math.min(rect.width, availableWidth)
-      const left = Math.min(
-        Math.max(rect.left, viewportPadding),
-        Math.max(viewportPadding, window.innerWidth - width - viewportPadding)
-      )
-      const top = Math.min(rect.bottom + menuGap, window.innerHeight - viewportPadding)
-      const maxHeight = Math.max(160, Math.min(288, window.innerHeight - top - viewportPadding))
-
-      setGroupMenuRect({ left, top, width, maxHeight })
-    }
-
-    updateGroupMenuRect()
-    window.addEventListener('resize', updateGroupMenuRect)
-    window.addEventListener('scroll', updateGroupMenuRect, true)
-
-    return () => {
-      window.removeEventListener('resize', updateGroupMenuRect)
-      window.removeEventListener('scroll', updateGroupMenuRect, true)
-    }
-  }, [isGroupMenuOpen])
-
-  useEffect(() => {
-    if (!shouldShowFundSearchMenu) {
-      setFundSearchMenuRect(null)
-      return
-    }
-
-    const updateFundSearchMenuRect = () => {
-      const trigger = fundSearchInputRef.current
-      if (!trigger) {
-        setFundSearchMenuRect(null)
-        return
-      }
-
-      const rect = trigger.getBoundingClientRect()
-      const viewportPadding = 16
-      const menuGap = 10
-      const availableWidth = Math.max(240, window.innerWidth - viewportPadding * 2)
-      const width = Math.min(rect.width, availableWidth)
-      const left = Math.min(
-        Math.max(rect.left, viewportPadding),
-        Math.max(viewportPadding, window.innerWidth - width - viewportPadding)
-      )
-      const top = Math.min(rect.bottom + menuGap, window.innerHeight - viewportPadding)
-      const maxHeight = Math.max(160, Math.min(320, window.innerHeight - top - viewportPadding))
-
-      setFundSearchMenuRect({ left, top, width, maxHeight })
-    }
-
-    updateFundSearchMenuRect()
-    window.addEventListener('resize', updateFundSearchMenuRect)
-    window.addEventListener('scroll', updateFundSearchMenuRect, true)
-
-    return () => {
-      window.removeEventListener('resize', updateFundSearchMenuRect)
-      window.removeEventListener('scroll', updateFundSearchMenuRect, true)
-    }
-  }, [shouldShowFundSearchMenu])
 
   const selectedGroup = useMemo(
     () => orderedWatchlistGroups.find((group) => group.id === selectedGroupID) ?? null,
@@ -728,72 +648,67 @@ export default function WatchlistPage() {
                   </div>
                 </button>
 
-                {isGroupMenuOpen && groupMenuRect && typeof document !== 'undefined' && createPortal(
-                  <>
-                    <div className="fixed inset-0 z-[80] cursor-default" onClick={() => setIsGroupMenuOpen(false)} />
-                    <div
-                      className="watchlist-select-dropdown pointer-events-auto fixed z-[90] overflow-hidden rounded-[24px] border border-cyan-400/22 p-2 shadow-[0_24px_60px_rgba(2,8,23,0.42)]"
-                      style={{ left: groupMenuRect.left, top: groupMenuRect.top, width: groupMenuRect.width }}
-                      role="listbox"
-                      aria-label="目标分组"
-                    >
-                      <div className="space-y-1 overflow-y-auto" style={{ maxHeight: groupMenuRect.maxHeight }}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedGroupID('')
-                            setIsGroupMenuOpen(false)
-                          }}
-                          className={cn(
-                            'relative z-10 flex w-full items-start justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors',
-                            !selectedGroup
-                              ? 'bg-cyan-500/14 text-cyan-100'
-                              : 'text-theme-secondary hover:bg-[var(--input-bg)] hover:text-theme-primary'
-                          )}
-                          role="option"
-                          aria-selected={!selectedGroup}
-                        >
-                          <div>
-                            <div className="text-sm font-medium">暂不选择分组</div>
-                            <div className="mt-1 text-xs text-theme-muted">保留当前搜索结果，不立即加入任何分组</div>
-                          </div>
-                          {!selectedGroup && <Check className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" />}
-                        </button>
-
-                        {watchlistGroups.map((group) => {
-                          const active = group.id === selectedGroupID
-                          return (
-                            <button
-                              key={group.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedGroupID(group.id)
-                                setIsGroupMenuOpen(false)
-                              }}
-                              className={cn(
-                                'relative z-10 flex w-full items-start justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors',
-                                active
-                                  ? 'bg-cyan-500/14 text-cyan-100'
-                                  : 'text-theme-secondary hover:bg-[var(--input-bg)] hover:text-theme-primary'
-                              )}
-                              role="option"
-                              aria-selected={active}
-                            >
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-medium">{group.name}</div>
-                                <div className="mt-1 text-xs text-theme-muted">
-                                  {group.description || '未填写分组说明'} · {group.funds.length} 只基金
-                                </div>
-                              </div>
-                              {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" />}
-                            </button>
-                          )
-                        })}
-                      </div>
+                <FloatingListbox
+                  open={isGroupMenuOpen}
+                  triggerRef={groupMenuButtonRef}
+                  ariaLabel="目标分组"
+                  withBackdrop
+                  onClose={() => setIsGroupMenuOpen(false)}
+                  gap={12}
+                  maxHeight={288}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedGroupID('')
+                      setIsGroupMenuOpen(false)
+                    }}
+                    className={cn(
+                      'relative z-10 flex w-full items-start justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors',
+                      !selectedGroup
+                        ? 'bg-cyan-500/14 text-cyan-100'
+                        : 'text-theme-secondary hover:bg-[var(--input-bg)] hover:text-theme-primary'
+                    )}
+                    role="option"
+                    aria-selected={!selectedGroup}
+                  >
+                    <div>
+                      <div className="text-sm font-medium">暂不选择分组</div>
+                      <div className="mt-1 text-xs text-theme-muted">保留当前搜索结果，不立即加入任何分组</div>
                     </div>
-                  </>,
-                  document.body
-                )}
+                    {!selectedGroup && <Check className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" />}
+                  </button>
+
+                  {watchlistGroups.map((group) => {
+                    const active = group.id === selectedGroupID
+                    return (
+                      <button
+                        key={group.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedGroupID(group.id)
+                          setIsGroupMenuOpen(false)
+                        }}
+                        className={cn(
+                          'relative z-10 flex w-full items-start justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors',
+                          active
+                            ? 'bg-cyan-500/14 text-cyan-100'
+                            : 'text-theme-secondary hover:bg-[var(--input-bg)] hover:text-theme-primary'
+                        )}
+                        role="option"
+                        aria-selected={active}
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">{group.name}</div>
+                          <div className="mt-1 text-xs text-theme-muted">
+                            {group.description || '未填写分组说明'} · {group.funds.length} 只基金
+                          </div>
+                        </div>
+                        {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" />}
+                      </button>
+                    )
+                  })}
+                </FloatingListbox>
               </div>
 
               <div className="relative">
@@ -817,60 +732,55 @@ export default function WatchlistPage() {
                   aria-autocomplete="list"
                 />
 
-                {shouldShowFundSearchMenu && fundSearchMenuRect && typeof document !== 'undefined' && createPortal(
-                  <div
-                    id="watchlist-fund-search-results"
-                    className="watchlist-select-dropdown pointer-events-auto fixed z-[90] overflow-hidden rounded-[24px] border border-cyan-400/22 p-2 shadow-[0_24px_60px_rgba(2,8,23,0.42)]"
-                    style={{ left: fundSearchMenuRect.left, top: fundSearchMenuRect.top, width: fundSearchMenuRect.width }}
-                    role="listbox"
-                    aria-label="基金搜索结果"
-                  >
-                    <div className="space-y-1 overflow-y-auto" style={{ maxHeight: fundSearchMenuRect.maxHeight }}>
-                      {isFundSearchLoading ? (
-                        <div className="flex items-center gap-2 rounded-[18px] px-4 py-3 text-sm text-theme-secondary">
-                          <LoaderCircle className="h-4 w-4 animate-spin text-cyan-300" />
-                          正在搜索基金...
-                        </div>
-                      ) : visibleFundResults.length > 0 ? (
-                        visibleFundResults.map((fund) => (
-                          <button
-                            key={fund.id}
-                            type="button"
-                            disabled={!selectedGroup}
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={() => {
-                              if (!selectedGroup) return
-                              void addFundToGroup(selectedGroup.id, fund.id)
-                              setFundQuery('')
-                              setIsFundSearchMenuOpen(false)
-                            }}
-                            className={cn(
-                              'relative z-10 flex w-full items-center justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors',
-                              selectedGroup
-                                ? 'text-theme-secondary hover:bg-[var(--input-bg)] hover:text-theme-primary'
-                                : 'cursor-not-allowed text-theme-muted opacity-70'
-                            )}
-                            role="option"
-                            aria-selected={false}
-                          >
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-medium text-theme-primary">{fund.name}</div>
-                              <div className="mt-1 text-xs text-theme-muted">
-                                {fund.id}{selectedGroup ? ` · 加入 ${selectedGroup.name}` : ' · 请先选择目标分组'}
-                              </div>
-                            </div>
-                            <Plus className={cn('h-4 w-4 shrink-0', selectedGroup ? 'text-cyan-300' : 'text-theme-muted')} />
-                          </button>
-                        ))
-                      ) : (
-                        <div className="rounded-[18px] px-4 py-3 text-sm text-theme-secondary">
-                          暂无匹配基金，请尝试基金代码或更完整名称。
-                        </div>
-                      )}
+                <FloatingListbox
+                  id="watchlist-fund-search-results"
+                  open={shouldShowFundSearchMenu}
+                  triggerRef={fundSearchInputRef}
+                  ariaLabel="基金搜索结果"
+                  maxHeight={320}
+                >
+                  {isFundSearchLoading ? (
+                    <div className="flex items-center gap-2 rounded-[18px] px-4 py-3 text-sm text-theme-secondary">
+                      <LoaderCircle className="h-4 w-4 animate-spin text-cyan-300" />
+                      正在搜索基金...
                     </div>
-                  </div>,
-                  document.body
-                )}
+                  ) : visibleFundResults.length > 0 ? (
+                    visibleFundResults.map((fund) => (
+                      <button
+                        key={fund.id}
+                        type="button"
+                        disabled={!selectedGroup}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          if (!selectedGroup) return
+                          void addFundToGroup(selectedGroup.id, fund.id)
+                          setFundQuery('')
+                          setIsFundSearchMenuOpen(false)
+                        }}
+                        className={cn(
+                          'relative z-10 flex w-full items-center justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors',
+                          selectedGroup
+                            ? 'text-theme-secondary hover:bg-[var(--input-bg)] hover:text-theme-primary'
+                            : 'cursor-not-allowed text-theme-muted opacity-70'
+                        )}
+                        role="option"
+                        aria-selected={false}
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-theme-primary">{fund.name}</div>
+                          <div className="mt-1 text-xs text-theme-muted">
+                            {fund.id}{selectedGroup ? ` · 加入 ${selectedGroup.name}` : ' · 请先选择目标分组'}
+                          </div>
+                        </div>
+                        <Plus className={cn('h-4 w-4 shrink-0', selectedGroup ? 'text-cyan-300' : 'text-theme-muted')} />
+                      </button>
+                    ))
+                  ) : (
+                    <div className="rounded-[18px] px-4 py-3 text-sm text-theme-secondary">
+                      暂无匹配基金，请尝试基金代码或更完整名称。
+                    </div>
+                  )}
+                </FloatingListbox>
               </div>
             </div>
           </section>

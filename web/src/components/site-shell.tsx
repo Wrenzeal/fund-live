@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ArrowUp, Bell, Bug, ChevronRight, Home, type LucideIcon } from 'lucide-react'
 import { BrandMark } from '@/components/brand-mark'
+import { SiteFooter } from '@/components/site-footer'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { UserAccountMenu } from '@/components/user-account-menu'
 import { useMobileTopSection } from '@/hooks/use-mobile-top-section'
@@ -117,9 +118,11 @@ export function SiteShell({
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main id="main-content" className="container mx-auto px-4 py-8">
         {children}
       </main>
+
+      <SiteFooter compact />
 
       {showBackToTop && (
         <button

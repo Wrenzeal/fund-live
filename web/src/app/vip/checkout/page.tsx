@@ -94,18 +94,18 @@ export default function VIPCheckoutPage() {
   return (
     <AccountAreaShell
       title="开通 VIP"
-      description="选择开通周期并完成微信支付，支付状态会在页面内更新。"
+      description="选择开通周期并完成微信支付，支付状态会在页面内更新。报告内容仅作数据整理与风险观察。"
     >
       <ScrollRevealStack className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="vip-checkout-shell rounded-[36px] border p-6">
           <div className="mb-6">
             <div className="vip-proof-chip inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs tracking-[0.26em]">
               <Crown className="h-3.5 w-3.5" />
-              VIP CHECKOUT
+              VIP ACCESS
             </div>
-            <div className="mt-4 text-4xl font-black leading-tight text-theme-primary">把普通查看，升级成付费级研究入口</div>
+            <div className="mt-4 text-4xl font-black leading-tight text-theme-primary">把分散信息整理成可核对的研究摘要</div>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-theme-secondary">
-              如果你已经开始关注自选分组、跟踪持仓节奏，就不该每天靠零散信息做判断。VIP 页面会把你真正关心的风险、机会和操作方向，整理成更容易消费的结构化结果。
+              如果你已经开始关注自选分组、跟踪持仓节奏，VIP 页面会把公开信息、风险线索和引用来源整理到同一页，便于复盘和核对。
             </p>
           </div>
 
@@ -137,7 +137,7 @@ export default function VIPCheckoutPage() {
                   </div>
                   <div className="mt-6 text-3xl font-black text-theme-primary">{option.priceLabel}</div>
                   <div className="mt-3 text-xs tracking-[0.14em] text-theme-muted">
-                    {option.cycle === 'yearly' ? '适合持续使用和形成日报习惯' : '适合先体验完整工作流'}
+                    {option.cycle === 'yearly' ? '适合持续复盘和留存报告' : '适合先核对完整工作流'}
                   </div>
                 </button>
               )
@@ -145,7 +145,7 @@ export default function VIPCheckoutPage() {
           </div>
 
           <div className="vip-urgency-banner mt-6 rounded-[28px] border p-5 text-sm leading-6 text-theme-secondary">
-            当前支持微信支付下单与订单状态查询；若暂未开通支付，页面会直接提示原因。
+            当前支持微信支付下单与订单状态查询；报告不提供交易指令，若暂未开通支付，页面会直接提示原因。
           </div>
         </section>
 
@@ -167,7 +167,7 @@ export default function VIPCheckoutPage() {
             <div className="vip-total-box mt-6 rounded-[24px] border p-5">
               <div className="text-sm text-theme-secondary">应付金额</div>
               <div className="mt-2 text-4xl font-black text-theme-primary">{selectedOption.priceLabel}</div>
-              <div className="mt-2 text-xs text-theme-muted">开通后即可解锁分析入口、任务中心和完整报告阅读权限</div>
+              <div className="mt-2 text-xs text-theme-muted">开通后即可使用分析入口、任务中心和带来源的报告阅读能力</div>
             </div>
 
             {paymentMessage && (

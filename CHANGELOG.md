@@ -59,6 +59,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
 ### Changed
+
+- **自选页浮层复杂度收口**
+  - 新增 `FloatingListbox` 复用组件，统一 fixed portal 下拉的定位、滚动/resize 监听、遮罩关闭、listbox 容器与最大高度计算。
+  - `/watchlist` 的目标分组下拉与基金搜索结果下拉改为复用该组件，删除页面内重复的 rect state、resize/scroll effect 与 `createPortal` 样板，同时保留原有选择、搜索、禁用和可访问性语义。
+
+- **前端 redesign 首轮体验收口**
+  - 全局字体从 Inter-only 收口为 Geist + 中文字体栈，并为金融数字启用 tabular nums、标题/正文 `text-wrap` 与统一 focus-visible，可读性和键盘可访问性更稳定。
+  - 默认深色背景从蓝紫 AI 渐变弱化为金融深色径向光感 + 细网格纹理，保留业务涨跌色和更克制的主操作色。
+  - 新增全局 skip link，恢复移动端页面缩放能力，并补充品牌化 404、隐私政策、服务条款和统一页脚，减少用户流程死胡同。
+  - `LoadingIndicator` 新增布局骨架屏，基金数据加载从纯旋转圈升级为结构化 loading 面板。
+  - VIP 介绍、开通页与样例报告文案从“低吸 / 看结论 / 操作方向”降级为“证据链 / 风险观察 / 复核条件”，继续强调不构成投资建议或交易指令。
 - **认证错误与生产 Cookie 安全收口**
   - 登录邮箱格式错误统一按 `INVALID_CREDENTIALS` 处理，不再区分“格式错误 / 账号不存在 / 密码错误”。
   - 认证默认异常响应改为通用 `Authentication failed`，避免向客户端暴露底层错误原文。

@@ -5,6 +5,7 @@ import { ArrowLeft, ChartNoAxesCombined, ShieldCheck, Sparkles, WalletCards } fr
 import { BrandMark } from '@/components/brand-mark'
 import { HeaderFundSearch } from '@/components/header-fund-search'
 import { ScrollReveal, ScrollRevealStack } from '@/components/scroll-reveal'
+import { SiteFooter } from '@/components/site-footer'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
 
@@ -79,7 +80,7 @@ export function AuthShell({
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-10">
+      <main id="main-content" className="container mx-auto px-4 py-10">
         <ScrollRevealStack className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <section className="relative overflow-hidden rounded-[32px] border border-[var(--card-border)] glass-strong p-8 sm:p-10">
             <div className="absolute inset-x-0 top-0 h-48 bg-gradient-to-br from-cyan-500/20 via-sky-500/10 to-transparent" />
@@ -130,6 +131,8 @@ export function AuthShell({
           </section>
         </ScrollRevealStack>
       </main>
+
+      <SiteFooter compact />
     </div>
   )
 }

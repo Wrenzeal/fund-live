@@ -37,7 +37,7 @@ export default function VIPPage() {
   return (
     <AccountAreaShell
       title="VIP 投研报告"
-      description="围绕自选分组与持仓组合整理报告，帮助你从板块、政策、财报和市场走势四个维度理解当下环境。"
+      description="围绕自选分组与持仓组合整理公开信息、风险提示和证据来源，帮助你更快完成复盘。"
     >
       <ScrollRevealStack className="space-y-8">
         <section className="vip-hero-panel overflow-hidden rounded-[40px] border p-8 lg:p-10">
@@ -47,16 +47,16 @@ export default function VIPPage() {
             <div className="space-y-6">
               <div className="vip-proof-chip inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs tracking-[0.28em]">
                 <Crown className="h-3.5 w-3.5" />
-                VIP REPORT
+                RESEARCH BRIEF
               </div>
 
               <div className="space-y-4">
                 <h2 className="max-w-3xl text-4xl font-black leading-[1.04] text-theme-primary sm:text-6xl">
-                  把“看行情”
-                  <span className="block vip-premium-gradient">升级成看结论</span>
+                  把分散信息
+                  <span className="block vip-premium-gradient">整理成证据链</span>
                 </h2>
                 <p className="max-w-2xl text-base leading-7 text-theme-secondary">
-                  涨了多少 VIP 会围绕自选分组和持仓组合整理研究报告，把新闻、政策、财报和板块走势放在同一页里查看。
+                  涨了多少 VIP 会围绕自选分组和持仓组合整理研究摘要，把新闻、政策、财报和板块走势放在同一页里核对。
                 </p>
               </div>
 
@@ -64,7 +64,7 @@ export default function VIPPage() {
                 {[
                   { label: '每日板块分析', value: '2 次' },
                   { label: '每日组合分析', value: '2 次' },
-                  { label: '报告核心价值', value: '看结论' },
+                  { label: '报告核心价值', value: '证据链' },
                 ].map((item) => (
                   <ScrollReveal key={item.label} delay={80} className="h-full" variant="scale-in">
                     <div className="vip-stat-card h-full rounded-[24px] border px-4 py-4">
@@ -81,7 +81,7 @@ export default function VIPPage() {
                   className="vip-primary-cta inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-medium text-white"
                 >
                   <Sparkles className="h-4 w-4" />
-                  {membership.isVip ? '查看分析任务' : '立即开通 VIP'}
+                  {membership.isVip ? '查看分析任务' : '查看开通方案'}
                 </Link>
                 <Link
                   href={`/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultPortfolio}`}
@@ -124,7 +124,7 @@ export default function VIPPage() {
                   ))}
                 </div>
                 <div className="mt-5 rounded-2xl border border-[var(--card-border)] bg-[var(--input-bg)]/60 px-4 py-4 text-sm leading-6 text-theme-secondary">
-                  从“每天看很多信息”，变成“每天只看一份结果清晰、结构完整的报告”。
+                  从“到处找信息”，变成“集中核对证据、风险和来源”。
                 </div>
               </div>
 
@@ -172,20 +172,20 @@ export default function VIPPage() {
               <div className="vip-preview-highlight rounded-[24px] border p-5">
                 <div className="text-sm font-semibold text-theme-primary">摘要结论</div>
                 <div className="mt-3 text-sm leading-6 text-theme-secondary">
-                  组合当前处于“成长驱动 + 医药修复”并存阶段，适合维持平衡偏积极而非极端押注。
+                  组合当前同时暴露于成长弹性与医药修复，需要复核集中度、回撤和修复持续性。
                 </div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="vip-value-card rounded-[24px] border p-5">
                   <div className="text-sm font-semibold text-theme-primary">观察要点</div>
-                  <div className="mt-3 text-3xl font-black text-up">低吸</div>
-                  <div className="mt-2 text-sm text-theme-secondary">参考区间：5%-10%</div>
+                  <div className="mt-3 text-3xl font-black text-up">组合复核</div>
+                  <div className="mt-2 text-sm text-theme-secondary">证据状态：中等风险 / 证据较完整</div>
                 </div>
                 <div className="vip-value-card rounded-[24px] border p-5">
                   <div className="text-sm font-semibold text-theme-primary">风险等级</div>
                   <div className="mt-3 text-3xl font-black text-amber-300">中等</div>
-                  <div className="mt-2 text-sm text-theme-secondary">接受波动，但不适合追高</div>
+                  <div className="mt-2 text-sm text-theme-secondary">需要复核波动来源和高位回撤风险</div>
                 </div>
               </div>
 
@@ -246,7 +246,7 @@ export default function VIPPage() {
             {[
               '有自选分组，想优先看主导板块节奏的用户',
               '有持仓组合，想定期查看组合报告的用户',
-              '不想每天自己拼新闻、财报和市场数据的用户',
+              '希望把新闻、财报和市场数据放到同一页核对的用户',
             ].map((item) => (
               <div key={item} className="rounded-[24px] border border-[var(--card-border)] bg-[var(--input-bg)]/70 px-4 py-4 text-sm leading-6 text-theme-secondary">
                 {item}

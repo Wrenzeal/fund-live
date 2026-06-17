@@ -19,6 +19,7 @@ import { MarketStatusIndicator } from '@/components/market-status-indicator'
 import { FundLoadingIndicator } from '@/components/loading-indicator'
 import { UserAccountMenu } from '@/components/user-account-menu'
 import { ScrollReveal, ScrollRevealStack } from '@/components/scroll-reveal'
+import { SiteFooter } from '@/components/site-footer'
 import { AlertTriangle, BarChart3, TrendingUp, Clock, RefreshCw, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -312,7 +313,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main id="main-content" className="container mx-auto px-4 py-8">
         {selectionError && (
           <div className="mb-6 flex items-start justify-between gap-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
             <div className="flex items-start gap-3">
@@ -582,21 +583,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-[var(--card-border)] mt-12">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-theme-muted">
-            <div>
-              <span className="gradient-text font-semibold">涨了多少</span>
-              {' '}© 2024 - 2026. 实时基金估值系统
-            </div>
-            <div className="flex items-center gap-4">
-              <Link href="/auth/login" className="transition-colors hover:text-theme-primary">账户登录</Link>
-              <span>⚠️ 本数据仅供参考，不构成投资建议</span>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter className="mt-12" compact />
     </div>
   )
 }

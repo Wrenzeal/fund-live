@@ -9,6 +9,7 @@ import { HeaderFundSearch } from '@/components/header-fund-search'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { UserAccountMenu } from '@/components/user-account-menu'
 import { ScrollReveal } from '@/components/scroll-reveal'
+import { SiteFooter } from '@/components/site-footer'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { useMobileTopSection } from '@/hooks/use-mobile-top-section'
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
@@ -193,7 +194,7 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main id="main-content" className="container mx-auto px-4 py-8">
         {shouldBlockVIPPage ? (
           <ScrollReveal variant="scale-in">
             <section className="mx-auto max-w-2xl rounded-[32px] border border-amber-500/25 bg-amber-500/10 p-6 glass">
@@ -222,6 +223,8 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
           </ScrollReveal>
         ) : children}
       </main>
+
+      <SiteFooter compact />
 
       {showBackToTop && (
         <button
