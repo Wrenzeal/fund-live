@@ -916,27 +916,36 @@ func TestLoadMacroPolicyEventsAddsRealtimeHormuzEnergyRadar(t *testing.T) {
 		nil,
 	)
 
-	found := false
-	for _, item := range events {
-		if item.Code == "realtime_hormuz_reopening_energy_pressure_202606" {
-			found = true
-			if item.Impact != "negative" {
-				t.Fatalf("impact = %q, want negative", item.Impact)
-			}
-			if item.TargetScope != "macro" {
-				t.Fatalf("target_scope = %q, want macro", item.TargetScope)
-			}
-			if item.WeightHint == nil || !item.WeightHint.Equal(decimal.RequireFromString("28.0")) {
-				t.Fatalf("weight_hint = %v, want 28.0", item.WeightHint)
-			}
-			if !strings.Contains(item.Summary, "当前主行业为石油能源") {
-				t.Fatalf("summary = %q, want primary sector context", item.Summary)
-			}
-			break
-		}
-	}
-	if !found {
+	item := findEventImpact(events, "realtime_hormuz_reopening_energy_pressure_202606")
+	if item == nil {
 		t.Fatalf("events = %+v, want realtime Hormuz energy event", events)
+	}
+	if item.Impact != "negative" {
+		t.Fatalf("impact = %q, want negative", item.Impact)
+	}
+	if item.TargetScope != "macro" {
+		t.Fatalf("target_scope = %q, want macro", item.TargetScope)
+	}
+	if item.WeightHint == nil || !item.WeightHint.Equal(decimal.RequireFromString("28.0")) {
+		t.Fatalf("weight_hint = %v, want 28.0", item.WeightHint)
+	}
+	if !strings.Contains(item.Summary, "当前主行业为石油能源") {
+		t.Fatalf("summary = %q, want primary sector context", item.Summary)
+	}
+	if item.SourceName != "Associated Press" {
+		t.Fatalf("source_name = %q, want Associated Press", item.SourceName)
+	}
+	if !strings.Contains(item.SourceURL, "apnews.com/article/strait-of-hormuz") {
+		t.Fatalf("source_url = %q, want AP Hormuz article", item.SourceURL)
+	}
+	if item.SourcePublishedAt != "2026-06-15" {
+		t.Fatalf("source_published_at = %q, want 2026-06-15", item.SourcePublishedAt)
+	}
+	if item.SourceConfidence != "high" {
+		t.Fatalf("source_confidence = %q, want high", item.SourceConfidence)
+	}
+	if !strings.Contains(item.MappingBasis, "行业暴露：石油能源") {
+		t.Fatalf("mapping_basis = %q, want sector exposure trace", item.MappingBasis)
 	}
 }
 
@@ -994,6 +1003,38 @@ func TestLoadMacroPolicyEventsDoesNotBroadcastRealtimeHormuzToLowExposure(t *tes
 		if strings.HasPrefix(item.Code, "realtime_hormuz_") {
 			t.Fatalf("events = %+v, low exposure should not trigger realtime Hormuz event", events)
 		}
+	}
+}
+
+func TestEvidenceFromEventPreservesRealtimeSourceTrace(t *testing.T) {
+	weight := decimal.RequireFromString("28.0")
+	evidence := evidenceFromEvent(domain.FundAnalysisEventImpact{
+		Code:              "realtime_hormuz_reopening_energy_pressure_202606",
+		Title:             "美伊协议推动霍尔木兹重开预期",
+		Summary:           "油气上游需要观察油价中枢下修压力。",
+		Impact:            "negative",
+		TargetScope:       "macro",
+		Strength:          "high",
+		Horizon:           "current",
+		WeightHint:        &weight,
+		SourceName:        "Associated Press",
+		SourceURL:         "https://apnews.com/article/strait-of-hormuz-oil-prices-iran-war-8304cc39c6ebe6f863f6f39ee6ce9768",
+		SourcePublishedAt: "2026-06-15",
+		SourceConfidence:  "high",
+		MappingBasis:      "行业暴露：石油能源，权重约 28.0%",
+	}, "counter_event")
+
+	if evidence.SourceName != "Associated Press" || evidence.SourceURL == "" {
+		t.Fatalf("evidence source = (%q, %q), want AP source preserved", evidence.SourceName, evidence.SourceURL)
+	}
+	if evidence.SourcePublishedAt != "2026-06-15" || evidence.SourceConfidence != "high" {
+		t.Fatalf("evidence source meta = (%q, %q), want date/confidence preserved", evidence.SourcePublishedAt, evidence.SourceConfidence)
+	}
+	if !strings.Contains(evidence.MappingBasis, "行业暴露：石油能源") {
+		t.Fatalf("evidence mapping_basis = %q, want mapping basis preserved", evidence.MappingBasis)
+	}
+	if evidence.WeightHint == nil || !evidence.WeightHint.Equal(weight) {
+		t.Fatalf("evidence weight_hint = %v, want %s", evidence.WeightHint, weight)
 	}
 }
 

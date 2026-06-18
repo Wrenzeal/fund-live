@@ -68,6 +68,19 @@ function compactText(value: string, maxLength = 66) {
   return `${value.slice(0, maxLength)}…`
 }
 
+function eventSourceConfidenceLabel(level?: string) {
+  switch (level) {
+    case 'high':
+      return '高可信'
+    case 'medium':
+      return '中可信'
+    case 'low':
+      return '低可信'
+    default:
+      return ''
+  }
+}
+
 export function FundAnalysisCard({ analysis, fundId, isLoading = false }: FundAnalysisCardProps) {
   if (!analysis && !isLoading) {
     return null
@@ -239,6 +252,39 @@ function SummaryEventRadar({ events }: { events: NonNullable<FundAnalysis['event
           </div>
           <div className="line-clamp-1 text-xs font-semibold text-theme-primary">{event.title}</div>
           <div className="mt-1 line-clamp-2 text-xs leading-5 text-theme-secondary">{compactText(event.summary, 76)}</div>
+          {(event.mapping_basis || event.source_name || event.source_published_at) && (
+            <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] leading-4 text-theme-muted">
+              {event.mapping_basis && (
+                <span className="rounded-full border border-[var(--card-border)] bg-[var(--input-bg)]/55 px-2 py-0.5">
+                  映射：{compactText(event.mapping_basis, 30)}
+                </span>
+              )}
+              {event.source_url ? (
+                <a
+                  href={event.source_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-0.5 text-cyan-100 transition-colors hover:border-cyan-300/40 hover:text-cyan-50"
+                >
+                  来源：{event.source_name || '事件源'}
+                </a>
+              ) : event.source_name ? (
+                <span className="rounded-full border border-[var(--card-border)] bg-[var(--input-bg)]/55 px-2 py-0.5">
+                  来源：{event.source_name}
+                </span>
+              ) : null}
+              {event.source_published_at && (
+                <span className="rounded-full border border-[var(--card-border)] bg-[var(--input-bg)]/55 px-2 py-0.5">
+                  {event.source_published_at}
+                </span>
+              )}
+              {event.source_confidence && (
+                <span className="rounded-full border border-[var(--card-border)] bg-[var(--input-bg)]/55 px-2 py-0.5">
+                  {eventSourceConfidenceLabel(event.source_confidence)}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       ))}
     </div>

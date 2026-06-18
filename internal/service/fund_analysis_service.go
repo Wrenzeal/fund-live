@@ -16,8 +16,9 @@ const (
 	FundAnalysisVersionV1 = "baseline_v1"
 	FundAnalysisVersionV2 = "baseline_v2"
 	FundAnalysisVersionV3 = "baseline_v3"
+	FundAnalysisVersionV4 = "baseline_v4"
 
-	CurrentFundAnalysisVersion = FundAnalysisVersionV3
+	CurrentFundAnalysisVersion = FundAnalysisVersionV4
 
 	FundAnalysisTypeDirectHoldings = "direct_holdings"
 	FundAnalysisTypeTrackedETF     = "tracked_etf"
@@ -2447,16 +2448,21 @@ func eventCountersDominant(event domain.FundAnalysisEventImpact, dominant string
 
 func evidenceFromEvent(event domain.FundAnalysisEventImpact, evidenceType string) domain.FundAnalysisEvidenceItem {
 	return domain.FundAnalysisEvidenceItem{
-		Code:           strings.TrimSpace(event.Code),
-		Title:          strings.TrimSpace(event.Title),
-		Summary:        strings.TrimSpace(event.Summary),
-		EvidenceType:   evidenceType,
-		SourceScope:    strings.TrimSpace(event.TargetScope),
-		Impact:         strings.TrimSpace(event.Impact),
-		Strength:       strings.TrimSpace(event.Strength),
-		Horizon:        strings.TrimSpace(event.Horizon),
-		RelatedSymbols: event.RelatedSymbols,
-		WeightHint:     event.WeightHint,
+		Code:              strings.TrimSpace(event.Code),
+		Title:             strings.TrimSpace(event.Title),
+		Summary:           strings.TrimSpace(event.Summary),
+		EvidenceType:      evidenceType,
+		SourceScope:       strings.TrimSpace(event.TargetScope),
+		Impact:            strings.TrimSpace(event.Impact),
+		Strength:          strings.TrimSpace(event.Strength),
+		Horizon:           strings.TrimSpace(event.Horizon),
+		RelatedSymbols:    event.RelatedSymbols,
+		WeightHint:        event.WeightHint,
+		SourceName:        strings.TrimSpace(event.SourceName),
+		SourceURL:         strings.TrimSpace(event.SourceURL),
+		SourcePublishedAt: strings.TrimSpace(event.SourcePublishedAt),
+		SourceConfidence:  strings.TrimSpace(event.SourceConfidence),
+		MappingBasis:      strings.TrimSpace(event.MappingBasis),
 	}
 }
 

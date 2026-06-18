@@ -8,15 +8,19 @@ import (
 )
 
 type macroPolicySeed struct {
-	Code        string
-	Title       string
-	Summary     string
-	Impact      string
-	Strength    string
-	PublishedAt string
-	ExpiresAt   string
-	SectorCodes []string
-	ThemeCodes  []string
+	Code              string
+	Title             string
+	Summary           string
+	Impact            string
+	Strength          string
+	PublishedAt       string
+	ExpiresAt         string
+	SectorCodes       []string
+	ThemeCodes        []string
+	SourceName        string
+	SourceURL         string
+	SourcePublishedAt string
+	SourceConfidence  string
 }
 
 type macroMatchContext struct {
@@ -98,36 +102,48 @@ var macroPolicySeeds = []macroPolicySeed{
 		ThemeCodes:  []string{"platform_internet", "consumer_upgrade", "gaming_entertainment"},
 	},
 	{
-		Code:        "realtime_hormuz_reopening_energy_pressure_202606",
-		Title:       "美伊协议推动霍尔木兹重开预期",
-		Summary:     "美伊协议与霍尔木兹重开预期推动原油风险溢价回落，油气上游和资源周期主线需要观察油价中枢下修压力。",
-		Impact:      "negative",
-		Strength:    "high",
-		PublishedAt: "2026-06-15",
-		ExpiresAt:   "2026-07-31",
-		SectorCodes: []string{"oil_gas_energy", "resources_cycle"},
+		Code:              "realtime_hormuz_reopening_energy_pressure_202606",
+		Title:             "美伊协议推动霍尔木兹重开预期",
+		Summary:           "美伊协议与霍尔木兹重开预期推动原油风险溢价回落，油气上游和资源周期主线需要观察油价中枢下修压力。",
+		Impact:            "negative",
+		Strength:          "high",
+		PublishedAt:       "2026-06-15",
+		ExpiresAt:         "2026-07-31",
+		SectorCodes:       []string{"oil_gas_energy", "resources_cycle"},
+		SourceName:        "Associated Press",
+		SourceURL:         "https://apnews.com/article/strait-of-hormuz-oil-prices-iran-war-8304cc39c6ebe6f863f6f39ee6ce9768",
+		SourcePublishedAt: "2026-06-15",
+		SourceConfidence:  "high",
 	},
 	{
-		Code:        "realtime_hormuz_reopening_cost_relief_202606",
-		Title:       "霍尔木兹重开预期缓解成本压力",
-		Summary:     "中东能源运输风险缓和有助于压低油价和通胀风险溢价，消费、出行与部分制造链条的成本压力边际改善。",
-		Impact:      "positive",
-		Strength:    "medium",
-		PublishedAt: "2026-06-15",
-		ExpiresAt:   "2026-07-31",
-		SectorCodes: []string{"consumer_service", "consumer_electronics", "internet_ecommerce", "food_beverage", "liquor", "new_energy_auto"},
-		ThemeCodes:  []string{"consumer_upgrade", "gaming_entertainment", "platform_internet", "smart_driving"},
+		Code:              "realtime_hormuz_reopening_cost_relief_202606",
+		Title:             "霍尔木兹重开预期缓解成本压力",
+		Summary:           "中东能源运输风险缓和有助于压低油价和通胀风险溢价，消费、出行与部分制造链条的成本压力边际改善。",
+		Impact:            "positive",
+		Strength:          "medium",
+		PublishedAt:       "2026-06-15",
+		ExpiresAt:         "2026-07-31",
+		SectorCodes:       []string{"consumer_service", "consumer_electronics", "internet_ecommerce", "food_beverage", "liquor", "new_energy_auto"},
+		ThemeCodes:        []string{"consumer_upgrade", "gaming_entertainment", "platform_internet", "smart_driving"},
+		SourceName:        "Associated Press",
+		SourceURL:         "https://apnews.com/article/strait-of-hormuz-oil-prices-iran-war-8304cc39c6ebe6f863f6f39ee6ce9768",
+		SourcePublishedAt: "2026-06-15",
+		SourceConfidence:  "high",
 	},
 	{
-		Code:        "realtime_hormuz_reopening_defensive_rotation_202606",
-		Title:       "地缘风险缓和后防御交易需复核",
-		Summary:     "美伊冲突缓和降低避险情绪，前期因高波动受益的高股息、金融权重和防御资产需要重新观察资金拥挤度。",
-		Impact:      "neutral",
-		Strength:    "medium",
-		PublishedAt: "2026-06-15",
-		ExpiresAt:   "2026-07-31",
-		SectorCodes: []string{"banking", "brokerage_finance", "insurance"},
-		ThemeCodes:  []string{"dividend_value", "financials", "financial_it"},
+		Code:              "realtime_hormuz_reopening_defensive_rotation_202606",
+		Title:             "地缘风险缓和后防御交易需复核",
+		Summary:           "美伊冲突缓和降低避险情绪，前期因高波动受益的高股息、金融权重和防御资产需要重新观察资金拥挤度。",
+		Impact:            "neutral",
+		Strength:          "medium",
+		PublishedAt:       "2026-06-15",
+		ExpiresAt:         "2026-07-31",
+		SectorCodes:       []string{"banking", "brokerage_finance", "insurance"},
+		ThemeCodes:        []string{"dividend_value", "financials", "financial_it"},
+		SourceName:        "Associated Press",
+		SourceURL:         "https://apnews.com/article/iran-us-israel-war-oil-deal-june-17-2026-19652f4611b704c0a991bf1f5bc9a4b9",
+		SourcePublishedAt: "2026-06-17",
+		SourceConfidence:  "high",
 	},
 }
 
@@ -163,14 +179,19 @@ func LoadMacroPolicyEvents(now time.Time, sectorSnapshot *domain.FundSectorSnaps
 			continue
 		}
 		results = append(results, domain.FundAnalysisEventImpact{
-			Code:        item.Code,
-			Title:       item.Title,
-			Impact:      item.Impact,
-			Summary:     contextualizeMacroSummary(item, match),
-			TargetScope: "macro",
-			Strength:    macroEventStrength(item.Strength, match.matchedWeight),
-			Horizon:     "current",
-			WeightHint:  decimalPointerFromFloat(match.matchedWeight),
+			Code:              item.Code,
+			Title:             item.Title,
+			Impact:            item.Impact,
+			Summary:           contextualizeMacroSummary(item, match),
+			TargetScope:       "macro",
+			Strength:          macroEventStrength(item.Strength, match.matchedWeight),
+			Horizon:           "current",
+			WeightHint:        decimalPointerFromFloat(match.matchedWeight),
+			SourceName:        strings.TrimSpace(item.SourceName),
+			SourceURL:         strings.TrimSpace(item.SourceURL),
+			SourcePublishedAt: strings.TrimSpace(item.SourcePublishedAt),
+			SourceConfidence:  strings.TrimSpace(item.SourceConfidence),
+			MappingBasis:      macroMappingBasis(match),
 		})
 	}
 	return results
@@ -252,6 +273,30 @@ func contextualizeMacroSummary(item macroPolicySeed, match *macroMatchContext) s
 		return item.Summary + " 当前组合中可映射到" + match.matchedName + "，匹配暴露约 " + macroWeightText(match.matchedWeight) + "；该热点仅按实际暴露权重参与解释。"
 	}
 	return item.Summary + " 当前组合中存在可映射暴露，匹配暴露约 " + macroWeightText(match.matchedWeight) + "；该热点仅按实际暴露权重参与解释。"
+}
+
+func macroMappingBasis(match *macroMatchContext) string {
+	if match == nil {
+		return ""
+	}
+	scopeLabel := "暴露"
+	switch match.matchedScope {
+	case "theme":
+		scopeLabel = "主题暴露"
+	case "sector":
+		scopeLabel = "行业暴露"
+	}
+	name := strings.TrimSpace(match.matchedName)
+	if match.matchedPrimaryTheme != "" {
+		name = strings.TrimSpace(match.matchedPrimaryTheme)
+	}
+	if match.matchedPrimarySector != "" {
+		name = strings.TrimSpace(match.matchedPrimarySector)
+	}
+	if name == "" {
+		return scopeLabel + "约 " + macroWeightText(match.matchedWeight)
+	}
+	return scopeLabel + "：" + name + "，权重约 " + macroWeightText(match.matchedWeight)
 }
 
 func normalizeMacroCode(code string) string {

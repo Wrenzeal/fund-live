@@ -56,7 +56,7 @@ func TestFetchDashboardAudit(t *testing.T) {
 						"provider": "disabled",
 						"cache_status": "generated",
 						"expires_at": "2026-05-08T23:59:59+08:00",
-						"invalidation_basis": ["analysis_version:baseline_v3","trading_day:2026-05-08"],
+						"invalidation_basis": ["analysis_version:baseline_v4","trading_day:2026-05-08"],
 						"rule_recommendation": "increase",
 						"boundary_notice": "AI解释层只负责解释，不得改写评分。",
 						"summary": "AI解释层未启用；当前展示规则证据降级摘要。",

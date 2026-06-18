@@ -346,6 +346,11 @@ export interface FundAnalysisEventImpact {
     horizon?: 'intraday' | 'current' | 'quarterly' | 'medium_term'
     related_symbols?: string[]
     weight_hint?: string
+    source_name?: string
+    source_url?: string
+    source_published_at?: string
+    source_confidence?: 'low' | 'medium' | 'high'
+    mapping_basis?: string
 }
 
 export interface FundAnalysisConfidenceFactor {
@@ -367,6 +372,11 @@ export interface FundAnalysisEvidenceItem {
     horizon?: 'intraday' | 'current' | 'quarterly' | 'medium_term'
     related_symbols?: string[]
     weight_hint?: string
+    source_name?: string
+    source_url?: string
+    source_published_at?: string
+    source_confidence?: 'low' | 'medium' | 'high'
+    mapping_basis?: string
 }
 
 export interface FundAnalysisAIExplanationCitation {

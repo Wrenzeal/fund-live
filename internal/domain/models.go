@@ -270,15 +270,20 @@ type FundAnalysisModuleScore struct {
 
 // FundAnalysisEventImpact represents a structured disclosure / event signal.
 type FundAnalysisEventImpact struct {
-	Code           string           `json:"code"`
-	Title          string           `json:"title"`
-	Impact         string           `json:"impact"`
-	Summary        string           `json:"summary"`
-	TargetScope    string           `json:"target_scope,omitempty"`
-	Strength       string           `json:"strength,omitempty"`
-	Horizon        string           `json:"horizon,omitempty"`
-	RelatedSymbols []string         `json:"related_symbols,omitempty"`
-	WeightHint     *decimal.Decimal `json:"weight_hint,omitempty"`
+	Code              string           `json:"code"`
+	Title             string           `json:"title"`
+	Impact            string           `json:"impact"`
+	Summary           string           `json:"summary"`
+	TargetScope       string           `json:"target_scope,omitempty"`
+	Strength          string           `json:"strength,omitempty"`
+	Horizon           string           `json:"horizon,omitempty"`
+	RelatedSymbols    []string         `json:"related_symbols,omitempty"`
+	WeightHint        *decimal.Decimal `json:"weight_hint,omitempty"`
+	SourceName        string           `json:"source_name,omitempty"`
+	SourceURL         string           `json:"source_url,omitempty"`
+	SourcePublishedAt string           `json:"source_published_at,omitempty"`
+	SourceConfidence  string           `json:"source_confidence,omitempty"`
+	MappingBasis      string           `json:"mapping_basis,omitempty"`
 }
 
 // FundAnalysisConfidenceFactor explains one component of the overall analysis confidence.
@@ -292,16 +297,21 @@ type FundAnalysisConfidenceFactor struct {
 
 // FundAnalysisEvidenceItem links a conclusion back to structured evidence.
 type FundAnalysisEvidenceItem struct {
-	Code           string           `json:"code"`
-	Title          string           `json:"title"`
-	Summary        string           `json:"summary"`
-	EvidenceType   string           `json:"evidence_type"`
-	SourceScope    string           `json:"source_scope,omitempty"`
-	Impact         string           `json:"impact,omitempty"`
-	Strength       string           `json:"strength,omitempty"`
-	Horizon        string           `json:"horizon,omitempty"`
-	RelatedSymbols []string         `json:"related_symbols,omitempty"`
-	WeightHint     *decimal.Decimal `json:"weight_hint,omitempty"`
+	Code              string           `json:"code"`
+	Title             string           `json:"title"`
+	Summary           string           `json:"summary"`
+	EvidenceType      string           `json:"evidence_type"`
+	SourceScope       string           `json:"source_scope,omitempty"`
+	Impact            string           `json:"impact,omitempty"`
+	Strength          string           `json:"strength,omitempty"`
+	Horizon           string           `json:"horizon,omitempty"`
+	RelatedSymbols    []string         `json:"related_symbols,omitempty"`
+	WeightHint        *decimal.Decimal `json:"weight_hint,omitempty"`
+	SourceName        string           `json:"source_name,omitempty"`
+	SourceURL         string           `json:"source_url,omitempty"`
+	SourcePublishedAt string           `json:"source_published_at,omitempty"`
+	SourceConfidence  string           `json:"source_confidence,omitempty"`
+	MappingBasis      string           `json:"mapping_basis,omitempty"`
 }
 
 // FundAnalysisAIExplanationCitation is a provider-visible reference that an AI explanation may cite.
