@@ -9,6 +9,7 @@ import { EstimateCard } from '@/components/estimate-card'
 import { FundSectorCard } from '@/components/fund-sector-card'
 import { HoldingsTable } from '@/components/holdings-table'
 import { TargetETFHoldingsCard } from '@/components/target-etf-holdings-card'
+import { AnalysisEventTraceMeta } from '@/components/analysis-event-trace-meta'
 import { useFundAnalysis, useFundDashboard, useFundHoldings, type Fund, type FundAnalysis, type FundAnalysisEventImpact, type FundAnalysisModuleScore, type FundClassificationOverride, type FundEstimate, type FundSectorSnapshot, type FundThemeSnapshot } from '@/hooks/use-fund-data'
 import { cn } from '@/lib/utils'
 import {
@@ -841,14 +842,7 @@ function EvidenceColumn({
           <div key={`${item.code}-${index}`} className={cn('min-h-[7.5rem] rounded-2xl border p-4 transition-transform duration-300 hover:-translate-y-0.5', amber ? 'border-amber-500/20 bg-amber-500/10' : 'border-cyan-500/20 bg-cyan-500/10')}>
             <div className="text-sm font-semibold text-theme-primary">{item.title}</div>
             <div className="mt-2 line-clamp-3 text-xs leading-5 text-theme-secondary">{item.summary}</div>
-            <EventTraceMeta
-              sourceName={item.source_name}
-              sourceURL={item.source_url}
-              sourcePublishedAt={item.source_published_at}
-              sourceConfidence={item.source_confidence}
-              mappingBasis={item.mapping_basis}
-              dense
-            />
+            <AnalysisEventTraceMeta trace={item} dense />
             <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-theme-muted">
               {item.source_scope && <span>{item.source_scope}</span>}
               {item.strength && <span>强度：{eventStrengthLabel(item.strength)}</span>}
@@ -915,77 +909,6 @@ function eventScopeLabel(scope?: FundAnalysisEventImpact['target_scope']) {
   }
 }
 
-function compactSignalText(value: string, maxLength = 84) {
-  if (value.length <= maxLength) {
-    return value
-  }
-  return `${value.slice(0, maxLength)}…`
-}
-
-function eventSourceConfidenceLabel(level?: string) {
-  switch (level) {
-    case 'high':
-      return '高可信'
-    case 'medium':
-      return '中可信'
-    case 'low':
-      return '低可信'
-    default:
-      return ''
-  }
-}
-
-function EventTraceMeta({
-  sourceName,
-  sourceURL,
-  sourcePublishedAt,
-  sourceConfidence,
-  mappingBasis,
-  dense = false,
-}: {
-  sourceName?: string
-  sourceURL?: string
-  sourcePublishedAt?: string
-  sourceConfidence?: string
-  mappingBasis?: string
-  dense?: boolean
-}) {
-  if (!sourceName && !sourceURL && !sourcePublishedAt && !sourceConfidence && !mappingBasis) {
-    return null
-  }
-
-  const pillClass = cn(
-    'rounded-full border border-[var(--card-border)] bg-[var(--input-bg)]/55 px-2.5 py-1 text-theme-muted',
-    dense ? 'text-[10px] leading-4' : 'text-[11px] leading-5'
-  )
-
-  return (
-    <div className={cn('flex flex-wrap gap-1.5', dense ? 'mt-2' : 'mt-3')}>
-      {mappingBasis && (
-        <span className={pillClass}>映射：{compactSignalText(mappingBasis, dense ? 38 : 74)}</span>
-      )}
-      {sourceURL ? (
-        <a
-          href={sourceURL}
-          target="_blank"
-          rel="noreferrer"
-          className={cn(pillClass, 'border-cyan-500/20 bg-cyan-500/10 text-cyan-100 transition-colors hover:border-cyan-300/40 hover:text-cyan-50')}
-        >
-          来源：{sourceName || '事件源'}
-        </a>
-      ) : sourceName ? (
-        <span className={pillClass}>来源：{sourceName}</span>
-      ) : null}
-      {sourcePublishedAt && (
-        <span className={pillClass}>发布：{sourcePublishedAt}</span>
-      )}
-      {sourceConfidence && (
-        <span className={pillClass}>{eventSourceConfidenceLabel(sourceConfidence) || sourceConfidence}</span>
-      )}
-    </div>
-  )
-}
-
 function RealtimeEventRadar({ events }: { events: FundAnalysisEventImpact[] }) {
   const lead = events[0]
 
@@ -1016,13 +939,7 @@ function RealtimeEventRadar({ events }: { events: FundAnalysisEventImpact[] }) {
               </div>
               <div className="text-xl font-black leading-tight text-theme-primary md:text-2xl">{lead.title}</div>
               <div className="mt-3 text-sm leading-7 text-theme-secondary">{lead.summary}</div>
-              <EventTraceMeta
-                sourceName={lead.source_name}
-                sourceURL={lead.source_url}
-                sourcePublishedAt={lead.source_published_at}
-                sourceConfidence={lead.source_confidence}
-                mappingBasis={lead.mapping_basis}
-              />
+              <AnalysisEventTraceMeta trace={lead} />
             </div>
           ) : (
             <div className="mt-5">
@@ -1046,14 +963,7 @@ function RealtimeEventRadar({ events }: { events: FundAnalysisEventImpact[] }) {
               </div>
               <div className="line-clamp-2 text-sm font-semibold text-theme-primary">{event.title}</div>
               <div className="mt-2 line-clamp-3 text-xs leading-5 text-theme-secondary">{event.summary}</div>
-              <EventTraceMeta
-                sourceName={event.source_name}
-                sourceURL={event.source_url}
-                sourcePublishedAt={event.source_published_at}
-                sourceConfidence={event.source_confidence}
-                mappingBasis={event.mapping_basis}
-                dense
-              />
+              <AnalysisEventTraceMeta trace={event} dense />
             </div>
           ))}
         </div>
@@ -1150,14 +1060,7 @@ function EventGroupCard({
             </div>
             <div className="mt-3 text-sm font-semibold text-theme-primary">{event.title}</div>
             <div className="mt-2 line-clamp-3 text-sm leading-6 text-theme-secondary">{event.summary}</div>
-            <EventTraceMeta
-              sourceName={event.source_name}
-              sourceURL={event.source_url}
-              sourcePublishedAt={event.source_published_at}
-              sourceConfidence={event.source_confidence}
-              mappingBasis={event.mapping_basis}
-              dense
-            />
+            <AnalysisEventTraceMeta trace={event} dense />
             {event.related_symbols && event.related_symbols.length > 0 && (
               <div className="mt-2 text-xs text-theme-muted">
                 相关标的：{event.related_symbols.join(' / ')}
