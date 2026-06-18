@@ -1,11 +1,13 @@
 'use client'
 
-import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { AlertTriangle, ArrowLeft, LoaderCircle, MessageSquareQuote, Send, WandSparkles } from 'lucide-react'
 import { ScrollRevealStack } from '@/components/scroll-reveal'
 import { SiteShell } from '@/components/site-shell'
+import { ActionButton } from '@/components/ui/action-button'
+import { StatusBanner } from '@/components/ui/status-banner'
+import { Surface } from '@/components/ui/surface'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { type IssueStatus, useIssue, updateIssueReply, updateIssueStatus } from '@/hooks/use-issues'
 import { cn } from '@/lib/utils'
@@ -98,10 +100,10 @@ export default function IssueDetailPage() {
         eyebrowLabel="反馈详情"
         EyebrowIcon={WandSparkles}
       >
-        <div className="rounded-[32px] border border-[var(--card-border)] p-10 glass text-center">
+        <Surface radius="xl" padding="lg" className="text-center">
           <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
           <div className="mt-4 text-sm text-theme-secondary">正在加载想法详情...</div>
-        </div>
+        </Surface>
       </SiteShell>
     )
   }
@@ -114,9 +116,9 @@ export default function IssueDetailPage() {
         eyebrowLabel="反馈详情"
         EyebrowIcon={WandSparkles}
       >
-        <div className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6 text-sm text-rose-100">
+        <StatusBanner tone="danger">
           {error instanceof Error ? error.message : '这条反馈不存在。'}
-        </div>
+        </StatusBanner>
       </SiteShell>
     )
   }
@@ -137,16 +139,16 @@ export default function IssueDetailPage() {
     >
       <ScrollRevealStack className="space-y-6">
         <div>
-          <Link
+          <ActionButton
             href="/issues"
-            className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-theme-primary"
+            variant="secondary"
           >
             <ArrowLeft className="h-4 w-4" />
             返回反馈与想法
-          </Link>
+          </ActionButton>
         </div>
 
-        <section className="rounded-[36px] border border-[var(--card-border)] p-8 glass">
+        <Surface as="section" radius="xl" padding="lg">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-3">
@@ -167,7 +169,7 @@ export default function IssueDetailPage() {
             </div>
 
             {user?.is_admin && (
-              <div className="w-full rounded-[28px] border border-[var(--card-border)] bg-[var(--input-bg)]/70 p-5 lg:max-w-sm">
+              <Surface tone="subtle" radius="lg" padding="md" className="w-full lg:max-w-sm">
                 <div className="text-xs tracking-[0.18em] text-theme-muted">管理员操作</div>
                 <div className="mt-4 flex flex-wrap gap-3">
                   {statuses.map((status) => (
@@ -223,28 +225,23 @@ export default function IssueDetailPage() {
                 </div>
 
                 {feedback && (
-                  <div className={cn(
-                    'mt-4 rounded-[20px] border px-4 py-3 text-sm',
-                    feedback.type === 'success'
-                      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100'
-                      : 'border-rose-500/20 bg-rose-500/10 text-rose-100'
-                  )}>
+                  <StatusBanner tone={feedback.type === 'success' ? 'success' : 'danger'} className="mt-4">
                     {feedback.message}
-                  </div>
+                  </StatusBanner>
                 )}
-              </div>
+              </Surface>
             )}
           </div>
-        </section>
+        </Surface>
 
-        <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
+        <Surface as="section" radius="xl" padding="md">
           <div className="mb-4 text-xl font-bold text-theme-primary">详情描述</div>
           <div className="whitespace-pre-wrap text-sm leading-8 text-theme-secondary">
             {issue.body}
           </div>
-        </section>
+        </Surface>
 
-        <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
+        <Surface as="section" radius="xl" padding="md">
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-500/20 bg-cyan-500/10 text-cyan-200">
               <MessageSquareQuote className="h-5 w-5" />
@@ -267,21 +264,16 @@ export default function IssueDetailPage() {
               </div>
             </div>
           ) : (
-            <div className="rounded-[24px] border border-dashed border-[var(--card-border)] px-5 py-5 text-sm leading-7 text-theme-secondary">
+            <Surface tone="dashed" radius="lg" padding="md" className="text-sm leading-7 text-theme-secondary">
               这条反馈暂未收到公开回复。
-            </div>
+            </Surface>
           )}
-        </section>
+        </Surface>
 
         {!user?.is_admin && (
-          <section className="rounded-[32px] border border-amber-500/20 bg-amber-500/10 p-6">
-            <div className="flex items-start gap-3 text-amber-100">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-              <div className="text-sm leading-6">
-                这条反馈会公开展示；处理状态和官方回复由管理员维护。
-              </div>
-            </div>
-          </section>
+          <StatusBanner tone="warning" icon={<AlertTriangle className="h-5 w-5" />}>
+            这条反馈会公开展示；处理状态和官方回复由管理员维护。
+          </StatusBanner>
         )}
       </ScrollRevealStack>
     </SiteShell>

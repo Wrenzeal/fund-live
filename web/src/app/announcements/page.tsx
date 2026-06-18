@@ -5,13 +5,16 @@ import { useState } from 'react'
 import { Bell, FileUp, LoaderCircle, Megaphone } from 'lucide-react'
 import { ScrollRevealStack } from '@/components/scroll-reveal'
 import { SiteShell } from '@/components/site-shell'
+import { ActionButton } from '@/components/ui/action-button'
+import { EmptyState } from '@/components/ui/empty-state'
+import { StatusBanner } from '@/components/ui/status-banner'
+import { Surface } from '@/components/ui/surface'
 import { useCurrentUser } from '@/hooks/use-auth'
 import {
   createAnnouncement,
   importAnnouncementsFromChangelog,
   useAnnouncements,
 } from '@/hooks/use-announcements'
-import { cn } from '@/lib/utils'
 
 export default function AnnouncementsPage() {
   const { user } = useCurrentUser()
@@ -72,7 +75,7 @@ export default function AnnouncementsPage() {
       <div className="space-y-8">
         {user?.is_admin && (
           <ScrollRevealStack className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-            <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
+            <Surface as="section" radius="xl" padding="md">
               <div className="text-xs tracking-[0.22em] text-theme-muted">管理员发布</div>
               <div className="mt-2 text-2xl font-bold text-theme-primary">手动新增公告</div>
               <div className="mt-6 space-y-4">
@@ -108,40 +111,35 @@ export default function AnnouncementsPage() {
                 </label>
 
                 {feedback && (
-                  <div className={cn(
-                    'rounded-[20px] border px-4 py-3 text-sm',
-                    feedback.includes('完成') || feedback.includes('已发布')
-                      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100'
-                      : 'border-rose-500/20 bg-rose-500/10 text-rose-100'
-                  )}>
+                  <StatusBanner tone={feedback.includes('完成') || feedback.includes('已发布') ? 'success' : 'danger'}>
                     {feedback}
-                  </div>
+                  </StatusBanner>
                 )}
 
                 <div className="flex flex-wrap gap-3">
-                  <button
+                  <ActionButton
                     type="button"
+                    variant="primary"
                     onClick={() => void handleCreateAnnouncement()}
                     disabled={isSubmitting}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-5 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     <Megaphone className="h-4 w-4" />
                     {isSubmitting ? '发布中...' : '发布公告'}
-                  </button>
-                  <button
+                  </ActionButton>
+                  <ActionButton
                     type="button"
+                    variant="secondary"
                     onClick={() => void handleImportChangelog()}
                     disabled={isImporting}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-5 py-3 text-sm font-medium text-theme-primary disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     <FileUp className="h-4 w-4" />
                     {isImporting ? '导入中...' : '从 CHANGELOG 导入'}
-                  </button>
+                  </ActionButton>
                 </div>
               </div>
-            </section>
+            </Surface>
 
-            <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
+            <Surface as="section" radius="xl" padding="md">
               <div className="text-xs tracking-[0.22em] text-theme-muted">发布说明</div>
               <div className="mt-2 text-2xl font-bold text-theme-primary">公告发布</div>
               <div className="mt-5 space-y-4 text-sm leading-7 text-theme-secondary">
@@ -155,25 +153,22 @@ export default function AnnouncementsPage() {
                   登录用户会在存在未读公告时收到弹窗提醒，并可手动标记已读。
                 </div>
               </div>
-            </section>
+            </Surface>
           </ScrollRevealStack>
         )}
 
         <ScrollRevealStack className="space-y-4">
           {isLoading ? (
-            <div className="rounded-[32px] border border-[var(--card-border)] p-10 glass text-center">
+            <Surface radius="xl" padding="lg" className="text-center">
               <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
               <div className="mt-4 text-sm text-theme-secondary">正在加载公告列表...</div>
-            </div>
+            </Surface>
           ) : error ? (
-            <div className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6 text-sm text-rose-100">
+            <StatusBanner tone="danger">
               {error instanceof Error ? error.message : '加载公告失败'}
-            </div>
+            </StatusBanner>
           ) : announcements.length === 0 ? (
-            <div className="rounded-[32px] border border-dashed border-[var(--card-border)] p-10 text-center glass">
-              <Bell className="mx-auto h-8 w-8 text-theme-muted" />
-              <div className="mt-4 text-xl font-semibold text-theme-primary">暂时还没有公告</div>
-            </div>
+            <EmptyState icon={<Bell className="h-8 w-8" />} title="暂时还没有公告" />
           ) : (
             announcements.map((announcement) => (
               <Link

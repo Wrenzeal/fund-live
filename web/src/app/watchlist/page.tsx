@@ -1,10 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronDown, FileSearch, FileStack, FolderPlus, GripVertical, Layers3, LoaderCircle, Palette, PencilLine, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
+import { ActionButton } from '@/components/ui/action-button'
+import { EmptyState } from '@/components/ui/empty-state'
+import { StatusBanner } from '@/components/ui/status-banner'
+import { Surface } from '@/components/ui/surface'
 import { FloatingListbox } from '@/components/floating-listbox'
 import { ScrollReveal, ScrollRevealStack } from '@/components/scroll-reveal'
 import { VIPAnalysisEntry } from '@/components/vip-analysis-entry'
@@ -481,7 +484,9 @@ export default function WatchlistPage() {
   if (isLoading) {
     return (
       <AccountAreaShell title="我的自选" description="按分组管理重点关注的基金。">
-        <div className="glass h-64 rounded-[32px] border border-[var(--card-border)]" />
+        <Surface padding="none" radius="xl" className="h-64 animate-pulse">
+          <span className="sr-only">正在加载自选分组</span>
+        </Surface>
       </AccountAreaShell>
     )
   }
@@ -489,20 +494,21 @@ export default function WatchlistPage() {
   if (!user) {
     return (
       <AccountAreaShell title="我的自选" description="按分组管理重点关注的基金。">
-        <div className="glass rounded-[32px] border border-[var(--card-border)] p-8 text-center">
-          <div className="mb-3 text-2xl font-bold text-theme-primary">登录后可查看我的自选</div>
-          <p className="mx-auto max-w-xl text-sm leading-6 text-theme-secondary">
-            登录后可同步查看和管理你的分组与基金清单。
-          </p>
-          <div className="mt-6 flex justify-center gap-3">
-            <Link href="/auth/login" className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm text-theme-secondary">
-              去登录
-            </Link>
-            <Link href="/auth/register" className="rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-4 py-3 text-sm font-medium text-white">
-              去注册
-            </Link>
-          </div>
-        </div>
+        <EmptyState
+          icon={<Layers3 className="h-10 w-10" />}
+          title="登录后可查看我的自选"
+          description="登录后可同步查看和管理你的分组与基金清单。"
+          action={
+            <div className="flex justify-center gap-3">
+              <ActionButton href="/auth/login" variant="subtle">
+                去登录
+              </ActionButton>
+              <ActionButton href="/auth/register" variant="primary">
+                去注册
+              </ActionButton>
+            </div>
+          }
+        />
       </AccountAreaShell>
     )
   }
@@ -511,31 +517,17 @@ export default function WatchlistPage() {
     <AccountAreaShell title="我的自选" description="按分组整理关注的基金，并快速查看每只基金的实时预估涨跌幅与迷你走势。">
       <ScrollRevealStack className="space-y-8">
         {watchlistFeedback && (
-          <div
-            className={cn(
-              'flex items-start gap-3 rounded-[28px] border px-4 py-4 text-sm',
-              watchlistFeedback.type === 'success'
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-50'
-                : 'border-amber-500/30 bg-amber-500/10 text-amber-100'
-            )}
-          >
-            <span>{watchlistFeedback.message}</span>
-          </div>
+          <StatusBanner tone={watchlistFeedback.type === 'success' ? 'success' : 'warning'}>
+            {watchlistFeedback.message}
+          </StatusBanner>
         )}
         {vipFeedback && (
-          <div
-            className={cn(
-              'flex items-start gap-3 rounded-[28px] border px-4 py-4 text-sm',
-              vipFeedback.type === 'success'
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-50'
-                : 'border-amber-500/30 bg-amber-500/10 text-amber-100'
-            )}
-          >
-            <span>{vipFeedback.message}</span>
-          </div>
+          <StatusBanner tone={vipFeedback.type === 'success' ? 'success' : 'warning'}>
+            {vipFeedback.message}
+          </StatusBanner>
         )}
         <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
-          <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
+          <Surface as="section" radius="xl" padding="md">
             <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="text-sm text-theme-muted">分组总览</div>
@@ -545,14 +537,10 @@ export default function WatchlistPage() {
               </div>
 
               {watchlistGroups.length === 0 && (
-                <button
-                  type="button"
-                  onClick={() => void seedDemoData()}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm text-theme-secondary"
-                >
+                <ActionButton type="button" variant="subtle" onClick={() => void seedDemoData()}>
                   <Sparkles className="h-4 w-4" />
                   快速开始
-                </button>
+                </ActionButton>
               )}
             </div>
 
@@ -578,28 +566,23 @@ export default function WatchlistPage() {
               </label>
             </div>
 
-            <button
+            <ActionButton
               type="button"
+              variant="primary"
               onClick={() => void handleCreateGroup()}
               disabled={isCreatingGroup}
-              className={cn(
-                'group relative mt-4 inline-flex items-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-4 py-3 text-sm font-medium text-white transition-all duration-200',
-                'hover:-translate-y-0.5 hover:shadow-[0_18px_35px_rgba(14,165,233,0.28)] active:scale-[0.985]',
-                'disabled:cursor-not-allowed disabled:opacity-85',
-                isCreatingGroup && 'action-button-pop'
-              )}
+              className={cn('mt-4', isCreatingGroup && 'action-button-pop')}
             >
-              <span className="action-button-shine" />
               {isCreatingGroup ? (
-                <LoaderCircle className="relative z-10 h-4 w-4 animate-spin" />
+                <LoaderCircle className="h-4 w-4 animate-spin" />
               ) : (
-                <FolderPlus className="relative z-10 h-4 w-4 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110" />
+                <FolderPlus className="h-4 w-4" />
               )}
-              <span className="relative z-10">{isCreatingGroup ? '创建中...' : '创建分组'}</span>
-            </button>
-          </section>
+              {isCreatingGroup ? '创建中...' : '创建分组'}
+            </ActionButton>
+          </Surface>
 
-          <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
+          <Surface as="section" radius="xl" padding="md">
             <div className="mb-5">
               <div className="text-sm text-theme-muted">把基金放进分组</div>
               <div className="mt-1 text-2xl font-bold text-theme-primary">分组管理</div>
@@ -783,21 +766,19 @@ export default function WatchlistPage() {
                 </FloatingListbox>
               </div>
             </div>
-          </section>
+          </Surface>
         </div>
 
         <div className="space-y-6">
           {watchlistGroups.length === 0 ? (
-            <div className="rounded-[32px] border border-dashed border-[var(--card-border)] p-10 text-center glass">
-              <Layers3 className="mx-auto h-10 w-10 text-theme-muted" />
-              <div className="mt-4 text-xl font-semibold text-theme-primary">还没有自选分组</div>
-              <p className="mt-2 text-sm leading-6 text-theme-secondary">
-                你可以先创建分组，再把基金加入对应的观察篮子；创建后的分组和基金会自动保存。
-            </p>
-          </div>
+            <EmptyState
+              icon={<Layers3 className="h-10 w-10" />}
+              title="还没有自选分组"
+              description="你可以先创建分组，再把基金加入对应的观察篮子；创建后的分组和基金会自动保存。"
+            />
           ) : (
             <>
-              <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
+              <Surface as="section" radius="xl" padding="md">
                 <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
                   <div className="space-y-3">
                     <div className="text-sm text-theme-muted">快速定位分组</div>
@@ -954,16 +935,14 @@ export default function WatchlistPage() {
                     </div>
                   )}
                 </div>
-              </section>
+              </Surface>
 
               {visibleGroups.length === 0 ? (
-                <div className="rounded-[32px] border border-dashed border-[var(--card-border)] p-10 text-center glass">
-                  <Layers3 className="mx-auto h-10 w-10 text-theme-muted" />
-                  <div className="mt-4 text-xl font-semibold text-theme-primary">当前没有可展示的分组</div>
-                  <p className="mt-2 text-sm leading-6 text-theme-secondary">
-                    请检查搜索关键词，或切回“全部分组”模式查看完整列表。
-                  </p>
-                </div>
+                <EmptyState
+                  icon={<Layers3 className="h-10 w-10" />}
+                  title="当前没有可展示的分组"
+                  description="请检查搜索关键词，或切回“全部分组”模式查看完整列表。"
+                />
               ) : (
                 visibleGroups.map((group) => {
                   const isCollapsed = collapsedGroupIds.has(group.id)

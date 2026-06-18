@@ -1,8 +1,9 @@
 'use client'
 
-import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { Bell, CheckCircle2, X } from 'lucide-react'
+import { ActionButton } from '@/components/ui/action-button'
+import { Surface } from '@/components/ui/surface'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { markAnnouncementRead, useUnreadAnnouncements } from '@/hooks/use-announcements'
 
@@ -36,7 +37,7 @@ export function GlobalAnnouncementDialog() {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4 py-8 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-[32px] border border-[var(--card-border)] glass-strong p-6 shadow-2xl">
+      <Surface tone="strong" radius="xl" padding="md" className="w-full max-w-2xl shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-4">
             <div className="rounded-2xl bg-cyan-500/12 p-3 text-cyan-300">
@@ -61,30 +62,30 @@ export function GlobalAnnouncementDialog() {
           </button>
         </div>
 
-        <div className="mt-6 rounded-[24px] border border-[var(--card-border)] bg-[var(--input-bg)]/60 p-5">
+        <Surface tone="subtle" radius="lg" padding="md" className="mt-6">
           <div className="text-sm leading-7 text-theme-secondary whitespace-pre-wrap">
             {currentAnnouncement.summary || currentAnnouncement.content}
           </div>
-        </div>
+        </Surface>
 
         <div className="mt-6 flex flex-wrap justify-end gap-3">
-          <Link
+          <ActionButton
             href={`/announcements/${currentAnnouncement.id}`}
-            className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-theme-primary"
+            variant="secondary"
           >
             查看详情
-          </Link>
-          <button
+          </ActionButton>
+          <ActionButton
             type="button"
+            variant="primary"
             onClick={() => void handleMarkRead()}
             disabled={isMarkingRead}
-            className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-70"
           >
             <CheckCircle2 className="h-4 w-4" />
             {isMarkingRead ? '处理中...' : '标记已读'}
-          </button>
+          </ActionButton>
         </div>
-      </div>
+      </Surface>
     </div>
   )
 }

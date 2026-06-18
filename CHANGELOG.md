@@ -65,6 +65,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 静态信息页 Hero 与卡片网格改为复用 `Surface`，并移除一处高频 tracking eyebrow 样式；主要页面容器从 `min-h-screen` 调整为 `min-h-[100dvh]`，提升移动端 viewport 稳定性。
   - 第二批补充 `ActionButton` 轻量 primitive，收口首页顶部导航、静态信息页返回链接、持仓页登录 / 注册入口与筛选空态恢复按钮的 CTA 类名重复，继续保持路由、业务 hook 和表单字段不变。
   - 第三批抽出 `HoldingsWorkspaceNav`，将持仓页顶部概览、快捷动作、快速开始和工作台 tab 网格下沉为纯展示组件；`holdings/page.tsx` 继续保留 active tab、seed demo、口径/视图状态和业务数据流。
+  - 第四批收口 `/watchlist` 低风险展示壳层：加载占位、未登录空态、反馈提示、分组总览/管理面板和无分组/无匹配空态改为复用 `Surface`、`EmptyState`、`StatusBanner`、`ActionButton`；分组创建、选择、搜索、拖拽、删除、编辑逻辑保持不变。
+  - 第五批收口公告与反馈页展示壳层：`/announcements`、`/announcements/[id]`、`/issues`、`/issues/[id]` 的加载/错误/空态、管理员提示、提交入口和内容面板继续复用 `Surface`、`EmptyState`、`StatusBanner`、`ActionButton`；公告发布、CHANGELOG 导入、反馈提交、状态更新和官方回复流程保持不变。
+  - 同步收口全局未读公告弹窗 `GlobalAnnouncementDialog` 的弹窗面板、摘要壳层和查看详情 / 标记已读 CTA，使站内公告入口继续沿用同一套 `Surface` / `ActionButton` 展示语言；未读公告拉取、关闭和标记已读逻辑保持不变。
 
 - **前端 redesign 第二轮收口与 Vercel API 域名修复**
   - 静态信息页抽出 `StaticInfoShell` / `StaticInfoHero` / `StaticInfoCardGrid`，让品牌化 404、隐私政策和服务条款复用统一壳层，并为隐私政策 / 服务条款补充页面 metadata。

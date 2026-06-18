@@ -1,14 +1,15 @@
 'use client'
 
-import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useState } from 'react'
 import { ArrowLeft, Bell, CheckCircle2, LoaderCircle } from 'lucide-react'
 import { ScrollRevealStack } from '@/components/scroll-reveal'
 import { SiteShell } from '@/components/site-shell'
+import { ActionButton } from '@/components/ui/action-button'
+import { StatusBanner } from '@/components/ui/status-banner'
+import { Surface } from '@/components/ui/surface'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { markAnnouncementRead, useAnnouncement } from '@/hooks/use-announcements'
-import { cn } from '@/lib/utils'
 
 export default function AnnouncementDetailPage() {
   const params = useParams<{ id: string }>()
@@ -43,10 +44,10 @@ export default function AnnouncementDetailPage() {
         eyebrowLabel="UPDATE DETAIL"
         EyebrowIcon={Bell}
       >
-        <div className="rounded-[32px] border border-[var(--card-border)] p-10 glass text-center">
+        <Surface radius="xl" padding="lg" className="text-center">
           <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
           <div className="mt-4 text-sm text-theme-secondary">正在加载公告详情...</div>
-        </div>
+        </Surface>
       </SiteShell>
     )
   }
@@ -59,9 +60,9 @@ export default function AnnouncementDetailPage() {
         eyebrowLabel="UPDATE DETAIL"
         EyebrowIcon={Bell}
       >
-        <div className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6 text-sm text-rose-100">
+        <StatusBanner tone="danger">
           {error instanceof Error ? error.message : '公告不存在。'}
-        </div>
+        </StatusBanner>
       </SiteShell>
     )
   }
@@ -75,38 +76,33 @@ export default function AnnouncementDetailPage() {
     >
       <ScrollRevealStack className="space-y-6">
         <div className="flex flex-wrap gap-3">
-          <Link
+          <ActionButton
             href="/announcements"
-            className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-theme-primary"
+            variant="secondary"
           >
             <ArrowLeft className="h-4 w-4" />
             返回公告列表
-          </Link>
+          </ActionButton>
           {user && (
-            <button
+            <ActionButton
               type="button"
+              variant="primary"
               onClick={() => void handleMarkRead()}
               disabled={isMarkingRead}
-              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-70"
             >
               <CheckCircle2 className="h-4 w-4" />
               {isMarkingRead ? '处理中...' : '标记已读'}
-            </button>
+            </ActionButton>
           )}
         </div>
 
         {feedback && (
-          <div className={cn(
-            'rounded-[24px] border px-4 py-3 text-sm',
-            feedback.includes('已标记')
-              ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100'
-              : 'border-rose-500/20 bg-rose-500/10 text-rose-100'
-          )}>
+          <StatusBanner tone={feedback.includes('已标记') ? 'success' : 'danger'}>
             {feedback}
-          </div>
+          </StatusBanner>
         )}
 
-        <section className="rounded-[36px] border border-[var(--card-border)] p-8 glass">
+        <Surface as="section" radius="xl" padding="lg">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-3 py-1 text-xs tracking-[0.18em] text-cyan-200">
@@ -122,13 +118,13 @@ export default function AnnouncementDetailPage() {
               {announcement.source_ref && <div className="mt-2">来源标识：{announcement.source_ref}</div>}
             </div>
           </div>
-        </section>
+        </Surface>
 
-        <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
+        <Surface as="section" radius="xl" padding="md">
           <div className="whitespace-pre-wrap text-sm leading-8 text-theme-secondary">
             {announcement.content}
           </div>
-        </section>
+        </Surface>
       </ScrollRevealStack>
     </SiteShell>
   )

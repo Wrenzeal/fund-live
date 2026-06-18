@@ -5,6 +5,10 @@ import { useMemo, useState } from 'react'
 import { AlertTriangle, Bug, Check, CheckCircle2, ChevronDown, LoaderCircle, Search, Sparkles, WandSparkles } from 'lucide-react'
 import { ScrollReveal, ScrollRevealStack } from '@/components/scroll-reveal'
 import { SiteShell } from '@/components/site-shell'
+import { ActionButton } from '@/components/ui/action-button'
+import { EmptyState } from '@/components/ui/empty-state'
+import { StatusBanner } from '@/components/ui/status-banner'
+import { Surface } from '@/components/ui/surface'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { createIssue, type IssueStatus, type IssueType, useIssues } from '@/hooks/use-issues'
 import { useDebounce } from '@/hooks/use-debounce'
@@ -225,15 +229,15 @@ export default function IssuesPage() {
             { label: '处理中', value: counts.accepted, accent: 'text-cyan-300' },
             { label: '已完成', value: counts.completed, accent: 'text-emerald-300' },
           ].map((item) => (
-            <article key={item.label} className="rounded-[28px] border border-[var(--card-border)] p-6 glass">
+            <Surface as="article" key={item.label} radius="lg" padding="md">
               <div className="text-xs tracking-[0.22em] text-theme-muted">{item.label}</div>
               <div className={cn('mt-3 text-4xl font-black', item.accent)}>{item.value}</div>
-            </article>
+            </Surface>
           ))}
         </ScrollRevealStack>
 
         <ScrollReveal>
-          <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
+          <Surface as="section" radius="xl" padding="md">
             <div className="grid gap-4 lg:grid-cols-[1.4fr_0.7fr_0.7fr]">
               <label className="rounded-[22px] border border-[var(--input-border)] bg-[var(--input-bg)]/70 px-4 py-3">
                 <div className="mb-2 text-xs tracking-[0.18em] text-theme-muted">关键字搜索</div>
@@ -274,28 +278,26 @@ export default function IssuesPage() {
                 onSelect={(value) => setStatus(value as '' | IssueStatus)}
               />
             </div>
-          </section>
+          </Surface>
         </ScrollReveal>
 
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <ScrollRevealStack className="space-y-4">
             {isLoading ? (
-              <div className="rounded-[32px] border border-[var(--card-border)] p-10 glass text-center">
+              <Surface radius="xl" padding="lg" className="text-center">
                 <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
                 <div className="mt-4 text-sm text-theme-secondary">正在加载反馈列表...</div>
-              </div>
+              </Surface>
             ) : error ? (
-              <div className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6 text-sm text-rose-100">
+              <StatusBanner tone="danger">
                 {error instanceof Error ? error.message : '加载反馈失败'}
-              </div>
+              </StatusBanner>
             ) : issues.length === 0 ? (
-              <div className="rounded-[32px] border border-dashed border-[var(--card-border)] p-10 text-center glass">
-                <AlertTriangle className="mx-auto h-8 w-8 text-theme-muted" />
-                <div className="mt-4 text-xl font-semibold text-theme-primary">暂时没有匹配的反馈</div>
-                <p className="mt-2 text-sm leading-6 text-theme-secondary">
-                  你可以调整筛选条件，或者登录后提交一个新的反馈。
-                </p>
-              </div>
+              <EmptyState
+                icon={<AlertTriangle className="h-8 w-8" />}
+                title="暂时没有匹配的反馈"
+                description="你可以调整筛选条件，或者登录后提交一个新的反馈。"
+              />
             ) : (
               issues.map((issue) => {
                 const typeMeta = issueTypeMeta(issue.type)
@@ -340,7 +342,7 @@ export default function IssuesPage() {
           </ScrollRevealStack>
 
           <ScrollReveal className="space-y-6" delay={80}>
-            <section className="rounded-[32px] border border-[var(--card-border)] p-6 glass">
+            <Surface as="section" radius="xl" padding="md">
               <div className="text-xs tracking-[0.22em] text-theme-muted">反馈投递</div>
               <div className="mt-2 text-2xl font-bold text-theme-primary">提交一条新的反馈</div>
               <p className="mt-3 text-sm leading-6 text-theme-secondary">
@@ -348,25 +350,19 @@ export default function IssuesPage() {
               </p>
 
               {!user ? (
-                <div className="mt-6 rounded-[24px] border border-amber-500/20 bg-amber-500/10 p-5">
-                  <div className="text-sm leading-6 text-amber-50/90">
-                    你可以先公开浏览所有反馈。若要提交新的反馈，请先登录账号。
+                <StatusBanner tone="warning" className="mt-6">
+                  <div>
+                    <div>你可以先公开浏览所有反馈。若要提交新的反馈，请先登录账号。</div>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <ActionButton href="/auth/login" variant="primary">
+                        去登录
+                      </ActionButton>
+                      <ActionButton href="/auth/register" variant="secondary">
+                        注册账号
+                      </ActionButton>
+                    </div>
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <Link
-                      href="/auth/login"
-                      className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-4 py-3 text-sm font-medium text-white"
-                    >
-                      去登录
-                    </Link>
-                    <Link
-                      href="/auth/register"
-                      className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-theme-primary"
-                    >
-                      注册账号
-                    </Link>
-                  </div>
-                </div>
+                </StatusBanner>
               ) : (
                 <div className="mt-6 space-y-4">
                   <IdeaSelect
@@ -408,34 +404,24 @@ export default function IssuesPage() {
                   </label>
 
                   {feedback && (
-                    <div className={cn(
-                      'rounded-[22px] border px-4 py-3 text-sm leading-6',
-                      feedback.includes('送达')
-                        ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100'
-                        : 'border-rose-500/20 bg-rose-500/10 text-rose-100'
-                    )}>
+                    <StatusBanner tone={feedback.includes('送达') ? 'success' : 'danger'}>
                       {feedback}
-                    </div>
+                    </StatusBanner>
                   )}
 
-                  <button
+                  <ActionButton
                     type="button"
+                    variant="primary"
                     onClick={() => void handleSubmit()}
                     disabled={isSubmitting}
-                    className={cn(
-                      'group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-5 py-3 text-sm font-medium text-white transition-all duration-200',
-                      'hover:-translate-y-0.5 hover:shadow-[0_18px_35px_rgba(14,165,233,0.28)] active:scale-[0.985]',
-                      'disabled:cursor-not-allowed disabled:opacity-70',
-                      isSubmitting && 'action-button-pop'
-                    )}
+                    className={cn(isSubmitting && 'action-button-pop')}
                   >
-                    <span className="action-button-shine" />
-                    <CheckCircle2 className="relative z-10 h-4 w-4 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110" />
-                    <span className="relative z-10">{isSubmitting ? '发送中...' : '发送反馈'}</span>
-                  </button>
+                    <CheckCircle2 className="h-4 w-4" />
+                    {isSubmitting ? '发送中...' : '发送反馈'}
+                  </ActionButton>
                 </div>
               )}
-            </section>
+            </Surface>
           </ScrollReveal>
         </section>
       </div>
