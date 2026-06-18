@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useFundAnalysis, useFundDashboard, useFundHoldings, useTimeSeries } from '@/hooks/use-fund-data'
-import { useMarketStatus, getSessionLabel, formatTimeUntil } from '@/hooks/use-market-status'
+import { useMarketStatus, getSessionLabel } from '@/hooks/use-market-status'
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
 import { FundSearch } from '@/components/fund-search'
 import { EstimateCard } from '@/components/estimate-card'
@@ -20,9 +20,9 @@ import { UserAccountMenu } from '@/components/user-account-menu'
 import { ScrollReveal, ScrollRevealStack } from '@/components/scroll-reveal'
 import { SiteFooter } from '@/components/site-footer'
 import { ActionButton } from '@/components/ui/action-button'
-import { Surface } from '@/components/ui/surface'
 import { StatusBanner } from '@/components/ui/status-banner'
-import { BarChart3, TrendingUp, Clock, RefreshCw } from 'lucide-react'
+import { HomeInsightRail, HomeVisualShell } from '@/components/home-visual-shell'
+import { Clock, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // 默认基金 ID
@@ -350,172 +350,58 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
           </ScrollReveal>
         ) : (
           /* ===== Professional Mode ===== */
-          <ScrollRevealStack className="space-y-6">
-            {/* Top Section: Estimate Card + Stats */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <EstimateCard
+          <div className="space-y-8">
+            <ScrollReveal>
+              <HomeVisualShell
+                currentFundId={currentFundId}
                 estimate={activeEstimate}
                 fund={activeFund}
-                isLoading={isDashboardLoading}
-                isCallAuction={isCallAuction}
-                isValidating={isValidating}
                 lastUpdated={activeLastUpdated}
-                className="lg:col-span-2"
+                analysis={activeAnalysis}
+                marketStatus={marketStatus}
+                marketStatusLabel={marketStatusLabel}
+                isCallAuction={isCallAuction}
+                isTrading={isTrading}
+                isLoading={isDashboardLoading}
+                isWarming={isDashboardWarming}
+                isValidating={isValidating}
+                refreshInterval={refreshInterval}
+                holdingsDisplayLevel={holdingsDisplayLevel}
+                displayHoldingCoverageCount={displayHoldingCoverageCount}
+                displayHoldingRatio={displayHoldingRatio}
+                lookthroughAvailable={lookthroughAvailable}
+                topContributors={topContributors}
+                topDisplayItems={topDisplayItems}
+                onSelect={handleFundSelect}
+                onRefresh={handleRefresh}
               />
+            </ScrollReveal>
 
-              {/* Quick Stats */}
-              <div className="space-y-4">
-                {/* Trading Status Card */}
-                <Surface padding="md" radius="md">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 rounded-lg bg-cyan-500/20">
-                      <BarChart3 className="w-5 h-5 text-cyan-400" />
-                    </div>
-                    <h3 className="font-semibold text-theme-primary">市场状态</h3>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-theme-secondary">交易状态</span>
-                      <span className={cn(
-                        'font-medium',
-                        marketStatus.mounted && marketStatus.isTrading ? 'market-open' : 'market-closed'
-                      )}>
-                        {marketStatusLabel}
-                      </span>
-                    </div>
-                    {marketStatus.mounted && !marketStatus.isTrading && marketStatus.timeUntilNextSession > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-theme-secondary">距开盘</span>
-                        <span className="text-theme-primary font-medium">
-                          {formatTimeUntil(marketStatus.timeUntilNextSession)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-sm">
-                      <span className="text-theme-secondary">
-                        {holdingsDisplayLevel === 'target_layer' ? '追踪目标数' : '重仓股覆盖'}
-                      </span>
-                      <span className="text-theme-primary font-medium">
-                        {holdingsDisplayLevel === 'target_layer'
-                          ? `${displayHoldingCoverageCount} 个`
-                          : isCallAuction
-                            ? `${displayHoldingCoverageCount} / 10`
-                            : `${estimate?.holding_details?.length || 0} / 10`}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-theme-secondary">
-                        {holdingsDisplayLevel === 'target_layer' ? '目标层级' : '持仓占比'}
-                      </span>
-                      <span className="text-theme-primary font-medium">
-                        {holdingsDisplayLevel === 'target_layer'
-                          ? '下一层目标'
-                          : isCallAuction
-                            ? `${displayHoldingRatio.toFixed(2)}%`
-                            : `${parseFloat(estimate?.total_hold_ratio || '0').toFixed(2)}%`}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-theme-secondary">数据来源</span>
-                      <span className="text-cyan-400 font-medium">
-                        {holdingsDisplayLevel === 'target_layer'
-                          ? (lookthroughAvailable ? '追踪目标' : '跟踪标的')
-                          : isCallAuction
-                            ? '静态持仓'
-                            : (estimate?.data_source || 'N/A')}
-                      </span>
-                    </div>
-                  </div>
-                </Surface>
+            <ScrollRevealStack className="space-y-6">
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.12fr)_minmax(20rem,0.88fr)]">
+                <EstimateCard
+                  estimate={activeEstimate}
+                  fund={activeFund}
+                  isLoading={isDashboardLoading}
+                  isCallAuction={isCallAuction}
+                  isValidating={isValidating}
+                  lastUpdated={activeLastUpdated}
+                  className="min-h-full"
+                />
 
-                {/* Top Contributors */}
-                <Surface padding="md" radius="md">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 rounded-lg bg-[var(--accent-up)]/20">
-                      <TrendingUp className="w-5 h-5 text-up" />
-                    </div>
-                    <h3 className="font-semibold text-theme-primary">
-                      {holdingsDisplayLevel === 'target_layer'
-                        ? '追踪目标 TOP'
-                        : isCallAuction
-                          ? '重仓股 TOP3'
-                          : '涨幅贡献 TOP3'}
-                    </h3>
-                  </div>
-                  <div className="space-y-2">
-                    {holdingsDisplayLevel !== 'target_layer' && !isCallAuction && topContributors.map((holding, index) => {
-                      const contrib = parseFloat(holding.contribution)
-                      const isPositive = contrib >= 0
-                      return (
-                        <div
-                          key={holding.stock_code}
-                          className="flex items-center justify-between py-2 border-b border-[var(--card-border)] last:border-0"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-theme-muted w-4">{index + 1}</span>
-                            <span className="text-sm text-theme-primary">{holding.stock_name}</span>
-                          </div>
-                          <span className={cn('text-sm font-medium', isPositive ? 'text-up' : 'text-down')}>
-                            {isPositive ? '+' : ''}{contrib.toFixed(4)}%
-                          </span>
-                        </div>
-                      )
-                    })}
-                    {holdingsDisplayLevel === 'target_layer' ? (
-                      topDisplayItems.length > 0 ? topDisplayItems.map((holding, index) => (
-                        <div
-                          key={`${holding.item_type}:${holding.code || holding.name}:${index}`}
-                          className="flex items-center justify-between py-2 border-b border-[var(--card-border)] last:border-0"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-theme-muted w-4">{index + 1}</span>
-                            <span className="text-sm text-theme-primary">{holding.name}</span>
-                          </div>
-                          <span className="text-sm font-medium text-theme-secondary">
-                            {holding.target_type === 'etf_fund'
-                              ? 'ETF'
-                              : holding.target_type === 'index'
-                                ? '指数'
-                                : '基金'}
-                          </span>
-                        </div>
-                      )) : (
-                        <p className="text-sm text-theme-muted text-center py-4">暂无追踪目标</p>
-                      )
-                    ) : isCallAuction ? (
-                      topDisplayItems.length > 0 ? topDisplayItems.map((holding, index) => (
-                        <div
-                          key={`${holding.item_type}:${holding.code || holding.name}:${index}`}
-                          className="flex items-center justify-between py-2 border-b border-[var(--card-border)] last:border-0"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-theme-muted w-4">{index + 1}</span>
-                            <span className="text-sm text-theme-primary">{holding.name}</span>
-                          </div>
-                          <span className="text-sm font-medium text-theme-secondary">
-                            {parseFloat(holding.holding_ratio || '0').toFixed(2)}%
-                          </span>
-                        </div>
-                      )) : (
-                        <p className="text-sm text-theme-muted text-center py-4">暂无持仓数据</p>
-                      )
-                    ) : topContributors.length === 0 && (
-                      <p className="text-sm text-theme-muted text-center py-4">暂无数据</p>
-                    )}
-                    {isCallAuction && (
-                      <p className="pt-2 text-xs text-theme-muted">
-                        集合竞价阶段保留固定持仓与占比信息，贡献值等待 09:30 开盘后恢复。
-                      </p>
-                    )}
-                    {holdingsDisplayLevel === 'target_layer' && (
-                      <p className="pt-2 text-xs text-theme-muted">
-                        默认只展示下一层追踪目标；底层股票仅用于估值计算，不在这里继续下钻。
-                      </p>
-                    )}
-                  </div>
-                </Surface>
+                <HomeInsightRail
+                  marketStatus={marketStatus}
+                  marketStatusLabel={marketStatusLabel}
+                  holdingsDisplayLevel={holdingsDisplayLevel}
+                  displayHoldingCoverageCount={displayHoldingCoverageCount}
+                  displayHoldingRatio={displayHoldingRatio}
+                  isCallAuction={isCallAuction}
+                  estimate={estimate}
+                  lookthroughAvailable={lookthroughAvailable}
+                  topContributors={topContributors}
+                  topDisplayItems={topDisplayItems}
+                />
               </div>
-            </div>
 
             {/* Chart Section */}
             <IntradayChart
@@ -561,6 +447,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
               isLoading={!isCallAuction && isAnalysisLoading}
             />
           </ScrollRevealStack>
+          </div>
         )}
       </main>
 
