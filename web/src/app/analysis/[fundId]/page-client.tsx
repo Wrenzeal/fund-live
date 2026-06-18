@@ -27,7 +27,7 @@ import {
 
 export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
   const {
-    fund,
+    fund: dashboardFund,
     estimate,
     sectorSnapshot,
     themeSnapshot,
@@ -40,19 +40,27 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
     mutate: refreshDashboard,
   } = useFundDashboard(fundId)
   const {
+    fund: analysisFund,
     analysis,
     isLoading: isAnalysisLoading,
+    isValidating: isAnalysisValidating,
     mutate: refreshAnalysis,
   } = useFundAnalysis(fundId)
 
   const {
+    fund: holdingsFund,
     holdings: resolvedHoldings,
     displayItems,
     displayLevel,
     lookthroughAvailable,
+    isLoading: isHoldingsLoading,
   } = useFundHoldings(fundId)
 
+  const resolvedFund = dashboardFund || analysisFund || holdingsFund
   const lastUpdated = estimate?.calculated_at ? new Date(estimate.calculated_at) : null
+  const isAnalysisPending = (isAnalysisLoading || isAnalysisValidating) && !analysis
+  const isHoldingsPending = isHoldingsLoading && displayItems.length === 0
+  const holdingsReady = displayItems.length > 0
   const timelineEvents = (analysis?.event_impacts || []).slice().sort((left, right) => eventTimelineRank(left) - eventTimelineRank(right))
   const realtimeRadarEvents = buildRealtimeRadarEvents(analysis?.event_impacts || [])
   const quarterlyEvents = (analysis?.event_impacts || []).filter((item) => item.horizon === 'quarterly')
@@ -76,7 +84,7 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
               </Link>
               <div className="text-2xl font-black tracking-tight text-theme-primary md:text-3xl">量化看板</div>
               <div className="mt-2 max-w-3xl text-sm leading-6 text-theme-secondary">
-                {fund?.name ? `${fund.name}（${fund.id}）` : `基金 ${fundId}`} · 先看结论和证据，再展开事件、风险与底层数据。
+                {resolvedFund?.name ? `${resolvedFund.name}（${resolvedFund.id || fundId}）` : isLoading ? '基金信息加载中' : `基金 ${fundId}`} · 先看结论和证据，再展开事件、风险与底层数据。
               </div>
             </div>
 
@@ -109,20 +117,20 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
 
           <RevealSection delay={120}>
             <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-              <RecommendationMixPanel items={recommendationItems} />
-              <ModuleRadarPanel modules={analysis?.module_scores || []} />
+              <RecommendationMixPanel items={recommendationItems} isLoading={isAnalysisPending} />
+              <ModuleRadarPanel modules={analysis?.module_scores || []} isLoading={isAnalysisPending} />
             </div>
           </RevealSection>
 
           <RevealSection delay={120}>
-            <EvidenceFocusGrid analysis={analysis} />
+            <EvidenceFocusGrid analysis={analysis} isLoading={isAnalysisPending} />
           </RevealSection>
 
           <RevealSection delay={120}>
             <div className="space-y-5">
-              <RealtimeEventRadar events={realtimeRadarEvents} />
-              <EventSignalBoard events={timelineEvents} />
-              <RiskBreakdownCard analysis={analysis} riskModules={riskModules} />
+              <RealtimeEventRadar events={realtimeRadarEvents} isLoading={isAnalysisPending} />
+              <EventSignalBoard events={timelineEvents} isLoading={isAnalysisPending} />
+              <RiskBreakdownCard analysis={analysis} riskModules={riskModules} isLoading={isAnalysisPending} />
             </div>
           </RevealSection>
 
@@ -140,7 +148,7 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
 
           <RevealSection delay={120}>
             <DataContextPanel
-              fund={fund}
+              fund={resolvedFund}
               estimate={estimate}
               isLoading={isLoading}
               isValidating={isValidating}
@@ -154,6 +162,8 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
               }}
               displayLevel={displayLevel}
               lookthroughAvailable={lookthroughAvailable}
+              holdingsReady={holdingsReady}
+              isHoldingsLoading={isHoldingsLoading}
               displayDate={displayDate}
               isHistorical={isHistorical}
               officialCloseStatus={officialClose?.display_status}
@@ -166,6 +176,7 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
               displayLevel={displayLevel}
               items={displayItems}
               lookthroughAvailable={lookthroughAvailable}
+              isLoading={isHoldingsPending}
             />
           </RevealSection>
 
@@ -443,6 +454,8 @@ function DataContextPanel({
   onClassificationOverrideUpdated,
   displayLevel,
   lookthroughAvailable,
+  holdingsReady,
+  isHoldingsLoading,
   displayDate,
   isHistorical,
   officialCloseStatus,
@@ -458,10 +471,23 @@ function DataContextPanel({
   onClassificationOverrideUpdated?: () => void
   displayLevel: 'stock_layer' | 'target_layer'
   lookthroughAvailable: boolean
+  holdingsReady: boolean
+  isHoldingsLoading: boolean
   displayDate: string
   isHistorical: boolean
   officialCloseStatus?: 'hidden' | 'pending' | 'ready'
 }) {
+  const displayLevelText = isHoldingsLoading && !holdingsReady
+    ? '拉取中'
+    : holdingsReady
+      ? displayLevel === 'target_layer' ? '下一层追踪目标' : '股票持仓层'
+      : '待确认'
+  const lookthroughText = isHoldingsLoading && !holdingsReady
+    ? '拉取中'
+    : holdingsReady
+      ? lookthroughAvailable ? '是' : '否'
+      : '--'
+
   return (
     <section className="space-y-5">
       <EstimateCard
@@ -488,8 +514,8 @@ function DataContextPanel({
             description="把展示层级、分时与官方净值状态收在一个位置。"
           />
           <div className="mt-4 flex flex-1 flex-col justify-center space-y-2 text-sm text-theme-secondary">
-            <MetaRow label="展示层级" value={displayLevel === 'target_layer' ? '下一层追踪目标' : '股票持仓层'} />
-            <MetaRow label="可穿透估值" value={lookthroughAvailable ? '是' : '否'} />
+            <MetaRow label="展示层级" value={displayLevelText} />
+            <MetaRow label="可穿透估值" value={lookthroughText} />
             <MetaRow label="分时日期" value={displayDate || '--'} />
             <MetaRow label="历史数据" value={isHistorical ? '是' : '否'} />
             <MetaRow label="官方收盘" value={officialCloseStatus === 'ready' ? '已就绪' : officialCloseStatus === 'pending' ? '待同步' : '隐藏'} />
@@ -534,7 +560,7 @@ function MethodCompactCard({ analysis }: { analysis?: FundAnalysis }) {
   )
 }
 
-function RecommendationMixPanel({ items }: { items: RecommendationItem[] }) {
+function RecommendationMixPanel({ items, isLoading = false }: { items: RecommendationItem[]; isLoading?: boolean }) {
   const [panelRef, hasEnteredView] = useLazyReveal<HTMLElement>()
   const total = items.reduce((sum, item) => sum + Math.max(item.value, 0), 0)
 
@@ -556,7 +582,11 @@ function RecommendationMixPanel({ items }: { items: RecommendationItem[] }) {
 
       {total <= 0 ? (
         <div className="relative flex flex-1 items-center">
-          <EmptyPanel text="当前没有可绘制的建议分布数据。" />
+          <EmptyPanel
+            code={isLoading ? 'ANALYSIS_PIPELINE_ACTIVE' : 'PENDING_QUANT_SIGNAL'}
+            text={isLoading ? '正在生成建议分布' : '建议分布未返回'}
+            scanning={isLoading}
+          />
         </div>
       ) : (
         <div className="relative grid flex-1 items-center gap-5 lg:grid-cols-[16rem_minmax(0,1fr)]">
@@ -713,7 +743,7 @@ function AnimatedRecommendationDonut({ items }: { items: RecommendationItem[] })
   )
 }
 
-function ModuleRadarPanel({ modules }: { modules: FundAnalysisModuleScore[] }) {
+function ModuleRadarPanel({ modules, isLoading = false }: { modules: FundAnalysisModuleScore[]; isLoading?: boolean }) {
   const normalized = modules.slice(0, 6)
   const center = 96
   const radius = 68
@@ -732,7 +762,11 @@ function ModuleRadarPanel({ modules }: { modules: FundAnalysisModuleScore[] }) {
         description="用雷达图压缩展示模块强弱，避免重复展开每条规则。"
       />
       {normalized.length === 0 ? (
-        <EmptyPanel text="当前没有可展示的模块分数。" />
+        <RadarBasePlaceholder
+          code={isLoading ? 'MODULE_VECTOR_SYNC' : 'MODULE_VECTOR_EMPTY'}
+          text={isLoading ? '正在计算六维模块' : '模块分数未返回'}
+          scanning={isLoading}
+        />
       ) : (
       <div className="mt-5 grid items-center gap-5 md:grid-cols-[13rem_minmax(0,1fr)]">
         <div className="relative mx-auto h-52 w-52">
@@ -781,15 +815,15 @@ function ModuleRadarPanel({ modules }: { modules: FundAnalysisModuleScore[] }) {
   )
 }
 
-function EvidenceFocusGrid({ analysis }: { analysis?: FundAnalysis }) {
+function EvidenceFocusGrid({ analysis, isLoading = false }: { analysis?: FundAnalysis; isLoading?: boolean }) {
   const primary = analysis?.primary_evidence || []
   const counter = analysis?.counter_evidence || []
   const ai = analysis?.ai_explanation
 
   return (
     <section className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_20rem]">
-      <EvidenceColumn title="主证据" icon={<Target className="h-4 w-4 text-cyan-200" />} items={primary} />
-      <EvidenceColumn title="反方证据 / 限制" icon={<ShieldAlert className="h-4 w-4 text-amber-200" />} items={counter} amber />
+      <EvidenceColumn title="主证据" icon={<Target className="h-4 w-4 text-cyan-200" />} items={primary} isLoading={isLoading} />
+      <EvidenceColumn title="反方证据 / 限制" icon={<ShieldAlert className="h-4 w-4 text-amber-200" />} items={counter} isLoading={isLoading} amber />
       <div className="glass flex h-full min-h-[18rem] flex-col rounded-3xl p-5 md:p-6">
         <SectionHeading
           icon={<Sparkles className="h-4 w-4 text-fuchsia-200" />}
@@ -813,7 +847,11 @@ function EvidenceFocusGrid({ analysis }: { analysis?: FundAnalysis }) {
           </div>
         ) : (
           <div className="flex flex-1 items-center">
-            <EmptyPanel text="当前没有补充解释；评分与证据仍可查看。" />
+            <EmptyPanel
+              code={isLoading ? 'AI_EXPLANATION_PENDING' : 'AI_EXPLANATION_EMPTY'}
+              text={isLoading ? '正在同步解释层' : '解释层未返回'}
+              scanning={isLoading}
+            />
           </div>
         )}
       </div>
@@ -825,19 +863,23 @@ function EvidenceColumn({
   title,
   icon,
   items,
+  isLoading = false,
   amber = false,
 }: {
   title: string
   icon: ReactNode
   items: NonNullable<FundAnalysis['primary_evidence']>
+  isLoading?: boolean
   amber?: boolean
 }) {
   return (
     <div className={cn('glass flex h-full min-h-[18rem] flex-col rounded-3xl p-5 md:p-6', amber ? 'bg-amber-500/5' : 'bg-cyan-500/5')}>
       <SectionHeading icon={icon} title={title} />
       <div className={cn('mt-4 flex flex-1 flex-col gap-3', items.length === 0 && 'justify-center')}>
-        {items.length === 0 ? (
-          <EmptyPanel text={`${title} 暂无结构化数据。`} />
+        {items.length === 0 && isLoading ? (
+          <EvidenceSkeletonList amber={amber} />
+        ) : items.length === 0 ? (
+          <EmptyPanel code={amber ? 'COUNTER_EVIDENCE_EMPTY' : 'PRIMARY_EVIDENCE_EMPTY'} text={`${title}未返回`} />
         ) : items.slice(0, 3).map((item, index) => (
           <div key={`${item.code}-${index}`} className={cn('min-h-[7.5rem] rounded-2xl border p-4 transition-transform duration-300 hover:-translate-y-0.5', amber ? 'border-amber-500/20 bg-amber-500/10' : 'border-cyan-500/20 bg-cyan-500/10')}>
             <div className="text-sm font-semibold text-theme-primary">{item.title}</div>
@@ -909,7 +951,7 @@ function eventScopeLabel(scope?: FundAnalysisEventImpact['target_scope']) {
   }
 }
 
-function RealtimeEventRadar({ events }: { events: FundAnalysisEventImpact[] }) {
+function RealtimeEventRadar({ events, isLoading = false }: { events: FundAnalysisEventImpact[]; isLoading?: boolean }) {
   const lead = events[0]
 
   return (
@@ -943,14 +985,20 @@ function RealtimeEventRadar({ events }: { events: FundAnalysisEventImpact[] }) {
             </div>
           ) : (
             <div className="mt-5">
-              <EmptyPanel text="当前没有可映射的实时事件。若热点未落到基金持仓或主线暴露，不会强行写入结论。" />
+              <EmptyPanel
+                code={isLoading ? 'EVENT_RADAR_SYNC' : 'EVENT_RADAR_IDLE'}
+                text={isLoading ? '正在映射实时事件' : '暂无映射事件'}
+                scanning={isLoading}
+              />
             </div>
           )}
         </div>
 
         <div className={cn('grid gap-3 sm:grid-cols-2', events.length === 0 && 'block')}>
-          {events.length === 0 ? (
-            <EmptyPanel text="暂无事件雷达卡片。" />
+          {events.length === 0 && isLoading ? (
+            <EventSkeletonGrid />
+          ) : events.length === 0 ? (
+            <EmptyPanel code="EVENT_CARD_EMPTY" text="事件卡片未返回" />
           ) : events.map((event) => (
             <div key={event.code} className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4 transition-transform duration-300 hover:-translate-y-0.5">
               <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
@@ -972,7 +1020,7 @@ function RealtimeEventRadar({ events }: { events: FundAnalysisEventImpact[] }) {
   )
 }
 
-function EventSignalBoard({ events }: { events: FundAnalysisEventImpact[] }) {
+function EventSignalBoard({ events, isLoading = false }: { events: FundAnalysisEventImpact[]; isLoading?: boolean }) {
   const groups = [
     {
       key: 'macro',
@@ -1010,7 +1058,11 @@ function EventSignalBoard({ events }: { events: FundAnalysisEventImpact[] }) {
 
       <div className={cn('mt-5 flex-1', groups.length === 0 && 'flex items-center')}>
         {groups.length === 0 ? (
-          <EmptyPanel text="当前还没有可展开的事件信号。" />
+          <EmptyPanel
+            code={isLoading ? 'SIGNAL_CHAIN_SYNC' : 'SIGNAL_CHAIN_IDLE'}
+            text={isLoading ? '正在生成事件信号链' : '暂无事件信号'}
+            scanning={isLoading}
+          />
         ) : (
           <div className="grid gap-4 xl:grid-cols-2">
             {groups.map((group) => (
@@ -1099,9 +1151,11 @@ function QuarterlyDiffCard({ events }: { events: FundAnalysisEventImpact[] }) {
 function RiskBreakdownCard({
   analysis,
   riskModules,
+  isLoading = false,
 }: {
   analysis?: FundAnalysis
   riskModules: FundAnalysisModuleScore[]
+  isLoading?: boolean
 }) {
   return (
     <section className="glass flex h-full flex-col rounded-3xl p-5 md:p-6">
@@ -1126,7 +1180,11 @@ function RiskBreakdownCard({
 
         <div className={cn('grid gap-3 md:grid-cols-2', riskModules.length === 0 && 'block')}>
           {riskModules.length === 0 ? (
-            <EmptyPanel text="当前没有单独可拆的风险模块。" />
+            <EmptyPanel
+              code={isLoading ? 'RISK_MODULE_SYNC' : 'RISK_MODULE_EMPTY'}
+              text={isLoading ? '正在拆解风险模块' : '风险模块未返回'}
+              scanning={isLoading}
+            />
           ) : riskModules.map((module) => (
             <div key={module.code} className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4">
               <div className="flex items-center justify-between gap-4">
@@ -1246,14 +1304,103 @@ function StructureComparisonCard({
   )
 }
 
-function EmptyPanel({ text }: { text: string }) {
+function EmptyPanel({
+  text,
+  code = 'DATA_LINK_OFFLINE',
+  scanning = false,
+}: {
+  text: string
+  code?: string
+  scanning?: boolean
+}) {
   return (
-    <div className="flex min-h-[6rem] w-full items-center justify-center rounded-2xl border border-dashed border-[var(--card-border)] px-4 py-5 text-center text-sm text-theme-muted">
-      {text}
+    <div className="relative flex min-h-[6rem] w-full overflow-hidden rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--card-bg)]/25 px-4 py-5 text-center text-sm text-theme-muted">
+      {scanning && <div className="pointer-events-none absolute inset-y-0 left-[-40%] w-1/2 animate-[pulse_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-cyan-300/10 to-transparent" />}
+      <div className="relative z-10 m-auto">
+        <div className="font-mono text-[11px] tracking-[0.22em] text-cyan-100/55">[ {code} ]</div>
+        <div className="mt-2 text-theme-muted">{text}</div>
+      </div>
     </div>
   )
 }
 
 function EmptyInline({ text }: { text: string }) {
   return <div className="text-sm text-theme-muted">{text}</div>
+}
+
+function RadarBasePlaceholder({
+  code,
+  text,
+  scanning = false,
+}: {
+  code: string
+  text: string
+  scanning?: boolean
+}) {
+  const center = 96
+  const radius = 68
+  const gridLevels = [0.33, 0.66, 1]
+  const axes = Array.from({ length: 6 }, (_, index) => index)
+
+  return (
+    <div className="mt-5 grid items-center gap-5 md:grid-cols-[13rem_minmax(0,1fr)]">
+      <div className="relative mx-auto h-52 w-52 overflow-hidden rounded-full border border-cyan-300/10 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.12),rgba(15,23,42,0)_64%)]">
+        <svg viewBox="0 0 192 192" className="h-full w-full">
+          {gridLevels.map((level) => (
+            <circle key={level} cx={center} cy={center} r={radius * level} fill="none" stroke="rgba(148,163,184,.22)" strokeWidth="1" />
+          ))}
+          {axes.map((axis) => {
+            const angle = -Math.PI / 2 + (axis * Math.PI * 2) / axes.length
+            return (
+              <line
+                key={axis}
+                x1={center}
+                y1={center}
+                x2={center + Math.cos(angle) * radius}
+                y2={center + Math.sin(angle) * radius}
+                stroke="rgba(148,163,184,.18)"
+                strokeWidth="1"
+              />
+            )
+          })}
+        </svg>
+        <div className={cn('absolute inset-3 rounded-full border border-cyan-200/10', scanning && 'animate-[spin_6s_linear_infinite] border-t-cyan-200/45')} />
+        <div className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-200/55 shadow-[0_0_24px_rgba(34,211,238,0.45)]" />
+      </div>
+      <EmptyPanel code={code} text={text} scanning={scanning} />
+    </div>
+  )
+}
+
+function EvidenceSkeletonList({ amber = false }: { amber?: boolean }) {
+  return (
+    <div className="space-y-3">
+      {[0, 1].map((item) => (
+        <div key={item} className={cn('min-h-[7.5rem] rounded-2xl border p-4', amber ? 'border-amber-500/15 bg-amber-500/10' : 'border-cyan-500/15 bg-cyan-500/10')}>
+          <div className="h-3 w-24 rounded-full bg-slate-400/15" />
+          <div className="mt-4 h-2.5 w-full rounded-full bg-slate-400/10" />
+          <div className="mt-2 h-2.5 w-4/5 rounded-full bg-slate-400/10" />
+          <div className="mt-4 font-mono text-[10px] tracking-[0.2em] text-theme-muted opacity-70">[ EVIDENCE_STREAM_PENDING ]</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function EventSkeletonGrid() {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {[0, 1, 2, 3].map((item) => (
+        <div key={item} className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4">
+          <div className="flex gap-2">
+            <div className="h-5 w-16 rounded-full bg-slate-400/10" />
+            <div className="h-5 w-14 rounded-full bg-slate-400/10" />
+          </div>
+          <div className="mt-4 h-3 w-3/4 rounded-full bg-slate-400/15" />
+          <div className="mt-3 h-2.5 w-full rounded-full bg-slate-400/10" />
+          <div className="mt-2 h-2.5 w-2/3 rounded-full bg-slate-400/10" />
+        </div>
+      ))}
+    </div>
+  )
 }

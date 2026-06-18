@@ -15,6 +15,17 @@ interface EstimateCardProps {
     className?: string
 }
 
+function formatNavCurrency(value?: string) {
+    if (value === undefined || value === null || value === '') {
+        return '--'
+    }
+    const parsed = Number.parseFloat(value)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        return '--'
+    }
+    return formatCurrency(value)
+}
+
 export function EstimateCard({
     estimate,
     fund,
@@ -29,15 +40,27 @@ export function EstimateCard({
 
     const changeInfo = useMemo(() =>
         isCallAuction
-            ? { text: '-', isPositive: false }
+            ? { text: '--', isPositive: false }
             : formatPercent(estimate?.change_percent),
         [estimate?.change_percent, isCallAuction]
     )
 
-    // 使用 CSS 变量实现主题感知的颜色
-    const change = parseFloat(estimate?.change_percent || '0')
-    const isPositive = change >= 0
+    // 使用 CSS 变量实现主题感知的颜色，但缺失数据必须保持中性，不渲染为 0 或正收益。
+    const change = Number.parseFloat(estimate?.change_percent || '')
+    const hasChange = Number.isFinite(change)
+    const isPositive = hasChange && change >= 0
+    const isNegative = hasChange && change < 0
     const TrendIcon = change > 0 ? TrendingUp : change < 0 ? TrendingDown : Minus
+    const fundCode = estimate?.fund_id || fund?.id
+    const displayName = isCallAuction
+        ? '集合竞价中'
+        : estimate?.fund_name || fund?.name || (isLoading ? '基金信息加载中' : fundCode ? `基金 ${fundCode}` : '基金信息待同步')
+    const metaText = isCallAuction
+        ? '等待 09:30 开盘后更新基金估值数据'
+        : [
+            fund?.manager ? `基金经理: ${fund.manager}` : '',
+            fund?.company ? fund.company : '',
+        ].filter(Boolean).join(' · ')
 
     return (
         <div
@@ -46,47 +69,48 @@ export function EstimateCard({
                 // 动态边框颜色
                 isPositive
                     ? 'border-[var(--accent-up)]/30'
-                    : 'border-[var(--accent-down)]/30',
+                    : isNegative
+                        ? 'border-[var(--accent-down)]/30'
+                        : 'border-[var(--card-border)]',
                 className
             )}
             style={{
                 // 使用 CSS 变量确保主题感知
                 background: isPositive
                     ? 'linear-gradient(135deg, rgba(var(--accent-up-rgb, 244, 63, 94), 0.1), rgba(var(--accent-up-rgb, 244, 63, 94), 0.05))'
-                    : 'linear-gradient(135deg, rgba(var(--accent-down-rgb, 16, 185, 129), 0.1), rgba(var(--accent-down-rgb, 16, 185, 129), 0.05))',
+                    : isNegative
+                        ? 'linear-gradient(135deg, rgba(var(--accent-down-rgb, 16, 185, 129), 0.1), rgba(var(--accent-down-rgb, 16, 185, 129), 0.05))'
+                        : 'linear-gradient(135deg, rgba(148, 163, 184, 0.10), rgba(15, 23, 42, 0.05))',
             }}
         >
             <div className="relative z-10">
                 {/* Fund name and info */}
                 <div className="mb-6">
                     <h2 className="text-2xl font-bold text-theme-primary">
-                        {isCallAuction ? '集合竞价中' : estimate?.fund_name || fund?.name || '选择基金'}
+                        {displayName}
                     </h2>
-                    {!isCallAuction && (estimate?.fund_id || fund?.id) && (
+                    {!isCallAuction && fundCode && (
                         <p className="text-sm text-theme-secondary mt-1">
-                            基金代码：{estimate?.fund_id || fund?.id}
+                            基金代码：{fundCode}
                         </p>
                     )}
-                    <p className="text-sm text-theme-secondary mt-1">
-                        {isCallAuction
-                            ? '等待 09:30 开盘后更新基金估值数据'
-                            : [
-                                fund?.manager ? `基金经理: ${fund.manager}` : '',
-                                fund?.company ? fund.company : '',
-                            ].filter(Boolean).join(' · ')}
-                    </p>
+                    {metaText && (
+                        <p className="text-sm text-theme-secondary mt-1">
+                            {metaText}
+                        </p>
+                    )}
                 </div>
 
                 {/* Main change display */}
                 <div className="flex items-start gap-3 sm:items-center sm:gap-4 mb-6">
                     <TrendIcon
-                        className={cn('h-10 w-10 shrink-0 sm:h-16 sm:w-16', isPositive ? 'text-up' : 'text-down')}
+                        className={cn('h-10 w-10 shrink-0 sm:h-16 sm:w-16', isPositive ? 'text-up' : isNegative ? 'text-down' : 'text-theme-muted')}
                         strokeWidth={2.5}
                     />
                     <div className="min-w-0">
                         <div className={cn(
                             'text-4xl sm:text-6xl lg:text-7xl font-black leading-none tracking-tight transition-colors duration-300',
-                            isPositive ? 'text-up' : 'text-down'
+                            isPositive ? 'text-up' : isNegative ? 'text-down' : 'text-theme-muted'
                         )}>
                             {isLoading && !estimate && !isCallAuction ? (
                                 <RefreshCw className="h-10 w-10 animate-spin sm:h-16 sm:w-16" />
@@ -109,13 +133,13 @@ export function EstimateCard({
                     <div className="rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/55 p-3 sm:p-4">
                         <div className="text-sm text-theme-muted">预估净值</div>
                         <div className="text-lg sm:text-2xl font-bold text-theme-primary mt-1">
-                            {isCallAuction ? '-' : formatCurrency(estimate?.estimate_nav)}
+                            {isCallAuction ? '--' : isLoading && !estimate ? 'Loading…' : formatNavCurrency(estimate?.estimate_nav)}
                         </div>
                     </div>
                     <div className="rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/55 p-3 sm:p-4">
                         <div className="text-sm text-theme-muted">昨日净值</div>
                         <div className="text-lg sm:text-2xl font-bold text-theme-primary mt-1">
-                            {isCallAuction ? '-' : formatCurrency(estimate?.prev_nav)}
+                            {isCallAuction ? '--' : isLoading && !estimate ? 'Loading…' : formatNavCurrency(estimate?.prev_nav)}
                         </div>
                     </div>
                 </div>
@@ -129,7 +153,7 @@ export function EstimateCard({
                             <span>·</span>
                         </>
                     )}
-                    <span>数据源: {isCallAuction ? '-' : estimate?.data_source || 'N/A'}</span>
+                    <span>数据源: {isCallAuction ? '--' : estimate?.data_source || (isLoading ? '同步中' : '未返回')}</span>
                     {estimate?.total_hold_ratio && !isCallAuction && (
                         <>
                             <span>·</span>
@@ -158,7 +182,7 @@ export function EstimateCard({
                             </div>
                             {officialClose.net_asset_val && (
                                 <div className="text-sm text-theme-secondary">
-                                    官方净值：{formatCurrency(officialClose.net_asset_val)}
+                                    官方净值：{formatNavCurrency(officialClose.net_asset_val)}
                                 </div>
                             )}
                         </div>

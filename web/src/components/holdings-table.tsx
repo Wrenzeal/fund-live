@@ -10,6 +10,7 @@ interface HoldingsTableProps {
     displayLevel?: 'stock_layer' | 'target_layer'
     items?: FundHoldingsDisplayItem[]
     lookthroughAvailable?: boolean
+    isLoading?: boolean
     isCallAuction?: boolean
     className?: string
 }
@@ -32,6 +33,7 @@ export function HoldingsTable({
     displayLevel = 'stock_layer',
     items: displayItems = [],
     lookthroughAvailable = false,
+    isLoading = false,
     isCallAuction = false,
     className,
 }: HoldingsTableProps) {
@@ -70,11 +72,23 @@ export function HoldingsTable({
     if (rows.length === 0) {
         return (
             <div className={cn('glass rounded-2xl p-4 sm:p-6', className)}>
-                <h3 className="text-lg font-semibold text-theme-primary mb-4">持仓明细</h3>
-                <p className="text-theme-muted text-center py-8">暂无持仓数据</p>
+                <h3 className="mb-4 text-lg font-semibold text-theme-primary">
+                    {displayLevel === 'target_layer' ? '追踪目标' : '持仓明细'}
+                </h3>
+                <HoldingsSystemState
+                    code={isLoading ? 'HOLDINGS_LINKING' : 'DATA_LINK_OFFLINE'}
+                    text={isLoading ? '正在同步持仓层' : '持仓层未返回'}
+                    scanning={isLoading}
+                />
             </div>
         )
     }
+
+    const totalHoldingRatio = rows.reduce((sum, holding) => {
+        const ratio = parseOptionalNumber(holding.holding_ratio)
+        return Number.isFinite(ratio) ? sum + ratio : sum
+    }, 0)
+    const hasTotalHoldingRatio = rows.some((holding) => Number.isFinite(parseOptionalNumber(holding.holding_ratio)))
 
     return (
         <div className={cn('glass rounded-2xl p-4 sm:p-6', className)}>
@@ -94,7 +108,7 @@ export function HoldingsTable({
                 <span className="text-xs text-theme-muted sm:text-right">
                     {displayLevel === 'target_layer'
                         ? (lookthroughAvailable ? '可继续穿透估值' : '当前无穿透估值')
-                        : `合计占比: ${isCallAuction ? formatRatio(rows.reduce((sum, holding) => sum + parseFloat(holding.holding_ratio || '0'), 0).toString()) : formatRatio(estimate?.total_hold_ratio)}`}
+                        : `合计占比: ${isCallAuction ? hasTotalHoldingRatio ? formatRatio(totalHoldingRatio.toString()) : '--' : formatRatio(estimate?.total_hold_ratio)}`}
                 </span>
             </div>
 
@@ -168,8 +182,8 @@ function HoldingRow({
     isCallAuction?: boolean
 }) {
     const changeInfo = formatPercent(holding.stock_change)
-    const change = parseFloat(holding.stock_change || '0')
-    const contribution = parseFloat(holding.contribution || '0')
+    const change = parseOptionalNumber(holding.stock_change)
+    const contribution = parseOptionalNumber(holding.contribution)
 
     const TrendIcon = change > 0 ? TrendingUp : change < 0 ? TrendingDown : Minus
 
@@ -178,6 +192,7 @@ function HoldingRow({
     const isNegative = change < 0
     const contribPositive = contribution > 0
     const contribNegative = contribution < 0
+    const contributionText = Number.isFinite(contribution) ? `${contribution >= 0 ? '+' : ''}${contribution.toFixed(4)}%` : '--'
 
     if (displayLevel === 'target_layer') {
         return (
@@ -246,8 +261,36 @@ function HoldingRow({
                 contribNegative && 'text-down',
                 !contribPositive && !contribNegative && 'text-theme-muted'
             )}>
-                {isCallAuction ? '--' : `${contribution >= 0 ? '+' : ''}${contribution.toFixed(4)}%`}
+                {isCallAuction ? '--' : contributionText}
             </td>
         </tr>
+    )
+}
+
+function parseOptionalNumber(value?: string) {
+    if (value === undefined || value === null || value === '') {
+        return Number.NaN
+    }
+    const parsed = Number.parseFloat(value)
+    return Number.isFinite(parsed) ? parsed : Number.NaN
+}
+
+function HoldingsSystemState({
+    code,
+    text,
+    scanning = false,
+}: {
+    code: string
+    text: string
+    scanning?: boolean
+}) {
+    return (
+        <div className="relative overflow-hidden rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--card-bg)]/25 px-4 py-8 text-center">
+            {scanning && (
+                <div className="pointer-events-none absolute inset-y-0 left-[-40%] w-1/2 animate-[pulse_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-cyan-300/10 to-transparent" />
+            )}
+            <div className="relative z-10 font-mono text-[11px] tracking-[0.22em] text-cyan-100/55">[ {code} ]</div>
+            <div className="relative z-10 mt-2 text-sm text-theme-muted">{text}</div>
+        </div>
     )
 }

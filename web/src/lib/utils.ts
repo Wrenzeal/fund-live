@@ -7,9 +7,11 @@ export function cn(...inputs: ClassValue[]) {
 
 // Format a decimal string as percentage with color class
 export function formatPercent(value: string | undefined): { text: string; isPositive: boolean } {
-    if (!value) return { text: '0.00%', isPositive: false }
+    if (value === undefined || value === null || value === '') return { text: '--', isPositive: false }
 
     const num = parseFloat(value)
+    if (!Number.isFinite(num)) return { text: '--', isPositive: false }
+
     const isPositive = num >= 0
     const prefix = isPositive ? '+' : ''
 
@@ -19,19 +21,23 @@ export function formatPercent(value: string | undefined): { text: string; isPosi
     }
 }
 
-// Format a decimal string as currency (CNY)
+// Format a decimal string as currency (CNY). Missing financial values must stay unknown, not zero.
 export function formatCurrency(value: string | undefined): string {
-    if (!value) return '¥0.0000'
+    if (value === undefined || value === null || value === '') return '--'
 
     const num = parseFloat(value)
+    if (!Number.isFinite(num)) return '--'
+
     return `¥${num.toFixed(4)}`
 }
 
 // Format stock holding ratio
 export function formatRatio(value: string | undefined): string {
-    if (!value) return '0.00%'
+    if (value === undefined || value === null || value === '') return '--'
 
     const num = parseFloat(value)
+    if (!Number.isFinite(num)) return '--'
+
     return `${num.toFixed(2)}%`
 }
 
