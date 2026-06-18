@@ -69,7 +69,7 @@ export function HoldingsTable({
 
     if (rows.length === 0) {
         return (
-            <div className={cn('glass rounded-2xl p-6', className)}>
+            <div className={cn('glass rounded-2xl p-4 sm:p-6', className)}>
                 <h3 className="text-lg font-semibold text-theme-primary mb-4">持仓明细</h3>
                 <p className="text-theme-muted text-center py-8">暂无持仓数据</p>
             </div>
@@ -77,8 +77,8 @@ export function HoldingsTable({
     }
 
     return (
-        <div className={cn('glass rounded-2xl p-6', className)}>
-            <div className="flex items-center justify-between mb-4">
+        <div className={cn('glass rounded-2xl p-4 sm:p-6', className)}>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h3 className="text-lg font-semibold text-theme-primary">
                         {displayLevel === 'target_layer' ? '追踪目标' : '重仓股明细'}
@@ -91,15 +91,15 @@ export function HoldingsTable({
                                 : `当前参与估值展示 ${rows.length} / 10 只`}
                     </p>
                 </div>
-                <span className="text-xs text-theme-muted">
+                <span className="text-xs text-theme-muted sm:text-right">
                     {displayLevel === 'target_layer'
                         ? (lookthroughAvailable ? '可继续穿透估值' : '当前无穿透估值')
                         : `合计占比: ${isCallAuction ? formatRatio(rows.reduce((sum, holding) => sum + parseFloat(holding.holding_ratio || '0'), 0).toString()) : formatRatio(estimate?.total_hold_ratio)}`}
                 </span>
             </div>
 
-            <div className="overflow-x-auto">
-                <table className="w-full">
+            <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
+                <table className="w-full min-w-[42rem]">
                     <thead>
                         {displayLevel === 'target_layer' ? (
                             <tr className="text-xs text-theme-muted border-b border-[var(--card-border)]">
@@ -133,20 +133,21 @@ export function HoldingsTable({
                     </tbody>
                 </table>
             </div>
+            <div className="mt-2 text-[11px] text-theme-muted sm:hidden">横向滑动查看更多列</div>
 
             {/* Legend */}
             <div className="mt-4 pt-4 border-t border-[var(--card-border)] text-xs text-theme-muted">
                 {displayLevel === 'target_layer' ? (
                     <p>
-                        💡 当前默认展示基金的下一层追踪目标；底层股票仅用于估值计算，不在详情页默认展开
+                        说明：当前默认展示基金的下一层追踪目标；底层股票仅用于估值计算，不在详情页默认展开
                     </p>
                 ) : isCallAuction ? (
                     <p>
-                        💡 集合竞价阶段保留持仓名称、代码与占比等固定信息；涨跌幅、贡献等盘中字段会在 09:30 开盘后恢复更新
+                        说明：集合竞价阶段保留持仓名称、代码与占比等固定信息；涨跌幅、贡献等盘中字段会在 09:30 开盘后恢复更新
                     </p>
                 ) : (
                     <p>
-                        💡 <strong>贡献</strong> = 个股涨跌幅 × 持仓占比 / 100，表示该股对基金整体涨跌的影响
+                        说明：<strong>贡献</strong> = 个股涨跌幅 × 持仓占比 / 100，表示该股对基金整体涨跌的影响
                     </p>
                 )}
             </div>

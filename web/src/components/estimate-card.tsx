@@ -42,7 +42,7 @@ export function EstimateCard({
     return (
         <div
             className={cn(
-                'relative overflow-hidden rounded-3xl p-8 glass',
+                'relative overflow-hidden rounded-3xl p-5 sm:p-8 glass',
                 // 动态边框颜色
                 isPositive
                     ? 'border-[var(--accent-up)]/30'
@@ -78,23 +78,23 @@ export function EstimateCard({
                 </div>
 
                 {/* Main change display */}
-                <div className="flex items-center gap-4 mb-6">
+                <div className="flex items-start gap-3 sm:items-center sm:gap-4 mb-6">
                     <TrendIcon
-                        className={cn('w-16 h-16', isPositive ? 'text-up' : 'text-down')}
+                        className={cn('h-10 w-10 shrink-0 sm:h-16 sm:w-16', isPositive ? 'text-up' : 'text-down')}
                         strokeWidth={2.5}
                     />
-                    <div>
+                    <div className="min-w-0">
                         <div className={cn(
-                            'text-6xl sm:text-7xl font-black tracking-tight transition-all duration-300',
+                            'text-4xl sm:text-6xl lg:text-7xl font-black leading-none tracking-tight transition-colors duration-300',
                             isPositive ? 'text-up' : 'text-down'
                         )}>
                             {isLoading && !estimate && !isCallAuction ? (
-                                <RefreshCw className="w-16 h-16 animate-spin" />
+                                <RefreshCw className="h-10 w-10 animate-spin sm:h-16 sm:w-16" />
                             ) : (
                                 changeInfo.text
                             )}
                         </div>
-                        <div className="text-lg text-theme-secondary mt-1 flex items-center gap-2">
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-theme-secondary sm:text-lg">
                             {isCallAuction ? '等待开盘' : '实时预估涨跌幅'}
                             {/* 后台刷新指示器 */}
                             {isValidating && !isCallAuction && (
@@ -105,16 +105,16 @@ export function EstimateCard({
                 </div>
 
                 {/* NAV info */}
-                <div className="grid grid-cols-2 gap-4 sm:gap-6">
-                    <div className="glass rounded-xl p-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-6">
+                    <div className="rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/55 p-3 sm:p-4">
                         <div className="text-sm text-theme-muted">预估净值</div>
-                        <div className="text-xl sm:text-2xl font-bold text-theme-primary mt-1">
+                        <div className="text-lg sm:text-2xl font-bold text-theme-primary mt-1">
                             {isCallAuction ? '-' : formatCurrency(estimate?.estimate_nav)}
                         </div>
                     </div>
-                    <div className="glass rounded-xl p-4">
+                    <div className="rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/55 p-3 sm:p-4">
                         <div className="text-sm text-theme-muted">昨日净值</div>
-                        <div className="text-xl sm:text-2xl font-bold text-theme-primary mt-1">
+                        <div className="text-lg sm:text-2xl font-bold text-theme-primary mt-1">
                             {isCallAuction ? '-' : formatCurrency(estimate?.prev_nav)}
                         </div>
                     </div>

@@ -71,7 +71,7 @@ export function ScrollReveal({
     <div
       ref={ref}
       className={cn(
-        'transition-all duration-700 ease-out motion-reduce:translate-y-0 motion-reduce:scale-100 motion-reduce:opacity-100',
+        'transition-[opacity,transform] duration-500 ease-out motion-reduce:translate-y-0 motion-reduce:scale-100 motion-reduce:opacity-100',
         hasEnteredView ? enteredVariantClass : initialVariantClass,
         className
       )}

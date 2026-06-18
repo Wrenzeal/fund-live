@@ -425,9 +425,9 @@ export function IntradayChart({
     }, [displayDate])
 
     return (
-        <div className={cn('glass rounded-2xl p-6', className)}>
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
+        <div className={cn('glass rounded-2xl p-4 sm:p-6', className)}>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-lg font-semibold text-theme-primary">分时走势</h3>
                     {isHistorical && (
                         <span className="px-2 py-0.5 text-xs rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
@@ -445,7 +445,7 @@ export function IntradayChart({
                         </span>
                     )}
                 </div>
-                <div className="flex items-center gap-2 text-xs text-theme-muted">
+                <div className="flex items-center gap-2 text-xs text-theme-muted sm:justify-end">
                     {isCallAuction ? (
                         <span>集合竞价中</span>
                     ) : isTrading ? (
@@ -459,7 +459,7 @@ export function IntradayChart({
                 </div>
             </div>
 
-            <div className="h-64">
+            <div className="h-56 sm:h-64">
                 {isCallAuction ? (
                     <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/40 text-center">
                         <div>

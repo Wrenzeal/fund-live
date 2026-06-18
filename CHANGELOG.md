@@ -59,6 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
 ### Changed
+- **前端高帧率与移动端显示优化**
+  - 移动端禁用高成本 `backdrop-filter`、fixed background 与 cyber 主题无限背景动画，降低小屏滚动时的重绘压力；实时状态点、慢速旋转、VIP 闪烁类无限动画在小屏降级为静态展示。
+  - `ScrollReveal` 从 `transition-all` 收口为只过渡 `opacity` / `transform`，并缩短进入时长，避免无关属性参与合成。
+  - 首页估值卡移动端缩小主涨跌数字与趋势图标、减少内层 glass 嵌套、净值信息改为小屏单列，降低拥挤与模糊层叠成本。
+  - 分时走势图与持仓明细在移动端改为更稳的纵向表头和紧凑 padding；持仓表增加最小宽度、touch 横向滚动与小屏滑动提示，避免列被压缩。
+
 - **前端设计系统第一批 targeted evolution**
   - 新增 `Surface`、`StatusBanner`、`EmptyState`、`SectionHeader` 轻量 UI primitives，用于收口重复的 glass 面板、状态提示和空态表达，不引入新 UI 库或动画依赖。
   - 首页市场状态 / 涨幅贡献卡片、预热 / 集合竞价 / 切换失败提示改为复用统一 primitives；持仓页登录空态、首笔持仓空态、筛选提示和无匹配空态同步收口。
