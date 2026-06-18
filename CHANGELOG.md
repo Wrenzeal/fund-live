@@ -59,12 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
 ### Changed
-- **首页可见视觉重设计第一轮**
-  - 新增 `HomeVisualShell` / `HomeInsightRail`，将首页专业模式首屏从直接展示数据卡片改为“产品叙事 + 基金搜索 + 真实估值终端预览”的非对称金融工作台。
-  - 首屏右侧预览复用现有 dashboard / analysis / holdings / market status 数据，展示实时涨跌幅、净值、持仓覆盖、量化观察、贡献排行和刷新状态，不做假截图或假数据。
-  - 下方核心数据区改为估值卡 + 市场/贡献洞察侧栏的宽屏组合，保留分时图、持仓分类、持仓表、目标 ETF 持仓和量化分析卡原有业务链路。
-  - 分时图时间轴文案将 em dash 分隔的“午休”改为“午间休市”，满足本轮视觉文案自检。
-
 - **前端设计系统第一批 targeted evolution**
   - 新增 `Surface`、`StatusBanner`、`EmptyState`、`SectionHeader` 轻量 UI primitives，用于收口重复的 glass 面板、状态提示和空态表达，不引入新 UI 库或动画依赖。
   - 首页市场状态 / 涨幅贡献卡片、预热 / 集合竞价 / 切换失败提示改为复用统一 primitives；持仓页登录空态、首笔持仓空态、筛选提示和无匹配空态同步收口。

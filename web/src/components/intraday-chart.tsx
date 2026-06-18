@@ -484,7 +484,7 @@ export function IntradayChart({
             {/* Trading hours indicator */}
             <div className="mt-4 flex justify-between text-xs text-theme-muted">
                 <span>09:30</span>
-                <span className="text-amber-500/70">午间休市</span>
+                <span className="text-amber-500/70">— 午休 —</span>
                 <span>15:00</span>
             </div>
         </div>
