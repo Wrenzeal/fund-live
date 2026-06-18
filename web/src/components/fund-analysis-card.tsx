@@ -100,7 +100,7 @@ export function FundAnalysisCard({ analysis, fundId, isLoading = false }: FundAn
     ...(analysis.counter_evidence || []).map((item) => item.summary || item.title),
     ...(analysis.warnings || []),
   ].filter(Boolean).slice(0, 2)
-  const leadEvent = (analysis.event_impacts || []).find((event) => event.target_scope === 'holding' || event.target_scope === 'exposure') || analysis.event_impacts?.[0]
+  const radarEvents = buildSummaryRadarEvents(analysis.event_impacts || [])
 
   return (
     <section className="glass rounded-3xl p-5 sm:p-6">
@@ -176,19 +176,7 @@ export function FundAnalysisCard({ analysis, fundId, isLoading = false }: FundAn
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_max-content] lg:items-stretch">
-        {leadEvent ? (
-          <div className="flex h-full min-h-[5.5rem] flex-col justify-center rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className={cn('rounded-full border px-2.5 py-1', eventImpactTone(leadEvent.impact))}>关键事件</span>
-              <span className="font-medium text-theme-primary">{leadEvent.title}</span>
-            </div>
-            <div className="mt-2 text-xs leading-5 text-theme-secondary">{compactText(leadEvent.summary, 92)}</div>
-          </div>
-        ) : (
-          <div className="flex h-full min-h-[5.5rem] items-center rounded-2xl border border-dashed border-[var(--card-border)] px-4 py-3 text-xs text-theme-muted">
-            暂无可展示的关键事件。
-          </div>
-        )}
+        <SummaryEventRadar events={radarEvents} />
 
         {fundId && (
           <Link
@@ -207,6 +195,71 @@ export function FundAnalysisCard({ analysis, fundId, isLoading = false }: FundAn
       </div>
     </section>
   )
+}
+
+function buildSummaryRadarEvents(events: FundAnalysis['event_impacts']) {
+  const currentEvents = events
+    .filter((event) => event.horizon === 'current' || event.horizon === 'intraday')
+    .filter((event) => event.target_scope !== 'disclosure' && event.target_scope !== 'methodology')
+
+  const picked: NonNullable<FundAnalysis['event_impacts']> = []
+  const pickFirst = (predicate: (event: FundAnalysis['event_impacts'][number]) => boolean) => {
+    const item = currentEvents.find((event) => !picked.includes(event) && predicate(event))
+    if (item) {
+      picked.push(item)
+    }
+  }
+
+  pickFirst((event) => event.target_scope === 'macro' && event.code.startsWith('realtime_'))
+  pickFirst((event) => event.target_scope === 'holding')
+  pickFirst((event) => event.target_scope === 'exposure')
+  pickFirst((event) => event.target_scope === 'macro')
+
+  return picked.slice(0, 3)
+}
+
+function SummaryEventRadar({ events }: { events: NonNullable<FundAnalysis['event_impacts']> }) {
+  if (events.length === 0) {
+    return (
+      <div className="flex h-full min-h-[5.5rem] items-center rounded-2xl border border-dashed border-[var(--card-border)] px-4 py-3 text-xs text-theme-muted">
+        事件雷达暂无可展示的实时信号；当前结论主要来自行情、持仓和规则口径。
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid h-full min-h-[5.5rem] gap-3 md:grid-cols-3">
+      {events.map((event) => (
+        <div key={event.code} className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-4 py-3">
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
+            <span className={cn('rounded-full border px-2 py-0.5', eventImpactTone(event.impact))}>
+              {eventRadarScopeLabel(event.target_scope)}
+            </span>
+            {event.weight_hint && <span className="text-theme-muted">暴露 {event.weight_hint}%</span>}
+          </div>
+          <div className="line-clamp-1 text-xs font-semibold text-theme-primary">{event.title}</div>
+          <div className="mt-1 line-clamp-2 text-xs leading-5 text-theme-secondary">{compactText(event.summary, 76)}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function eventRadarScopeLabel(scope?: string) {
+  switch (scope) {
+    case 'macro':
+      return '实时宏观'
+    case 'holding':
+      return '持仓事件'
+    case 'exposure':
+      return '主线暴露'
+    case 'fund':
+      return '基金公告'
+    case 'index':
+      return '指数事件'
+    default:
+      return '事件'
+  }
 }
 
 function SummaryMiniPanel({

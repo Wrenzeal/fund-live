@@ -59,6 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
 ### Changed
+- **量化观察摘要与详情页实时事件重构**
+  - 首页量化观察摘要卡新增“事件雷达”分区，优先展示实时宏观、持仓事件和主线暴露信号，减少主证据 / 风险限制 / 事件线索混在同一长文本里的问题。
+  - `/analysis/[fundId]` 详情页新增实时事件雷达首屏模块，并将事件信号链改为按“实时宏观 / 持仓事件 / 主线暴露 / 口径与限制”分组展示。
+  - 宏观事件源新增美伊协议 / 霍尔木兹重开预期相关实时事件种子，按油气资源、消费成本、防御交易三类暴露方向映射；低暴露基金不会被无差别写入热点。
+  - 新增后端回归测试覆盖实时事件命中能源暴露、消费成本缓和映射、低暴露不触发。
+
 - **前端高帧率与移动端显示优化**
   - 移动端禁用高成本 `backdrop-filter`、fixed background 与 cyber 主题无限背景动画，降低小屏滚动时的重绘压力；实时状态点、慢速旋转、VIP 闪烁类无限动画在小屏降级为静态展示。
   - `ScrollReveal` 从 `transition-all` 收口为只过渡 `opacity` / `transform`，并缩短进入时长，避免无关属性参与合成。

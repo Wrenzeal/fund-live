@@ -903,6 +903,100 @@ func TestLoadMacroPolicyEventsRequiresExposureWeight(t *testing.T) {
 	}
 }
 
+func TestLoadMacroPolicyEventsAddsRealtimeHormuzEnergyRadar(t *testing.T) {
+	events := LoadMacroPolicyEvents(
+		time.Date(2026, time.June, 18, 9, 0, 0, 0, time.Local),
+		&domain.FundSectorSnapshot{
+			PrimarySectorCode: "oil_gas_energy",
+			PrimarySectorName: "石油能源",
+			Breakdown: []domain.FundSectorBreakdown{
+				{SectorCode: "oil_gas_energy", SectorName: "石油能源", WeightPercent: decimal.RequireFromString("28.0000")},
+			},
+		},
+		nil,
+	)
+
+	found := false
+	for _, item := range events {
+		if item.Code == "realtime_hormuz_reopening_energy_pressure_202606" {
+			found = true
+			if item.Impact != "negative" {
+				t.Fatalf("impact = %q, want negative", item.Impact)
+			}
+			if item.TargetScope != "macro" {
+				t.Fatalf("target_scope = %q, want macro", item.TargetScope)
+			}
+			if item.WeightHint == nil || !item.WeightHint.Equal(decimal.RequireFromString("28.0")) {
+				t.Fatalf("weight_hint = %v, want 28.0", item.WeightHint)
+			}
+			if !strings.Contains(item.Summary, "当前主行业为石油能源") {
+				t.Fatalf("summary = %q, want primary sector context", item.Summary)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("events = %+v, want realtime Hormuz energy event", events)
+	}
+}
+
+func TestLoadMacroPolicyEventsMapsHormuzCostReliefToConsumerExposure(t *testing.T) {
+	events := LoadMacroPolicyEvents(
+		time.Date(2026, time.June, 18, 9, 0, 0, 0, time.Local),
+		&domain.FundSectorSnapshot{
+			PrimarySectorCode: "consumer_service",
+			PrimarySectorName: "消费服务",
+			Breakdown: []domain.FundSectorBreakdown{
+				{SectorCode: "consumer_service", SectorName: "消费服务", WeightPercent: decimal.RequireFromString("24.0000")},
+			},
+		},
+		&domain.FundThemeSnapshot{
+			PrimaryThemeCode: "consumer_upgrade",
+			PrimaryThemeName: "消费升级",
+			Breakdown: []domain.FundThemeBreakdown{
+				{ThemeCode: "consumer_upgrade", ThemeName: "消费升级", WeightPercent: decimal.RequireFromString("19.0000")},
+			},
+		},
+	)
+
+	found := false
+	for _, item := range events {
+		if item.Code == "realtime_hormuz_reopening_cost_relief_202606" {
+			found = true
+			if item.Impact != "positive" {
+				t.Fatalf("impact = %q, want positive", item.Impact)
+			}
+			if !strings.Contains(item.Summary, "匹配暴露约") {
+				t.Fatalf("summary = %q, want exposure context", item.Summary)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("events = %+v, want realtime Hormuz cost relief event", events)
+	}
+}
+
+func TestLoadMacroPolicyEventsDoesNotBroadcastRealtimeHormuzToLowExposure(t *testing.T) {
+	events := LoadMacroPolicyEvents(
+		time.Date(2026, time.June, 18, 9, 0, 0, 0, time.Local),
+		&domain.FundSectorSnapshot{
+			PrimarySectorCode: "oil_gas_energy",
+			PrimarySectorName: "石油能源",
+			Breakdown: []domain.FundSectorBreakdown{
+				{SectorCode: "oil_gas_energy", SectorName: "石油能源", WeightPercent: decimal.RequireFromString("4.0000")},
+			},
+		},
+		nil,
+	)
+
+	for _, item := range events {
+		if strings.HasPrefix(item.Code, "realtime_hormuz_") {
+			t.Fatalf("events = %+v, low exposure should not trigger realtime Hormuz event", events)
+		}
+	}
+}
+
 func TestFundAnalysisServiceSuppressesWeakMixedExposureCluster(t *testing.T) {
 	service := NewFundAnalysisService()
 

@@ -53,6 +53,7 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
 
   const lastUpdated = estimate?.calculated_at ? new Date(estimate.calculated_at) : null
   const timelineEvents = (analysis?.event_impacts || []).slice().sort((left, right) => eventTimelineRank(left) - eventTimelineRank(right))
+  const realtimeRadarEvents = buildRealtimeRadarEvents(analysis?.event_impacts || [])
   const quarterlyEvents = (analysis?.event_impacts || []).filter((item) => item.horizon === 'quarterly')
   const exposureEvents = (analysis?.event_impacts || []).filter((item) => item.target_scope === 'exposure')
   const riskModules = (analysis?.module_scores || []).filter((item) => isRiskModule(item.code))
@@ -118,6 +119,7 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
 
           <RevealSection delay={120}>
             <div className="space-y-5">
+              <RealtimeEventRadar events={realtimeRadarEvents} />
               <EventSignalBoard events={timelineEvents} />
               <RiskBreakdownCard analysis={analysis} riskModules={riskModules} />
             </div>
@@ -864,50 +866,205 @@ function isRiskModule(code: string) {
   return code === 'risk' || code === 'event'
 }
 
+function buildRealtimeRadarEvents(events: FundAnalysisEventImpact[]) {
+  return events
+    .filter((event) => event.horizon === 'current' || event.horizon === 'intraday')
+    .filter((event) => event.target_scope !== 'disclosure' && event.target_scope !== 'methodology')
+    .sort((left, right) => realtimeEventPriority(right) - realtimeEventPriority(left))
+    .slice(0, 5)
+}
+
+function realtimeEventPriority(event: FundAnalysisEventImpact) {
+  let score = 0
+  if (event.code.startsWith('realtime_')) score += 8
+  if (event.target_scope === 'macro') score += 5
+  if (event.target_scope === 'holding') score += 4
+  if (event.target_scope === 'exposure') score += 3
+  if (event.strength === 'high') score += 3
+  if (event.strength === 'medium') score += 1
+  if (event.weight_hint) score += Math.min(parseAnalysisNumber(event.weight_hint) / 10, 4)
+  return score
+}
+
+function eventScopeLabel(scope?: FundAnalysisEventImpact['target_scope']) {
+  switch (scope) {
+    case 'macro':
+      return '实时宏观'
+    case 'holding':
+      return '持仓事件'
+    case 'exposure':
+      return '主线暴露'
+    case 'fund':
+      return '基金公告'
+    case 'index':
+      return '指数事件'
+    case 'disclosure':
+      return '披露口径'
+    case 'methodology':
+      return '方法限制'
+    default:
+      return '事件'
+  }
+}
+
+function RealtimeEventRadar({ events }: { events: FundAnalysisEventImpact[] }) {
+  const lead = events[0]
+
+  return (
+    <section className="glass overflow-hidden rounded-3xl p-5 md:p-6">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)]">
+        <div className="relative min-h-[15rem] rounded-[2rem] border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-5">
+          <div className="pointer-events-none absolute -right-14 -top-14 h-40 w-40 rounded-full bg-cyan-500/15 blur-3xl" />
+          <SectionHeading
+            icon={<Zap className="h-4 w-4 text-cyan-200" />}
+            title="实时事件雷达"
+            description="只展示已映射到持仓、主线或宏观暴露的当前事件。"
+          />
+          {lead ? (
+            <div className="relative mt-5">
+              <div className="mb-3 flex flex-wrap gap-2">
+                <span className={cn('rounded-full border px-3 py-1 text-xs', eventImpactTone(lead.impact))}>
+                  {eventImpactLabel(lead.impact)}
+                </span>
+                <span className="rounded-full border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-1 text-xs text-theme-secondary">
+                  {eventScopeLabel(lead.target_scope)}
+                </span>
+                {lead.weight_hint && (
+                  <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-100">
+                    暴露 {lead.weight_hint}%
+                  </span>
+                )}
+              </div>
+              <div className="text-xl font-black leading-tight text-theme-primary md:text-2xl">{lead.title}</div>
+              <div className="mt-3 text-sm leading-7 text-theme-secondary">{lead.summary}</div>
+            </div>
+          ) : (
+            <div className="mt-5">
+              <EmptyPanel text="当前没有可映射的实时事件。若热点未落到基金持仓或主线暴露，不会强行写入结论。" />
+            </div>
+          )}
+        </div>
+
+        <div className={cn('grid gap-3 sm:grid-cols-2', events.length === 0 && 'block')}>
+          {events.length === 0 ? (
+            <EmptyPanel text="暂无事件雷达卡片。" />
+          ) : events.map((event) => (
+            <div key={event.code} className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4 transition-transform duration-300 hover:-translate-y-0.5">
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="rounded-full border border-[var(--input-border)] bg-[var(--input-bg)] px-2.5 py-1 text-theme-secondary">
+                  {eventScopeLabel(event.target_scope)}
+                </span>
+                <span className={cn('rounded-full border px-2.5 py-1', eventImpactTone(event.impact))}>
+                  {eventStrengthLabel(event.strength)}
+                </span>
+              </div>
+              <div className="line-clamp-2 text-sm font-semibold text-theme-primary">{event.title}</div>
+              <div className="mt-2 line-clamp-3 text-xs leading-5 text-theme-secondary">{event.summary}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function EventSignalBoard({ events }: { events: FundAnalysisEventImpact[] }) {
+  const groups = [
+    {
+      key: 'macro',
+      title: '实时宏观',
+      description: '只接收能映射到基金暴露的宏观/地缘事件。',
+      events: events.filter((event) => event.target_scope === 'macro'),
+    },
+    {
+      key: 'holding',
+      title: '持仓事件',
+      description: '重仓股公告、盘中驱动和个股层事件。',
+      events: events.filter((event) => event.target_scope === 'holding'),
+    },
+    {
+      key: 'exposure',
+      title: '主线暴露',
+      description: '行业、主题、季度结构变化和集中度线索。',
+      events: events.filter((event) => event.target_scope === 'exposure' || event.target_scope === 'index'),
+    },
+    {
+      key: 'basis',
+      title: '口径与限制',
+      description: '披露新鲜度、方法口径和其他辅助信号。',
+      events: events.filter((event) => !['macro', 'holding', 'exposure', 'index'].includes(event.target_scope || '')),
+    },
+  ].filter((group) => group.events.length > 0)
+
   return (
     <section className="glass flex h-full min-h-[22rem] flex-col rounded-3xl p-5 md:p-6">
       <SectionHeading
         icon={<CalendarClock className="h-4 w-4 text-cyan-200" />}
         title="事件信号链"
-        description="优先展示持仓、主线和近期事件，弱化纯规则说明。"
+        description="按实时宏观、持仓、主线和口径限制分组，避免热点与规则说明混在一起。"
       />
 
-      <div className={cn('relative mt-5 flex-1 space-y-4', events.length === 0 && 'flex items-center')}>
-        {events.length > 0 && (
-          <div className="absolute bottom-4 left-3 top-4 w-px bg-gradient-to-b from-cyan-400/0 via-cyan-400/40 to-cyan-400/0" />
-        )}
-        {events.length === 0 ? (
+      <div className={cn('mt-5 flex-1', groups.length === 0 && 'flex items-center')}>
+        {groups.length === 0 ? (
           <EmptyPanel text="当前还没有可展开的事件信号。" />
-        ) : events.slice(0, 6).map((event, index) => (
-          <div key={`${event.code}-${index}`} className="relative pl-8">
-            <div className="absolute left-0 top-5 flex h-6 w-6 items-center justify-center rounded-full border border-cyan-400/30 bg-[var(--card-bg)] text-[10px] font-bold text-cyan-100">
-              {index + 1}
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {groups.map((group) => (
+              <EventGroupCard key={group.key} title={group.title} description={group.description} events={group.events} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function EventGroupCard({
+  title,
+  description,
+  events,
+}: {
+  title: string
+  description: string
+  events: FundAnalysisEventImpact[]
+}) {
+  return (
+    <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/30 p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-theme-primary">{title}</div>
+          <div className="mt-1 text-xs leading-5 text-theme-muted">{description}</div>
+        </div>
+        <span className="rounded-full border border-[var(--input-border)] bg-[var(--input-bg)] px-2.5 py-1 text-[11px] text-theme-secondary">
+          {events.length} 条
+        </span>
+      </div>
+
+      <div className="space-y-3">
+        {events.slice(0, 4).map((event, index) => (
+          <div key={`${event.code}-${index}`} className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4 transition-transform duration-300 hover:-translate-y-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-[var(--input-border)] bg-[var(--input-bg)] px-2.5 py-1 text-[11px] text-theme-secondary">
+                {eventHorizonLabel(event.horizon)}
+              </span>
+              <span className="rounded-full border border-[var(--input-border)] bg-[var(--input-bg)] px-2.5 py-1 text-[11px] text-theme-secondary">
+                {eventStrengthLabel(event.strength)}
+              </span>
+              <span className={cn('rounded-full border px-2.5 py-1 text-[11px]', eventImpactTone(event.impact))}>
+                {eventImpactLabel(event.impact)}
+              </span>
             </div>
-            <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4 transition-transform duration-300 hover:-translate-y-0.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-[var(--input-border)] bg-[var(--input-bg)] px-2.5 py-1 text-[11px] text-theme-secondary">
-                  {eventHorizonLabel(event.horizon)}
-                </span>
-                <span className="rounded-full border border-[var(--input-border)] bg-[var(--input-bg)] px-2.5 py-1 text-[11px] text-theme-secondary">
-                  {eventStrengthLabel(event.strength)}
-                </span>
-                <span className={cn('rounded-full border px-2.5 py-1 text-[11px]', eventImpactTone(event.impact))}>
-                  {eventImpactLabel(event.impact)}
-                </span>
+            <div className="mt-3 text-sm font-semibold text-theme-primary">{event.title}</div>
+            <div className="mt-2 line-clamp-3 text-sm leading-6 text-theme-secondary">{event.summary}</div>
+            {event.related_symbols && event.related_symbols.length > 0 && (
+              <div className="mt-2 text-xs text-theme-muted">
+                相关标的：{event.related_symbols.join(' / ')}
               </div>
-              <div className="mt-3 text-sm font-semibold text-theme-primary">{event.title}</div>
-              <div className="mt-2 line-clamp-3 text-sm leading-6 text-theme-secondary">{event.summary}</div>
-              {event.related_symbols && event.related_symbols.length > 0 && (
-                <div className="mt-2 text-xs text-theme-muted">
-                  相关标的：{event.related_symbols.join(' / ')}
-                </div>
-              )}
-            </div>
+            )}
           </div>
         ))}
       </div>
-    </section>
+    </div>
   )
 }
 

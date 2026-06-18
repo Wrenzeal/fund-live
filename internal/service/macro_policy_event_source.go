@@ -97,6 +97,38 @@ var macroPolicySeeds = []macroPolicySeed{
 		SectorCodes: []string{"internet_platform", "internet_ecommerce", "consumer_service", "consumer_electronics"},
 		ThemeCodes:  []string{"platform_internet", "consumer_upgrade", "gaming_entertainment"},
 	},
+	{
+		Code:        "realtime_hormuz_reopening_energy_pressure_202606",
+		Title:       "美伊协议推动霍尔木兹重开预期",
+		Summary:     "美伊协议与霍尔木兹重开预期推动原油风险溢价回落，油气上游和资源周期主线需要观察油价中枢下修压力。",
+		Impact:      "negative",
+		Strength:    "high",
+		PublishedAt: "2026-06-15",
+		ExpiresAt:   "2026-07-31",
+		SectorCodes: []string{"oil_gas_energy", "resources_cycle"},
+	},
+	{
+		Code:        "realtime_hormuz_reopening_cost_relief_202606",
+		Title:       "霍尔木兹重开预期缓解成本压力",
+		Summary:     "中东能源运输风险缓和有助于压低油价和通胀风险溢价，消费、出行与部分制造链条的成本压力边际改善。",
+		Impact:      "positive",
+		Strength:    "medium",
+		PublishedAt: "2026-06-15",
+		ExpiresAt:   "2026-07-31",
+		SectorCodes: []string{"consumer_service", "consumer_electronics", "internet_ecommerce", "food_beverage", "liquor", "new_energy_auto"},
+		ThemeCodes:  []string{"consumer_upgrade", "gaming_entertainment", "platform_internet", "smart_driving"},
+	},
+	{
+		Code:        "realtime_hormuz_reopening_defensive_rotation_202606",
+		Title:       "地缘风险缓和后防御交易需复核",
+		Summary:     "美伊冲突缓和降低避险情绪，前期因高波动受益的高股息、金融权重和防御资产需要重新观察资金拥挤度。",
+		Impact:      "neutral",
+		Strength:    "medium",
+		PublishedAt: "2026-06-15",
+		ExpiresAt:   "2026-07-31",
+		SectorCodes: []string{"banking", "brokerage_finance", "insurance"},
+		ThemeCodes:  []string{"dividend_value", "financials", "financial_it"},
+	},
 }
 
 func LoadMacroPolicyEvents(now time.Time, sectorSnapshot *domain.FundSectorSnapshot, themeSnapshot *domain.FundThemeSnapshot) []domain.FundAnalysisEventImpact {
