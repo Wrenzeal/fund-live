@@ -245,7 +245,7 @@ const ChartContent = memo(function ChartContent({
     const strokeColor = isPositive ? 'var(--accent-up, #f43f5e)' : 'var(--accent-down, #10b981)'
 
     return (
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 1, height: 224 }}>
             <ComposedChart
                 data={preparedData}
                 margin={{ top: 10, right: 10, left: 0, bottom: 0 }}

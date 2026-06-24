@@ -59,6 +59,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
 ### Changed
+- **首页分时图首帧尺寸稳定性修复**
+  - `IntradayChart` 为 Recharts `ResponsiveContainer` 增加首帧正尺寸，避免 Playwright / 首次挂载时出现 `width(-1) and height(-1)` 控制台 warning。
+
 - **Classic 主题暖色重配色**
   - `classic` 主题从冷灰白切换为暖白纸面底色，卡片、弹层、输入框改为暖色边框与柔和投影，降低浅色模式刺眼感。
   - 浅色主题下的 cyan / amber / rose / emerald 状态色统一降饱和，保留 A 股红涨绿跌语义，但减少高对比颜色跳动。
