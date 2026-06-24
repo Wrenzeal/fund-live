@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Noto_Sans_SC, JetBrains_Mono } from "next/font/google";
 import { BrowserTitleTicker } from "@/components/browser-title-ticker";
 import { GlobalAnnouncementDialog } from "@/components/global-announcement-dialog";
+import { UIPreferencesSync } from "@/components/ui-preferences-sync";
 import "./globals.css";
 
 const geist = Geist({
@@ -59,6 +60,7 @@ export default function RootLayout({
       <body
         className={`${geist.variable} ${notoSansSC.variable} ${jetbrainsMono.variable} antialiased`}
       >
+        <UIPreferencesSync />
         <BrowserTitleTicker title={browserTitle} />
         <a className="skip-link" href="#main-content">跳到主要内容</a>
         <GlobalAnnouncementDialog />

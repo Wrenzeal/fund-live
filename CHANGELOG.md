@@ -59,6 +59,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
 ### Changed
+- **Classic 主题暖色重配色**
+  - `classic` 主题从冷灰白切换为暖白纸面底色，卡片、弹层、输入框改为暖色边框与柔和投影，降低浅色模式刺眼感。
+  - 浅色主题下的 cyan / amber / rose / emerald 状态色统一降饱和，保留 A 股红涨绿跌语义，但减少高对比颜色跳动。
+  - 主题切换器同步更新 Classic 描述与预览色块，新增全局偏好同步组件，确保量化详情等独立页面也继承用户选择的主题。
+
 - **量化观察摘要与详情页实时事件重构**
   - 首页量化观察摘要卡新增“事件雷达”分区，优先展示实时宏观、持仓事件和主线暴露信号，减少主证据 / 风险限制 / 事件线索混在同一长文本里的问题。
   - `/analysis/[fundId]` 详情页新增实时事件雷达首屏模块，并将事件信号链改为按“实时宏观 / 持仓事件 / 主线暴露 / 口径与限制”分组展示。
