@@ -28,8 +28,7 @@ function scoreTone(score: number) {
       via: '#d946ef',
       to: '#22d3ee',
       glow: 'rgba(217,70,239,.22)',
-      text: 'text-fuchsia-100',
-      chip: 'border-fuchsia-400/25 bg-fuchsia-500/10',
+      chip: 'border-fuchsia-500/28 bg-fuchsia-500/12 text-theme-primary',
     }
   }
 
@@ -40,8 +39,7 @@ function scoreTone(score: number) {
       via: '#22d3ee',
       to: '#14b8a6',
       glow: 'rgba(34,211,238,.2)',
-      text: 'text-cyan-100',
-      chip: 'border-cyan-400/25 bg-cyan-500/10',
+      chip: 'border-cyan-500/28 bg-cyan-500/12 text-theme-primary',
     }
   }
 
@@ -51,8 +49,7 @@ function scoreTone(score: number) {
     via: '#fb7185',
     to: '#a78bfa',
     glow: 'rgba(251,191,36,.18)',
-    text: 'text-amber-100',
-    chip: 'border-amber-400/25 bg-amber-500/10',
+    chip: 'border-amber-500/30 bg-amber-500/14 text-theme-primary',
   }
 }
 
@@ -71,8 +68,8 @@ export function AnimatedScoreGauge({
   const tone = scoreTone(normalized)
   const isHero = variant === 'hero'
   const center = 112
-  const radius = isHero ? 78 : 74
-  const strokeWidth = isHero ? 18 : 20
+  const radius = isHero ? 80 : 78
+  const strokeWidth = isHero ? 16 : 16
   const circumference = 2 * Math.PI * radius
   const activeLength = circumference * (normalized / 100)
   const endAngle = -Math.PI / 2 + (normalized / 100) * Math.PI * 2
@@ -123,7 +120,7 @@ export function AnimatedScoreGauge({
       />
       <div className="absolute inset-3 rounded-full border border-white/10 bg-[var(--card-bg)]/15 shadow-[inset_0_0_46px_rgba(255,255,255,0.04)]" />
       <div className={cn('absolute inset-1 rounded-full border border-cyan-300/10', isHero && 'animate-[spin_22s_linear_infinite]')} />
-      <div className={cn('absolute inset-7 rounded-full border border-dashed border-white/10', isHero && 'animate-[spin_28s_linear_infinite_reverse]')} />
+      <div className={cn('absolute inset-8 rounded-full border border-dashed border-white/8', isHero && 'animate-[spin_28s_linear_infinite_reverse]')} />
 
       <svg viewBox="0 0 224 224" className="relative h-full w-full -rotate-90 drop-shadow-[0_18px_38px_rgba(34,211,238,0.14)]">
         <defs>
@@ -141,8 +138,8 @@ export function AnimatedScoreGauge({
             y1={tick.y1}
             x2={tick.x2}
             y2={tick.y2}
-            stroke={tick.strong ? 'rgba(226,232,240,.3)' : 'rgba(148,163,184,.16)'}
-            strokeWidth={tick.strong ? 1.6 : 1}
+            stroke={tick.strong ? 'rgba(226,232,240,.26)' : 'rgba(148,163,184,.12)'}
+            strokeWidth={tick.strong ? 1.45 : 0.9}
             strokeLinecap="round"
           />
         ))}
@@ -152,7 +149,7 @@ export function AnimatedScoreGauge({
           cy={center}
           r={radius}
           fill="none"
-          stroke="rgba(148,163,184,.14)"
+          stroke="rgba(148,163,184,.12)"
           strokeWidth={strokeWidth}
         />
         <circle
@@ -177,23 +174,29 @@ export function AnimatedScoreGauge({
 
       <div className="absolute inset-0 flex items-center justify-center">
         <div className={cn(
-          'flex flex-col items-center justify-center rounded-full border border-[var(--card-border)] bg-[var(--card-bg)]/88 text-center shadow-[0_18px_44px_rgba(0,0,0,0.18)] backdrop-blur',
-          isHero ? 'h-36 w-36' : 'h-20 w-20'
+          'relative flex flex-col items-center justify-center overflow-hidden rounded-full border border-[var(--card-border)] text-center',
+          'bg-[color-mix(in_srgb,var(--background)_88%,var(--card-bg)_12%)] shadow-[0_18px_44px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur',
+          isHero ? 'h-[56%] w-[56%]' : 'h-[58%] w-[58%]'
         )}>
-          <div className={cn('tracking-[0.22em] text-theme-muted', isHero ? 'text-[10px]' : 'text-[8px]')}>
+          <div
+            className="pointer-events-none absolute inset-0 opacity-70"
+            style={{
+              background: `radial-gradient(circle at 50% 10%, ${tone.glow}, transparent 62%)`,
+            }}
+          />
+          <div className={cn('relative font-semibold tracking-[0.22em] text-theme-muted', isHero ? 'text-[11px]' : 'text-[10px]')}>
             {label}
           </div>
-          <div className={cn('font-black leading-none text-theme-primary', isHero ? 'mt-2 text-6xl' : 'mt-1 text-3xl')}>
+          <div className={cn('relative font-mono font-black leading-none tracking-[-0.08em] text-theme-primary drop-shadow-[0_2px_10px_rgba(0,0,0,0.22)]', isHero ? 'mt-2 text-6xl' : 'mt-1 text-4xl')}>
             {displayValue}
           </div>
-          <div className={cn('mt-1 font-medium text-theme-muted', isHero ? 'text-xs' : 'text-[9px]')}>
+          <div className={cn('relative mt-1 font-semibold text-theme-secondary', isHero ? 'text-xs' : 'text-[10px]')}>
             / 100
           </div>
           <div className={cn(
-            'mt-2 rounded-full border px-2 py-0.5 font-semibold',
+            'relative mt-2 rounded-full border px-2.5 py-0.5 font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]',
             tone.chip,
-            tone.text,
-            isHero ? 'text-[11px]' : 'text-[9px]'
+            isHero ? 'text-[11px]' : 'text-[10px]'
           )}>
             {tone.label}
           </div>
