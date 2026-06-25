@@ -243,7 +243,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
             <BrandMark subtitle="FundLive - 实时基金估值" />
 
             {/* Search */}
-            <div className="flex-1 max-w-md hidden md:block">
+            <div className="hidden min-w-[18rem] max-w-2xl flex-[1.4] md:block">
               <FundSearchWrapper onSelect={handleFundSelect} currentFundId={currentFundId} />
             </div>
 
