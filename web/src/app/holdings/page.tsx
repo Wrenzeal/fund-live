@@ -1,48 +1,47 @@
-'use client'
+"use client";
 
-import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { FileStack, Wallet } from 'lucide-react'
-import { AccountAreaShell } from '@/components/account-area-shell'
-import { ActionButton } from '@/components/ui/action-button'
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Wallet } from "lucide-react";
+import { AccountAreaShell } from "@/components/account-area-shell";
+import { ActionButton } from "@/components/ui/action-button";
 import {
   HoldingFeedbackBanner,
   type HoldingFeedbackMessage,
-} from '@/components/holding-feedback-banner'
-import { ScrollRevealStack } from '@/components/scroll-reveal'
-import { HoldingActivityTimeline } from '@/components/holding-activity-timeline'
-import { HoldingImportPanel } from '@/components/holding-import-panel'
-import { HoldingPortfolioHealthPanel } from '@/components/holding-portfolio-health-panel'
-import { HoldingReconciliationPanel } from '@/components/holding-reconciliation-panel'
-import { HoldingRecordComposer } from '@/components/holding-record-composer'
-import { HoldingReminderPanel } from '@/components/holding-reminder-panel'
-import { HoldingsWorkspaceNav, type HoldingWorkspaceTab } from '@/components/holdings-workspace-nav'
-import { HoldingsViewControls } from '@/components/holdings-view-controls'
-import { HoldingsList } from '@/components/holdings-list'
-import { HoldingsSummaryMetrics } from '@/components/holdings-summary-metrics'
-import { VIPAnalysisEntry } from '@/components/vip-analysis-entry'
-import { EmptyState } from '@/components/ui/empty-state'
-import { StatusBanner } from '@/components/ui/status-banner'
-import { useCurrentUser } from '@/hooks/use-auth'
+} from "@/components/holding-feedback-banner";
+import { ScrollRevealStack } from "@/components/scroll-reveal";
+import { HoldingActivityTimeline } from "@/components/holding-activity-timeline";
+import { HoldingImportPanel } from "@/components/holding-import-panel";
+import { HoldingPortfolioHealthPanel } from "@/components/holding-portfolio-health-panel";
+import { HoldingReconciliationPanel } from "@/components/holding-reconciliation-panel";
+import { HoldingRecordComposer } from "@/components/holding-record-composer";
+import { HoldingReminderPanel } from "@/components/holding-reminder-panel";
+import {
+  HoldingsWorkspaceNav,
+  type HoldingWorkspaceTab,
+} from "@/components/holdings-workspace-nav";
+import { HoldingsViewControls } from "@/components/holdings-view-controls";
+import { HoldingsList } from "@/components/holdings-list";
+import { HoldingsSummaryMetrics } from "@/components/holdings-summary-metrics";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBanner } from "@/components/ui/status-banner";
+import { useCurrentUser } from "@/hooks/use-auth";
 import {
   useFundAnalyses,
   useFundExposureSnapshots,
   useFundSearch,
   useFundTopHoldings,
-} from '@/hooks/use-fund-data'
+} from "@/hooks/use-fund-data";
 import {
   useMarketStatus,
   usePricingDatePreview,
-} from '@/hooks/use-market-status'
+} from "@/hooks/use-market-status";
 import {
   useHoldingEstimateMetrics,
   useUserPortfolio,
   type HoldingTransactionStatusFilter,
   type HoldingTransactionType,
-} from '@/hooks/use-user-portfolio'
-import { useVIPPreview } from '@/hooks/use-vip-preview'
-import { VIP_SAMPLE_REPORT_IDS } from '@/mocks/vip'
-import type { HoldingSourceFilter } from '@/lib/holding-sources'
+} from "@/hooks/use-user-portfolio";
+import type { HoldingSourceFilter } from "@/lib/holding-sources";
 import {
   aggregateChangeValue,
   aggregateLatestUpdatedAt,
@@ -67,28 +66,27 @@ import {
   type HoldingMetricScope,
   type HoldingSortMode,
   type TradeTiming,
-} from '@/lib/holding-display'
+} from "@/lib/holding-display";
 
-type HoldingViewMode = 'aggregate' | 'detail'
+type HoldingViewMode = "aggregate" | "detail";
 export default function HoldingsPage() {
-  const router = useRouter()
-  const { user, isLoading } = useCurrentUser()
-  const marketStatus = useMarketStatus()
-  const [transactionFundFilter, setTransactionFundFilter] = useState('all')
+  const { user, isLoading } = useCurrentUser();
+  const marketStatus = useMarketStatus();
+  const [transactionFundFilter, setTransactionFundFilter] = useState("all");
   const [transactionTypeFilter, setTransactionTypeFilter] = useState<
-    HoldingTransactionType | 'all'
-  >('all')
+    HoldingTransactionType | "all"
+  >("all");
   const [transactionStatusFilter, setTransactionStatusFilter] =
-    useState<HoldingTransactionStatusFilter>('all')
+    useState<HoldingTransactionStatusFilter>("all");
   const [transactionSourceFilter, setTransactionSourceFilter] =
-    useState<HoldingSourceFilter>('all')
-  const [transactionKeywordFilter, setTransactionKeywordFilter] = useState('')
+    useState<HoldingSourceFilter>("all");
+  const [transactionKeywordFilter, setTransactionKeywordFilter] = useState("");
   const [transactionStartDateFilter, setTransactionStartDateFilter] =
-    useState('')
-  const [transactionEndDateFilter, setTransactionEndDateFilter] = useState('')
-  const [transactionPage, setTransactionPage] = useState(1)
-  const transactionPageSize = 10
-  const transactionVisibleLimit = transactionPage * transactionPageSize
+    useState("");
+  const [transactionEndDateFilter, setTransactionEndDateFilter] = useState("");
+  const [transactionPage, setTransactionPage] = useState(1);
+  const transactionPageSize = 10;
+  const transactionVisibleLimit = transactionPage * transactionPageSize;
   const {
     holdings,
     holdingAggregates,
@@ -115,67 +113,58 @@ export default function HoldingsPage() {
     endDate: transactionEndDateFilter,
     offset: 0,
     limit: transactionVisibleLimit,
-  })
-  const [query, setQuery] = useState('')
-  const [selectedFundID, setSelectedFundID] = useState('')
-  const [selectedFundName, setSelectedFundName] = useState('')
-  const [amount, setAmount] = useState('')
-  const [tradeDate, setTradeDate] = useState('')
-  const [tradeTiming, setTradeTiming] = useState<TradeTiming>('before_close')
-  const [viewMode, setViewMode] = useState<HoldingViewMode>('aggregate')
+  });
+  const [query, setQuery] = useState("");
+  const [selectedFundID, setSelectedFundID] = useState("");
+  const [selectedFundName, setSelectedFundName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [tradeDate, setTradeDate] = useState("");
+  const [tradeTiming, setTradeTiming] = useState<TradeTiming>("before_close");
+  const [viewMode, setViewMode] = useState<HoldingViewMode>("aggregate");
   const [workspaceTab, setWorkspaceTab] =
-    useState<HoldingWorkspaceTab>('summary')
-  const [metricScope, setMetricScope] = useState<HoldingMetricScope>('official')
-  const [sortMode, setSortMode] = useState<HoldingSortMode>('default')
-  const [filterMode, setFilterMode] = useState<HoldingFilterMode>('all')
-  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false)
-  const [note, setNote] = useState('')
-  const [feedback, setFeedback] = useState<HoldingFeedbackMessage | null>(null)
-  const [vipFeedback, setVipFeedback] = useState<HoldingFeedbackMessage | null>(
-    null,
-  )
-  const [isSeedingDemo, setIsSeedingDemo] = useState(false)
-  const [isAddingHolding, setIsAddingHolding] = useState(false)
-  const defaultsInitializedRef = useRef(false)
-  const { results } = useFundSearch(query)
+    useState<HoldingWorkspaceTab>("summary");
+  const [metricScope, setMetricScope] =
+    useState<HoldingMetricScope>("official");
+  const [sortMode, setSortMode] = useState<HoldingSortMode>("default");
+  const [filterMode, setFilterMode] = useState<HoldingFilterMode>("all");
+  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
+  const [note, setNote] = useState("");
+  const [feedback, setFeedback] = useState<HoldingFeedbackMessage | null>(null);
+  const [isSeedingDemo, setIsSeedingDemo] = useState(false);
+  const [isAddingHolding, setIsAddingHolding] = useState(false);
+  const defaultsInitializedRef = useRef(false);
+  const { results } = useFundSearch(query);
   const fundIDsForAnalysis = useMemo(
     () =>
       Array.from(
         new Set(holdings.map((holding) => holding.fund_id).filter(Boolean)),
       ),
     [holdings],
-  )
-  const { analysesByFundID } = useFundAnalyses(fundIDsForAnalysis)
+  );
+  const { analysesByFundID } = useFundAnalyses(fundIDsForAnalysis);
   const { exposureSnapshotsByFundID } =
-    useFundExposureSnapshots(fundIDsForAnalysis)
-  const { topHoldingsByFundID } = useFundTopHoldings(fundIDsForAnalysis)
-  const {
-    isAdmin: canAccessVIP,
-    membership,
-    remainingQuota,
-    createTask,
-    latestCompletedTask,
-  } = useVIPPreview()
-  const normalizedQuery = query.trim()
+    useFundExposureSnapshots(fundIDsForAnalysis);
+  const { topHoldingsByFundID } = useFundTopHoldings(fundIDsForAnalysis);
+  const normalizedQuery = query.trim();
 
   const autoMatchedFund = useMemo(() => {
     if (!normalizedQuery) {
-      return null
+      return null;
     }
 
     const exactMatch = results.find(
       (fund) => fund.id === normalizedQuery || fund.name === normalizedQuery,
-    )
+    );
     if (exactMatch) {
-      return exactMatch
+      return exactMatch;
     }
 
     if (results.length === 1) {
-      return results[0]
+      return results[0];
     }
 
-    return null
-  }, [normalizedQuery, results])
+    return null;
+  }, [normalizedQuery, results]);
 
   useEffect(() => {
     if (
@@ -183,16 +172,16 @@ export default function HoldingsPage() {
       !marketStatus.currentDate ||
       marketStatus.currentTime.getTime() === 0
     ) {
-      return
+      return;
     }
 
-    setTradeDate(marketStatus.currentDate)
-    setTradeTiming(resolveTradeTimingFromServerClock(marketStatus.currentTime))
-    defaultsInitializedRef.current = true
-  }, [marketStatus.currentDate, marketStatus.currentTime])
+    setTradeDate(marketStatus.currentDate);
+    setTradeTiming(resolveTradeTimingFromServerClock(marketStatus.currentTime));
+    defaultsInitializedRef.current = true;
+  }, [marketStatus.currentDate, marketStatus.currentTime]);
 
   useEffect(() => {
-    setTransactionPage(1)
+    setTransactionPage(1);
   }, [
     transactionFundFilter,
     transactionTypeFilter,
@@ -201,67 +190,67 @@ export default function HoldingsPage() {
     transactionKeywordFilter,
     transactionStartDateFilter,
     transactionEndDateFilter,
-  ])
+  ]);
 
-  const resolvedFundID = selectedFundID || autoMatchedFund?.id || ''
-  const resolvedFundName = selectedFundName || autoMatchedFund?.name || ''
-  const tradeAtPayload = buildTradeAtValue(tradeDate, tradeTiming)
+  const resolvedFundID = selectedFundID || autoMatchedFund?.id || "";
+  const resolvedFundName = selectedFundName || autoMatchedFund?.name || "";
+  const tradeAtPayload = buildTradeAtValue(tradeDate, tradeTiming);
   const {
     preview,
     isLoading: isPricingPreviewLoading,
     error: pricingPreviewError,
-  } = usePricingDatePreview(tradeAtPayload || null)
-  const pricingDatePreview = preview?.pricingDate || ''
-  const tradeDateLabel = formatTradeDateLabel(tradeDate)
-  const tradeTimingLabel = formatTradeTimingLabel(tradeTiming)
-  const todayTradeDate = marketStatus.currentDate || tradeDate
-  const previousTradeDate = marketStatus.previousTradingDay || ''
-  const nextTradeDate = marketStatus.nextTradingDay || ''
+  } = usePricingDatePreview(tradeAtPayload || null);
+  const pricingDatePreview = preview?.pricingDate || "";
+  const tradeDateLabel = formatTradeDateLabel(tradeDate);
+  const tradeTimingLabel = formatTradeTimingLabel(tradeTiming);
+  const todayTradeDate = marketStatus.currentDate || tradeDate;
+  const previousTradeDate = marketStatus.previousTradingDay || "";
+  const nextTradeDate = marketStatus.nextTradingDay || "";
   const pricingRuleLabel = !tradeDate
-    ? '选择交易日期和提交时段后，会自动显示确认净值日。'
+    ? "选择交易日期和提交时段后，会自动显示确认净值日。"
     : pricingPreviewError
       ? pricingPreviewError.message
       : isPricingPreviewLoading
-        ? '正在按交易日历校验确认净值日...'
-        : preview?.message || '正在按交易日历校验确认净值日...'
-  const hasOfficialSummaryMetrics = holdingSummary.real_metrics_ready_count > 0
+        ? "正在按交易日历校验确认净值日..."
+        : preview?.message || "正在按交易日历校验确认净值日...";
+  const hasOfficialSummaryMetrics = holdingSummary.real_metrics_ready_count > 0;
   const officialSummaryCoverage = hasOfficialSummaryMetrics
     ? `${holdingSummary.real_metrics_ready_count}/${holdingSummary.total_holdings} 条`
-    : ''
+    : "";
   const officialReadyPrincipalText = hasOfficialSummaryMetrics
     ? formatSummaryMoney(holdingSummary.ready_principal)
-    : '--'
-  const totalPrincipalText = formatSummaryMoney(holdingSummary.total_principal)
+    : "--";
+  const totalPrincipalText = formatSummaryMoney(holdingSummary.total_principal);
   const {
     estimatesByFundID,
     aggregateMetrics,
     summary: previewSummary,
-  } = useHoldingEstimateMetrics(holdingAggregates)
-  const hasPreviewSummaryMetrics = previewSummary.ready_count > 0
+  } = useHoldingEstimateMetrics(holdingAggregates);
+  const hasPreviewSummaryMetrics = previewSummary.ready_count > 0;
   const previewReadyPrincipalText = hasPreviewSummaryMetrics
     ? formatSummaryMoney(previewSummary.ready_principal)
-    : '--'
+    : "--";
   const holdingsByFundID = useMemo(() => {
     return holdings.reduce<Record<string, typeof holdings>>(
       (groups, holding) => {
         if (!groups[holding.fund_id]) {
-          groups[holding.fund_id] = []
+          groups[holding.fund_id] = [];
         }
-        groups[holding.fund_id].push(holding)
-        return groups
+        groups[holding.fund_id].push(holding);
+        return groups;
       },
       {},
-    )
-  }, [holdings])
+    );
+  }, [holdings]);
   const transactionFundOptions = useMemo(() => {
     const options = holdingAggregates.map((aggregate) => ({
       fund_id: aggregate.fund_id,
       name: aggregate.fund?.name || aggregate.fund_id,
-    }))
+    }));
     return options.sort((left, right) =>
-      left.name.localeCompare(right.name, 'zh-Hans-CN'),
-    )
-  }, [holdingAggregates])
+      left.name.localeCompare(right.name, "zh-Hans-CN"),
+    );
+  }, [holdingAggregates]);
   const recentHoldingAggregates = useMemo(() => {
     return holdingAggregates
       .slice()
@@ -269,30 +258,30 @@ export default function HoldingsPage() {
         compareOptionalNumbers(
           aggregateLatestUpdatedAt(holdingsByFundID[left.fund_id] ?? []),
           aggregateLatestUpdatedAt(holdingsByFundID[right.fund_id] ?? []),
-          'desc',
+          "desc",
         ),
-      )
-  }, [holdingAggregates, holdingsByFundID])
+      );
+  }, [holdingAggregates, holdingsByFundID]);
   const incompleteHoldingCount = useMemo(
     () => holdings.filter(isHoldingIncomplete).length,
     [holdings],
-  )
+  );
   const incompleteAggregateCount = useMemo(
     () => holdingAggregates.filter(isAggregateIncomplete).length,
     [holdingAggregates],
-  )
+  );
   const filteredHoldingAggregates = useMemo(
     () =>
       holdingAggregates.filter((aggregate) => {
         if (showIncompleteOnly && !isAggregateIncomplete(aggregate)) {
-          return false
+          return false;
         }
         return matchesAggregateFilter(
           aggregate,
           aggregateMetrics[aggregate.fund_id],
           metricScope,
           filterMode,
-        )
+        );
       }),
     [
       aggregateMetrics,
@@ -301,12 +290,12 @@ export default function HoldingsPage() {
       metricScope,
       showIncompleteOnly,
     ],
-  )
+  );
   const filteredHoldings = useMemo(
     () =>
       holdings.filter((holding) => {
         if (showIncompleteOnly && !isHoldingIncomplete(holding)) {
-          return false
+          return false;
         }
         return matchesHoldingFilter(
           holding,
@@ -314,7 +303,7 @@ export default function HoldingsPage() {
           metricScope,
           filterMode,
           holdingsByFundID[holding.fund_id]?.length ?? 1,
-        )
+        );
       }),
     [
       estimatesByFundID,
@@ -324,87 +313,87 @@ export default function HoldingsPage() {
       metricScope,
       showIncompleteOnly,
     ],
-  )
+  );
   const sortedHoldingAggregates = useMemo(() => {
-    if (sortMode === 'default') {
-      return filteredHoldingAggregates
+    if (sortMode === "default") {
+      return filteredHoldingAggregates;
     }
 
     return filteredHoldingAggregates.slice().sort((left, right) => {
-      const leftAnalysis = analysesByFundID[left.fund_id]
-      const rightAnalysis = analysesByFundID[right.fund_id]
+      const leftAnalysis = analysesByFundID[left.fund_id];
+      const rightAnalysis = analysesByFundID[right.fund_id];
 
-      if (sortMode === 'analysis_recommendation') {
+      if (sortMode === "analysis_recommendation") {
         return (
           analysisRecommendationWeight(rightAnalysis) -
           analysisRecommendationWeight(leftAnalysis)
-        )
+        );
       }
 
-      if (sortMode === 'analysis_risk') {
+      if (sortMode === "analysis_risk") {
         return (
           analysisRiskWeight(rightAnalysis) - analysisRiskWeight(leftAnalysis)
-        )
+        );
       }
 
-      if (sortMode === 'principal_desc') {
+      if (sortMode === "principal_desc") {
         return compareOptionalNumbers(
           parseOptionalNumber(left.total_principal),
           parseOptionalNumber(right.total_principal),
-          'desc',
-        )
+          "desc",
+        );
       }
 
-      if (sortMode === 'count_desc') {
+      if (sortMode === "count_desc") {
         return compareOptionalNumbers(
           left.holding_count ?? null,
           right.holding_count ?? null,
-          'desc',
-        )
+          "desc",
+        );
       }
 
-      if (sortMode === 'recent_desc') {
+      if (sortMode === "recent_desc") {
         return compareOptionalNumbers(
           aggregateLatestUpdatedAt(holdingsByFundID[left.fund_id] ?? []),
           aggregateLatestUpdatedAt(holdingsByFundID[right.fund_id] ?? []),
-          'desc',
-        )
+          "desc",
+        );
       }
 
-      if (sortMode === 'change_asc' || sortMode === 'change_desc') {
+      if (sortMode === "change_asc" || sortMode === "change_desc") {
         const leftChange = aggregateChangeValue(
           left,
           aggregateMetrics[left.fund_id],
           metricScope,
-        )
+        );
         const rightChange = aggregateChangeValue(
           right,
           aggregateMetrics[right.fund_id],
           metricScope,
-        )
+        );
         return compareOptionalNumbers(
           leftChange,
           rightChange,
-          sortMode === 'change_asc' ? 'asc' : 'desc',
-        )
+          sortMode === "change_asc" ? "asc" : "desc",
+        );
       }
 
       const leftProfit = aggregateProfitValue(
         left,
         aggregateMetrics[left.fund_id],
         metricScope,
-      )
+      );
       const rightProfit = aggregateProfitValue(
         right,
         aggregateMetrics[right.fund_id],
         metricScope,
-      )
+      );
       return compareOptionalNumbers(
         leftProfit,
         rightProfit,
-        sortMode === 'profit_asc' ? 'asc' : 'desc',
-      )
-    })
+        sortMode === "profit_asc" ? "asc" : "desc",
+      );
+    });
   }, [
     aggregateMetrics,
     analysesByFundID,
@@ -412,87 +401,87 @@ export default function HoldingsPage() {
     holdingsByFundID,
     metricScope,
     sortMode,
-  ])
+  ]);
   const sortedHoldings = useMemo(() => {
-    if (sortMode === 'default') {
-      return filteredHoldings
+    if (sortMode === "default") {
+      return filteredHoldings;
     }
 
     return filteredHoldings.slice().sort((left, right) => {
-      const leftAnalysis = analysesByFundID[left.fund_id]
-      const rightAnalysis = analysesByFundID[right.fund_id]
+      const leftAnalysis = analysesByFundID[left.fund_id];
+      const rightAnalysis = analysesByFundID[right.fund_id];
 
-      if (sortMode === 'analysis_recommendation') {
+      if (sortMode === "analysis_recommendation") {
         return (
           analysisRecommendationWeight(rightAnalysis) -
           analysisRecommendationWeight(leftAnalysis)
-        )
+        );
       }
 
-      if (sortMode === 'analysis_risk') {
+      if (sortMode === "analysis_risk") {
         return (
           analysisRiskWeight(rightAnalysis) - analysisRiskWeight(leftAnalysis)
-        )
+        );
       }
 
-      if (sortMode === 'principal_desc') {
+      if (sortMode === "principal_desc") {
         return compareOptionalNumbers(
           parseOptionalNumber(left.amount),
           parseOptionalNumber(right.amount),
-          'desc',
-        )
+          "desc",
+        );
       }
 
-      if (sortMode === 'count_desc') {
+      if (sortMode === "count_desc") {
         return compareOptionalNumbers(
           holdingsByFundID[left.fund_id]?.length ?? null,
           holdingsByFundID[right.fund_id]?.length ?? null,
-          'desc',
-        )
+          "desc",
+        );
       }
 
-      if (sortMode === 'recent_desc') {
+      if (sortMode === "recent_desc") {
         return compareOptionalNumbers(
           timestampValue(left.updated_at || left.created_at),
           timestampValue(right.updated_at || right.created_at),
-          'desc',
-        )
+          "desc",
+        );
       }
 
-      if (sortMode === 'change_asc' || sortMode === 'change_desc') {
+      if (sortMode === "change_asc" || sortMode === "change_desc") {
         const leftChange = detailChangeValue(
           left,
           estimatesByFundID[left.fund_id],
           metricScope,
-        )
+        );
         const rightChange = detailChangeValue(
           right,
           estimatesByFundID[right.fund_id],
           metricScope,
-        )
+        );
         return compareOptionalNumbers(
           leftChange,
           rightChange,
-          sortMode === 'change_asc' ? 'asc' : 'desc',
-        )
+          sortMode === "change_asc" ? "asc" : "desc",
+        );
       }
 
       const leftProfit = detailProfitValue(
         left,
         estimatesByFundID[left.fund_id],
         metricScope,
-      )
+      );
       const rightProfit = detailProfitValue(
         right,
         estimatesByFundID[right.fund_id],
         metricScope,
-      )
+      );
       return compareOptionalNumbers(
         leftProfit,
         rightProfit,
-        sortMode === 'profit_asc' ? 'asc' : 'desc',
-      )
-    })
+        sortMode === "profit_asc" ? "asc" : "desc",
+      );
+    });
   }, [
     analysesByFundID,
     estimatesByFundID,
@@ -500,170 +489,114 @@ export default function HoldingsPage() {
     holdingsByFundID,
     metricScope,
     sortMode,
-  ])
+  ]);
   const shouldUseOfficialSummary =
-    metricScope === 'official' && hasOfficialSummaryMetrics
+    metricScope === "official" && hasOfficialSummaryMetrics;
   const activeDisplayCount =
-    viewMode === 'aggregate'
+    viewMode === "aggregate"
       ? sortedHoldingAggregates.length
-      : sortedHoldings.length
+      : sortedHoldings.length;
   const canLoadMoreTransactions =
     holdingTransactions.length >= transactionVisibleLimit &&
-    transactionVisibleLimit < 50
-  const hasActiveFilter = showIncompleteOnly || filterMode !== 'all'
+    transactionVisibleLimit < 50;
+  const hasActiveFilter = showIncompleteOnly || filterMode !== "all";
   const activeFilterDescription =
-    viewMode === 'aggregate'
+    viewMode === "aggregate"
       ? `当前筛选后显示 ${activeDisplayCount}/${holdingAggregates.length} 只基金。`
-      : `当前筛选后显示 ${activeDisplayCount}/${holdings.length} 条记录。`
+      : `当前筛选后显示 ${activeDisplayCount}/${holdings.length} 条记录。`;
   const incompleteFilterDescription =
-    viewMode === 'aggregate'
+    viewMode === "aggregate"
       ? `当前仅显示部分就绪或完全未就绪的基金，共 ${activeDisplayCount}/${holdingAggregates.length} 只。`
-      : `当前仅显示待确认份额、待同步官方净值或真实口径未就绪的记录，共 ${activeDisplayCount}/${holdings.length} 条。`
-  const activeWorkspaceTab = holdings.length === 0 ? 'record' : workspaceTab
+      : `当前仅显示待确认份额、待同步官方净值或真实口径未就绪的记录，共 ${activeDisplayCount}/${holdings.length} 条。`;
+  const activeWorkspaceTab = holdings.length === 0 ? "record" : workspaceTab;
   const handleSeedDemo = async () => {
-    setFeedback(null)
-    setIsSeedingDemo(true)
+    setFeedback(null);
+    setIsSeedingDemo(true);
 
     try {
-      await seedDemoData()
+      await seedDemoData();
       setFeedback({
-        type: 'success',
+        type: "success",
         message:
-          '已为你填入一组参考持仓；如果还没有自选分组，也会一并创建默认分组。',
-      })
+          "已为你填入一组参考持仓；如果还没有自选分组，也会一并创建默认分组。",
+      });
     } catch (error) {
       setFeedback({
-        type: 'error',
+        type: "error",
         message:
           error instanceof Error
             ? error.message
-            : '初始化参考持仓失败，请稍后重试。',
-      })
+            : "初始化参考持仓失败，请稍后重试。",
+      });
     } finally {
-      setIsSeedingDemo(false)
+      setIsSeedingDemo(false);
     }
-  }
+  };
 
   const handleAddHolding = async () => {
-    setFeedback(null)
+    setFeedback(null);
 
     if (!resolvedFundID) {
       setFeedback({
-        type: 'error',
-        message: '请先从搜索结果中选择基金，或输入能唯一匹配的基金代码/名称。',
-      })
-      return
+        type: "error",
+        message: "请先从搜索结果中选择基金，或输入能唯一匹配的基金代码/名称。",
+      });
+      return;
     }
 
-    const normalizedAmount = amount.replace(/,/g, '').trim()
-    const parsedAmount = Number.parseFloat(normalizedAmount)
+    const normalizedAmount = amount.replace(/,/g, "").trim();
+    const parsedAmount = Number.parseFloat(normalizedAmount);
     if (
       !normalizedAmount ||
       !Number.isFinite(parsedAmount) ||
       parsedAmount <= 0
     ) {
       setFeedback({
-        type: 'error',
-        message: '请输入有效的持仓金额。',
-      })
-      return
+        type: "error",
+        message: "请输入有效的持仓金额。",
+      });
+      return;
     }
 
     if (!tradeDate.trim()) {
       setFeedback({
-        type: 'error',
-        message: '请选择交易日期。',
-      })
-      return
+        type: "error",
+        message: "请选择交易日期。",
+      });
+      return;
     }
 
-    setIsAddingHolding(true)
+    setIsAddingHolding(true);
 
     try {
-      await addHolding(resolvedFundID, normalizedAmount, tradeAtPayload, note)
-      setSelectedFundID('')
-      setSelectedFundName('')
-      setQuery('')
-      setAmount('')
-      setTradeDate(marketStatus.currentDate || tradeDate)
+      await addHolding(resolvedFundID, normalizedAmount, tradeAtPayload, note);
+      setSelectedFundID("");
+      setSelectedFundName("");
+      setQuery("");
+      setAmount("");
+      setTradeDate(marketStatus.currentDate || tradeDate);
       setTradeTiming(
         marketStatus.currentTime.getTime() === 0
-          ? 'before_close'
+          ? "before_close"
           : resolveTradeTimingFromServerClock(marketStatus.currentTime),
-      )
-      setNote('')
+      );
+      setNote("");
       setFeedback({
-        type: 'success',
+        type: "success",
         message: pricingDatePreview
           ? `已加入 ${resolvedFundName || resolvedFundID} 的持仓记录，将按 ${pricingDatePreview} 收盘净值确认。`
           : `已加入 ${resolvedFundName || resolvedFundID} 的持仓记录，确认净值日已按交易日历计算。`,
-      })
+      });
     } catch (error) {
       setFeedback({
-        type: 'error',
+        type: "error",
         message:
-          error instanceof Error ? error.message : '加入持仓失败，请稍后重试。',
-      })
+          error instanceof Error ? error.message : "加入持仓失败，请稍后重试。",
+      });
     } finally {
-      setIsAddingHolding(false)
+      setIsAddingHolding(false);
     }
-  }
-
-  const handleCreatePortfolioVIPTask = async () => {
-    setVipFeedback(null)
-
-    if (!membership.isVip) {
-      router.push('/vip')
-      return
-    }
-
-    if (holdings.length === 0) {
-      setVipFeedback({
-        type: 'error',
-        message: '当前还没有持仓记录，先录入持仓后再发起组合分析。',
-      })
-      return
-    }
-
-    let created
-    try {
-      created = await createTask({
-        type: 'portfolio_analysis',
-        targetType: 'holdings_all',
-        targetId: 'all-holdings',
-        targetName: '全部持仓组合',
-      })
-    } catch (error) {
-      setVipFeedback({
-        type: 'error',
-        message:
-          error instanceof Error
-            ? error.message
-            : '创建 VIP 任务失败，请稍后重试。',
-      })
-      return
-    }
-
-    if (!created.ok) {
-      setVipFeedback({
-        type: 'error',
-        message:
-          created.reason === 'quota_exhausted'
-            ? '今日组合分析额度已用完，请明天再试。'
-            : '当前账号尚未开通 VIP。',
-      })
-      if (created.reason === 'not_vip') {
-        router.push('/vip')
-      }
-      return
-    }
-
-    setVipFeedback({
-      type: 'success',
-      message: '组合分析任务已创建，正在跳转到任务中心。',
-    })
-    router.push(`/vip/tasks?focus=${created.taskId}`)
-  }
+  };
 
   if (isLoading) {
     return (
@@ -673,7 +606,7 @@ export default function HoldingsPage() {
       >
         <div className="glass h-64 animate-pulse rounded-[32px] border border-[var(--card-border)]" />
       </AccountAreaShell>
-    )
+    );
   }
 
   if (!user) {
@@ -698,7 +631,7 @@ export default function HoldingsPage() {
           }
         />
       </AccountAreaShell>
-    )
+    );
   }
 
   return (
@@ -708,22 +641,21 @@ export default function HoldingsPage() {
     >
       <ScrollRevealStack className="space-y-8">
         {feedback && <HoldingFeedbackBanner feedback={feedback} />}
-        {vipFeedback && (
-          <HoldingFeedbackBanner feedback={vipFeedback} showIcon={false} />
-        )}
 
         <HoldingsWorkspaceNav
           holdingCount={holdings.length}
           activeTab={activeWorkspaceTab}
-          detailText={holdings.length === 0
-            ? '先记录一笔持仓，再查看净值、份额和盈亏。'
-            : `${metricScope === 'official' ? '官方口径' : '盘中预估'} · ${viewMode === 'aggregate' ? '按基金' : '分笔明细'}`}
+          detailText={
+            holdings.length === 0
+              ? "先记录一笔持仓，再查看净值、份额和盈亏。"
+              : `${metricScope === "official" ? "官方口径" : "盘中预估"} · ${viewMode === "aggregate" ? "按基金" : "分笔明细"}`
+          }
           isSeedingDemo={isSeedingDemo}
           onTabChange={setWorkspaceTab}
           onSeedDemo={() => void handleSeedDemo()}
         />
 
-        {activeWorkspaceTab === 'record' && (
+        {activeWorkspaceTab === "record" && (
           <HoldingRecordComposer
             compact={holdings.length > 0}
             holdingsCount={holdings.length}
@@ -746,21 +678,21 @@ export default function HoldingsPage() {
             pricingRuleLabel={pricingRuleLabel}
             isAddingHolding={isAddingHolding}
             onQueryChange={(value) => {
-              setQuery(value)
-              setSelectedFundID('')
-              setSelectedFundName('')
+              setQuery(value);
+              setSelectedFundID("");
+              setSelectedFundName("");
             }}
             onSelectFund={(fund) => {
-              setSelectedFundID(fund.id)
-              setSelectedFundName(fund.name)
-              setQuery(fund.name)
-              setFeedback(null)
+              setSelectedFundID(fund.id);
+              setSelectedFundName(fund.name);
+              setQuery(fund.name);
+              setFeedback(null);
             }}
             onSelectAggregate={(aggregate) => {
-              setSelectedFundID(aggregate.fund_id)
-              setSelectedFundName(aggregate.fund?.name || '')
-              setQuery(aggregate.fund?.name || aggregate.fund_id)
-              setFeedback(null)
+              setSelectedFundID(aggregate.fund_id);
+              setSelectedFundName(aggregate.fund?.name || "");
+              setQuery(aggregate.fund?.name || aggregate.fund_id);
+              setFeedback(null);
             }}
             onAmountChange={setAmount}
             onNoteChange={setNote}
@@ -770,19 +702,19 @@ export default function HoldingsPage() {
           />
         )}
 
-        {holdings.length === 0 && activeWorkspaceTab === 'record' && (
+        {holdings.length === 0 && activeWorkspaceTab === "record" && (
           <EmptyState
             icon={<Wallet className="h-10 w-10" />}
             title="记录第一笔后，这里会变成你的持仓驾驶舱"
             features={[
-              { title: '自动补齐', description: '净值、份额、市值' },
-              { title: '看见风险', description: '量化建议、事件标签' },
-              { title: '形成组合', description: '组合分析入口' },
+              { title: "自动补齐", description: "净值、份额、市值" },
+              { title: "看见风险", description: "量化建议、事件标签" },
+              { title: "形成组合", description: "组合分析入口" },
             ]}
           />
         )}
 
-        {holdings.length > 0 && activeWorkspaceTab === 'summary' && (
+        {holdings.length > 0 && activeWorkspaceTab === "summary" && (
           <>
             <HoldingsSummaryMetrics
               holdingSummary={holdingSummary}
@@ -804,7 +736,7 @@ export default function HoldingsPage() {
           </>
         )}
 
-        {holdings.length > 0 && activeWorkspaceTab === 'list' && (
+        {holdings.length > 0 && activeWorkspaceTab === "list" && (
           <>
             <HoldingsViewControls
               viewMode={viewMode}
@@ -813,7 +745,7 @@ export default function HoldingsPage() {
               filterMode={filterMode}
               showIncompleteOnly={showIncompleteOnly}
               incompleteCount={
-                viewMode === 'aggregate'
+                viewMode === "aggregate"
                   ? incompleteAggregateCount
                   : incompleteHoldingCount
               }
@@ -834,8 +766,8 @@ export default function HoldingsPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setShowIncompleteOnly(false)
-                      setFilterMode('all')
+                      setShowIncompleteOnly(false);
+                      setFilterMode("all");
                     }}
                     className="shrink-0 text-left text-xs font-medium text-amber-50 underline-offset-4 hover:underline sm:text-right"
                   >
@@ -852,16 +784,18 @@ export default function HoldingsPage() {
             {hasActiveFilter && activeDisplayCount === 0 ? (
               <EmptyState
                 title="当前没有匹配记录"
-                description={showIncompleteOnly
-                  ? '当前口径下没有待补齐记录。'
-                  : '取消筛选后可查看全部持仓。'}
+                description={
+                  showIncompleteOnly
+                    ? "当前口径下没有待补齐记录。"
+                    : "取消筛选后可查看全部持仓。"
+                }
                 action={
                   <ActionButton
                     type="button"
                     variant="subtle"
                     onClick={() => {
-                      setShowIncompleteOnly(false)
-                      setFilterMode('all')
+                      setShowIncompleteOnly(false);
+                      setFilterMode("all");
                     }}
                   >
                     查看全部持仓
@@ -889,7 +823,7 @@ export default function HoldingsPage() {
           </>
         )}
 
-        {holdings.length > 0 && activeWorkspaceTab === 'risk' && (
+        {holdings.length > 0 && activeWorkspaceTab === "risk" && (
           <>
             <HoldingPortfolioHealthPanel
               compact
@@ -913,7 +847,7 @@ export default function HoldingsPage() {
           </>
         )}
 
-        {holdings.length > 0 && activeWorkspaceTab === 'ledger' && (
+        {holdings.length > 0 && activeWorkspaceTab === "ledger" && (
           <HoldingActivityTimeline
             compact
             transactions={holdingTransactions}
@@ -939,112 +873,65 @@ export default function HoldingsPage() {
             onApplyRollback={applyHoldingTransactionRollback}
             onLoadMore={() => setTransactionPage((page) => page + 1)}
             onClearFilters={() => {
-              setTransactionFundFilter('all')
-              setTransactionTypeFilter('all')
-              setTransactionStatusFilter('all')
-              setTransactionSourceFilter('all')
-              setTransactionKeywordFilter('')
-              setTransactionStartDateFilter('')
-              setTransactionEndDateFilter('')
-              setTransactionPage(1)
+              setTransactionFundFilter("all");
+              setTransactionTypeFilter("all");
+              setTransactionStatusFilter("all");
+              setTransactionSourceFilter("all");
+              setTransactionKeywordFilter("");
+              setTransactionStartDateFilter("");
+              setTransactionEndDateFilter("");
+              setTransactionPage(1);
             }}
           />
         )}
 
-        {holdings.length > 0 && activeWorkspaceTab === 'tools' && (
+        {holdings.length > 0 && activeWorkspaceTab === "tools" && (
           <>
             <HoldingImportPanel
               compact
               recentAggregates={recentHoldingAggregates}
               onImportBatch={async (items) => {
-                setFeedback(null)
+                setFeedback(null);
                 try {
-                  const result = await addHoldingsBatch(items)
+                  const result = await addHoldingsBatch(items);
                   setFeedback({
-                    type: 'success',
+                    type: "success",
                     message: result
-                      ? `已导入 ${result.created_count}/${result.total} 行${result.failed_count ? `，${result.failed_count} 行需修正。` : '。'}`
-                      : '导入完成。',
-                  })
-                  return result
+                      ? `已导入 ${result.created_count}/${result.total} 行${result.failed_count ? `，${result.failed_count} 行需修正。` : "。"}`
+                      : "导入完成。",
+                  });
+                  return result;
                 } catch (error) {
                   setFeedback({
-                    type: 'error',
+                    type: "error",
                     message:
                       error instanceof Error
                         ? error.message
-                        : '批量导入失败，请检查数据后重试。',
-                  })
-                  throw error
+                        : "批量导入失败，请检查数据后重试。",
+                  });
+                  throw error;
                 }
               }}
               onSelectDraft={(draft) => {
                 const matchedAggregate = holdingAggregates.find(
                   (aggregate) => aggregate.fund_id === draft.fundID,
-                )
-                setSelectedFundID(draft.fundID)
-                setSelectedFundName(matchedAggregate?.fund?.name || '')
-                setQuery(matchedAggregate?.fund?.name || draft.fundID)
-                setAmount(draft.amount)
-                setNote(draft.note)
-                setWorkspaceTab('record')
+                );
+                setSelectedFundID(draft.fundID);
+                setSelectedFundName(matchedAggregate?.fund?.name || "");
+                setQuery(matchedAggregate?.fund?.name || draft.fundID);
+                setAmount(draft.amount);
+                setNote(draft.note);
+                setWorkspaceTab("record");
                 setFeedback({
-                  type: 'success',
+                  type: "success",
                   message:
-                    '已把导入预览行带入记录入口，请核对交易日期和金额后再提交。',
-                })
+                    "已把导入预览行带入记录入口，请核对交易日期和金额后再提交。",
+                });
               }}
             />
-            {canAccessVIP && (
-              <VIPAnalysisEntry
-                title="VIP 持仓组合分析"
-                description="围绕全部持仓输出组合报告。"
-                accent="amber"
-                badgeLabel={membership.isVip ? '已开通 VIP' : 'VIP'}
-                quotaLabel={
-                  membership.isVip
-                    ? `今日剩余：组合 ${remainingQuota.portfolioAnalysis} 次 · 板块 ${remainingQuota.sectorAnalysis} 次`
-                    : '开通后可用：2 次板块分析 · 2 次组合分析'
-                }
-                note="默认分析对象：全部持仓组合"
-                actions={
-                  membership.isVip
-                    ? [
-                        {
-                          label: '发起组合分析',
-                          onClick: () => void handleCreatePortfolioVIPTask(),
-                          variant: 'primary',
-                        },
-                        {
-                          label: latestCompletedTask?.reportId
-                            ? '查看最近报告'
-                            : '查看报告样例',
-                          href: latestCompletedTask?.reportId
-                            ? `/vip/reports/${latestCompletedTask.reportId}`
-                            : `/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultPortfolio}`,
-                          variant: 'secondary',
-                          icon: <FileStack className="h-4 w-4" />,
-                        },
-                      ]
-                    : [
-                        {
-                          label: '开通 VIP',
-                          href: '/vip',
-                          variant: 'primary',
-                        },
-                        {
-                          label: '查看报告样例',
-                          href: `/vip/reports/${VIP_SAMPLE_REPORT_IDS.defaultPortfolio}`,
-                          variant: 'secondary',
-                          icon: <FileStack className="h-4 w-4" />,
-                        },
-                      ]
-                }
-              />
-            )}
           </>
         )}
       </ScrollRevealStack>
     </AccountAreaShell>
-  )
+  );
 }

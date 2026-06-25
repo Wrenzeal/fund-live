@@ -117,16 +117,6 @@ var managedMigrations = []sqlMigration{
 		Statements:     announcementMigrationStatements,
 	},
 	{
-		ID:             "20260405_vip_tables",
-		RequiredTables: []string{},
-		Statements:     vipTableMigrationStatements,
-	},
-	{
-		ID:             "20260405_vip_payment_orders",
-		RequiredTables: []string{},
-		Statements:     vipPaymentMigrationStatements,
-	},
-	{
 		ID:             "20260404_fund_search_indexes",
 		RequiredTables: []string{"funds"},
 		Statements:     fundSearchIndexStatements,

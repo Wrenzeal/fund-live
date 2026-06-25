@@ -50,7 +50,6 @@ func main() {
 	var overrideRepo domain.UserHoldingOverrideRepository
 	var issueRepo domain.IssueRepository
 	var announcementRepo domain.AnnouncementRepository
-	var vipRepo domain.VIPRepository
 	var dbInstance = database.GetDB() // Will be nil if not initialized
 	var fundResolver *service.FundResolver
 	var fundSectorStore *service.FundSectorStore
@@ -78,7 +77,6 @@ func main() {
 		overrideRepo = userStore
 		issueRepo = repository.NewPostgresIssueRepository(db)
 		announcementRepo = repository.NewPostgresAnnouncementRepository(db)
-		vipRepo = repository.NewPostgresVIPRepository(db)
 		if err := service.SeedDefaultValuationProfiles(context.Background(), db); err != nil {
 			log.Fatalf("❌ Failed to seed valuation profiles: %v", err)
 		}
@@ -101,7 +99,6 @@ func main() {
 		overrideRepo = userStore
 		issueRepo = repository.NewMemoryIssueRepository()
 		announcementRepo = repository.NewMemoryAnnouncementRepository()
-		vipRepo = repository.NewMemoryVIPRepository()
 		log.Println("✅ Using in-memory storage (set STORAGE_MODE=postgres to use PostgreSQL)")
 	}
 
@@ -131,17 +128,6 @@ func main() {
 	userPreferenceService := service.NewUserPreferenceService(fundRepo, favoriteRepo, watchlistRepo, fundHoldingRepo, overrideRepo)
 	issueService := service.NewIssueService(issueRepo)
 	announcementService := service.NewAnnouncementService(announcementRepo)
-	vipService := service.NewVIPService(vipRepo)
-	wechatPayConfig := loadWeChatPayConfig(fileCfg)
-	if wechatPayConfig.Enabled {
-		wechatPayClient, err := service.NewWeChatPayClient(wechatPayConfig)
-		if err != nil {
-			log.Fatalf("❌ Failed to initialize WeChat Pay client: %v", err)
-		}
-		vipService.SetWeChatPayClient(wechatPayClient, wechatPayConfig)
-		log.Println("💸 WeChat Pay payment channel enabled")
-	}
-
 	// Initialize fund resolver for feeder fund -> ETF resolution
 	// This enables transparent access to ETF holdings for feeder funds (联接基金)
 	if dbInstance != nil {
@@ -198,7 +184,6 @@ func main() {
 	userHandler := handler.NewUserHandler(userPreferenceService, userRepo, defaultQuoteSource)
 	issueHandler := handler.NewIssueHandler(issueService)
 	announcementHandler := handler.NewAnnouncementHandler(announcementService)
-	vipHandler := handler.NewVIPHandler(vipService)
 
 	// Setup Gin router
 	gin.SetMode(gin.ReleaseMode)
@@ -330,23 +315,6 @@ func main() {
 			admin.POST("/announcements/import-changelog", announcementHandler.ImportChangelog)
 		}
 
-		vip := v1.Group("/vip")
-		{
-			vip.POST("/payments/wechat/notify", vipHandler.HandleWeChatPayNotify)
-
-			vipProtected := vip.Group("")
-			vipProtected.Use(middleware.RequireAuth(authService, authConfig.CookieName))
-			vipProtected.Use(middleware.RequireAdmin())
-			vipProtected.GET("/reports/:id", vipHandler.GetReport)
-			vipProtected.GET("/membership", vipHandler.GetMembership)
-			vipProtected.POST("/membership/preview-activate", vipHandler.PreviewActivateMembership)
-			vipProtected.POST("/preview/reset", vipHandler.PreviewReset)
-			vipProtected.GET("/quota", vipHandler.GetQuota)
-			vipProtected.GET("/tasks", vipHandler.ListTasks)
-			vipProtected.POST("/tasks", vipHandler.CreateTask)
-			vipProtected.POST("/orders", vipHandler.CreateOrder)
-			vipProtected.GET("/orders/:orderId", vipHandler.GetOrder)
-		}
 	}
 
 	// Server configuration
@@ -421,16 +389,6 @@ func main() {
 		log.Printf("   POST /api/v1/announcements/:id/read - Mark announcement as read (auth)")
 		log.Printf("   POST /api/v1/admin/announcements - Create announcement (admin)")
 		log.Printf("   POST /api/v1/admin/announcements/import-changelog - Import CHANGELOG announcements (admin)")
-		log.Printf("   GET /api/v1/vip/reports/:id - Get VIP report detail")
-		log.Printf("   GET /api/v1/vip/membership - Get VIP membership state")
-		log.Printf("   POST /api/v1/vip/membership/preview-activate - Activate preview VIP membership")
-		log.Printf("   POST /api/v1/vip/preview/reset - Reset VIP preview state")
-		log.Printf("   GET /api/v1/vip/quota - Get VIP daily quota")
-		log.Printf("   GET /api/v1/vip/tasks - List VIP tasks")
-		log.Printf("   POST /api/v1/vip/tasks - Create VIP task")
-		log.Printf("   POST /api/v1/vip/orders - Create VIP payment order")
-		log.Printf("   GET /api/v1/vip/orders/:orderId - Get VIP payment order")
-		log.Printf("   POST /api/v1/vip/payments/wechat/notify - Handle WeChat Pay callback")
 		log.Printf("📈 Sample fund codes: 005827, 003095, 320007")
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -562,75 +520,4 @@ func loadCORSAllowedOrigins(fileCfg *appconfig.Config) []string {
 		result = append(result, origin)
 	}
 	return result
-}
-
-func loadWeChatPayConfig(fileCfg *appconfig.Config) service.WeChatPayConfig {
-	cfg := service.DefaultWeChatPayConfig()
-
-	if fileCfg != nil {
-		wechatCfg := fileCfg.Payment.WeChatPay
-		cfg.Enabled = wechatCfg.Enabled
-		if wechatCfg.AppID != "" {
-			cfg.AppID = wechatCfg.AppID
-		}
-		if wechatCfg.MerchantID != "" {
-			cfg.MerchantID = wechatCfg.MerchantID
-		}
-		if wechatCfg.MerchantCertificateSerialNo != "" {
-			cfg.MerchantCertificateSerialNo = wechatCfg.MerchantCertificateSerialNo
-		}
-		if wechatCfg.MerchantPrivateKeyPath != "" {
-			cfg.MerchantPrivateKeyPath = wechatCfg.MerchantPrivateKeyPath
-		}
-		if wechatCfg.APIV3Key != "" {
-			cfg.APIV3Key = wechatCfg.APIV3Key
-		}
-		if wechatCfg.NotifyURL != "" {
-			cfg.NotifyURL = wechatCfg.NotifyURL
-		}
-		if wechatCfg.PlatformCertificatePath != "" {
-			cfg.PlatformCertificatePath = wechatCfg.PlatformCertificatePath
-		}
-		if wechatCfg.PlatformPublicKeyPath != "" {
-			cfg.PlatformPublicKeyPath = wechatCfg.PlatformPublicKeyPath
-		}
-		if wechatCfg.PlatformSerialNo != "" {
-			cfg.PlatformSerialNo = wechatCfg.PlatformSerialNo
-		}
-	}
-
-	if env := os.Getenv("WECHAT_PAY_ENABLED"); env != "" {
-		if enabled, err := strconv.ParseBool(env); err == nil {
-			cfg.Enabled = enabled
-		}
-	}
-	if env := os.Getenv("WECHAT_PAY_APP_ID"); env != "" {
-		cfg.AppID = env
-	}
-	if env := os.Getenv("WECHAT_PAY_MERCHANT_ID"); env != "" {
-		cfg.MerchantID = env
-	}
-	if env := os.Getenv("WECHAT_PAY_MERCHANT_CERTIFICATE_SERIAL_NO"); env != "" {
-		cfg.MerchantCertificateSerialNo = env
-	}
-	if env := os.Getenv("WECHAT_PAY_MERCHANT_PRIVATE_KEY_PATH"); env != "" {
-		cfg.MerchantPrivateKeyPath = env
-	}
-	if env := os.Getenv("WECHAT_PAY_API_V3_KEY"); env != "" {
-		cfg.APIV3Key = env
-	}
-	if env := os.Getenv("WECHAT_PAY_NOTIFY_URL"); env != "" {
-		cfg.NotifyURL = env
-	}
-	if env := os.Getenv("WECHAT_PAY_PLATFORM_CERTIFICATE_PATH"); env != "" {
-		cfg.PlatformCertificatePath = env
-	}
-	if env := os.Getenv("WECHAT_PAY_PLATFORM_PUBLIC_KEY_PATH"); env != "" {
-		cfg.PlatformPublicKeyPath = env
-	}
-	if env := os.Getenv("WECHAT_PAY_PLATFORM_SERIAL_NO"); env != "" {
-		cfg.PlatformSerialNo = env
-	}
-
-	return cfg
 }

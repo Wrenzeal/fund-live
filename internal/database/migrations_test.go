@@ -67,8 +67,6 @@ func TestInitDBCreatesCoreSchemaWithoutAutoMigrate(t *testing.T) {
 		"tb_user_fund_holding_transaction",
 		"issues",
 		"announcements",
-		"user_memberships",
-		"vip_orders",
 	}
 
 	for _, table := range requiredTables {
@@ -97,8 +95,6 @@ func TestInitDBCreatesCoreSchemaWithoutAutoMigrate(t *testing.T) {
 		"20260404_fund_time_series_unique_index",
 		"20260406_issue_tables",
 		"20260406_announcement_tables",
-		"20260405_vip_tables",
-		"20260405_vip_payment_orders",
 	}
 
 	for _, id := range appliedMigrations {

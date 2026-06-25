@@ -1,4 +1,4 @@
-'use client'
+"use client";
 
 import {
   CalendarDays,
@@ -10,62 +10,62 @@ import {
   Sparkles,
   Tags,
   Wallet,
-} from 'lucide-react'
-import type { Fund } from '@/hooks/use-fund-data'
-import type { HoldingAggregateEntry } from '@/hooks/use-user-portfolio'
-import { cn } from '@/lib/utils'
-import type { TradeTiming } from '@/lib/holding-display'
+} from "lucide-react";
+import type { Fund } from "@/hooks/use-fund-data";
+import type { HoldingAggregateEntry } from "@/hooks/use-user-portfolio";
+import { cn } from "@/lib/utils";
+import type { TradeTiming } from "@/lib/holding-display";
 
-const quickAmounts = ['5,000', '10,000', '30,000', '50,000']
-const notePresets = ['长期底仓', '回调补仓', '观察仓', '定投', '止盈后留仓']
+const quickAmounts = ["5,000", "10,000", "30,000", "50,000"];
+const notePresets = ["长期底仓", "回调补仓", "观察仓", "定投", "止盈后留仓"];
 
 interface HoldingRecordComposerProps {
-  compact?: boolean
-  holdingsCount: number
-  totalPrincipalText: string
-  query: string
-  results: Fund[]
-  recentAggregates: HoldingAggregateEntry[]
-  resolvedFundID: string
-  resolvedFundName: string
-  amount: string
-  note: string
-  tradeDate: string
-  tradeTiming: TradeTiming
-  tradeDateLabel: string
-  tradeTimingLabel: string
-  todayTradeDate: string
-  previousTradeDate: string
-  nextTradeDate: string
-  pricingDatePreview: string
-  pricingRuleLabel: string
-  isAddingHolding: boolean
-  onQueryChange: (value: string) => void
-  onSelectFund: (fund: Fund) => void
-  onSelectAggregate: (aggregate: HoldingAggregateEntry) => void
-  onAmountChange: (value: string) => void
-  onNoteChange: (value: string) => void
-  onTradeDateChange: (value: string) => void
-  onTradeTimingChange: (value: TradeTiming) => void
-  onAddHolding: () => void
+  compact?: boolean;
+  holdingsCount: number;
+  totalPrincipalText: string;
+  query: string;
+  results: Fund[];
+  recentAggregates: HoldingAggregateEntry[];
+  resolvedFundID: string;
+  resolvedFundName: string;
+  amount: string;
+  note: string;
+  tradeDate: string;
+  tradeTiming: TradeTiming;
+  tradeDateLabel: string;
+  tradeTimingLabel: string;
+  todayTradeDate: string;
+  previousTradeDate: string;
+  nextTradeDate: string;
+  pricingDatePreview: string;
+  pricingRuleLabel: string;
+  isAddingHolding: boolean;
+  onQueryChange: (value: string) => void;
+  onSelectFund: (fund: Fund) => void;
+  onSelectAggregate: (aggregate: HoldingAggregateEntry) => void;
+  onAmountChange: (value: string) => void;
+  onNoteChange: (value: string) => void;
+  onTradeDateChange: (value: string) => void;
+  onTradeTimingChange: (value: TradeTiming) => void;
+  onAddHolding: () => void;
 }
 
 function parseAmount(value: string) {
-  const normalized = value.replace(/,/g, '').trim()
-  const parsed = Number.parseFloat(normalized)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+  const normalized = value.replace(/,/g, "").trim();
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function formatInlineMoney(value?: string) {
-  const parsed = Number.parseFloat(value || '')
+  const parsed = Number.parseFloat(value || "");
   if (!Number.isFinite(parsed)) {
-    return '--'
+    return "--";
   }
-  return new Intl.NumberFormat('zh-CN', {
-    style: 'currency',
-    currency: 'CNY',
+  return new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency: "CNY",
     maximumFractionDigits: 0,
-  }).format(parsed)
+  }).format(parsed);
 }
 
 export function HoldingRecordComposer({
@@ -98,42 +98,42 @@ export function HoldingRecordComposer({
   onTradeTimingChange,
   onAddHolding,
 }: HoldingRecordComposerProps) {
-  const amountValue = parseAmount(amount)
-  const hasFund = Boolean(resolvedFundID)
-  const hasAmount = amountValue > 0
-  const hasTradeDate = Boolean(tradeDate.trim())
-  const canSubmit = hasFund && hasAmount && hasTradeDate && !isAddingHolding
-  const visibleRecentAggregates = recentAggregates.slice(0, 5)
-  const selectedFundLabel = resolvedFundName || resolvedFundID || '还没选基金'
+  const amountValue = parseAmount(amount);
+  const hasFund = Boolean(resolvedFundID);
+  const hasAmount = amountValue > 0;
+  const hasTradeDate = Boolean(tradeDate.trim());
+  const canSubmit = hasFund && hasAmount && hasTradeDate && !isAddingHolding;
+  const visibleRecentAggregates = recentAggregates.slice(0, 5);
+  const selectedFundLabel = resolvedFundName || resolvedFundID || "还没选基金";
   const remainingHint = !hasFund
-    ? '先选基金'
+    ? "先选基金"
     : !hasAmount
-      ? '补金额'
+      ? "补金额"
       : !hasTradeDate
-        ? '选交易日'
-        : '可以记录'
+        ? "选交易日"
+        : "可以记录";
 
   const steps = [
     {
-      label: '选基金',
+      label: "选基金",
       done: hasFund,
-      detail: hasFund ? selectedFundLabel : '代码或名称都可以',
+      detail: hasFund ? selectedFundLabel : "代码或名称都可以",
     },
     {
-      label: '填金额',
+      label: "填金额",
       done: hasAmount,
       detail: hasAmount
-        ? `¥${amountValue.toLocaleString('zh-CN')}`
-        : '可以先填大概本金',
+        ? `¥${amountValue.toLocaleString("zh-CN")}`
+        : "可以先填大概本金",
     },
     {
-      label: '定日期',
+      label: "定日期",
       done: hasTradeDate,
       detail: hasTradeDate
         ? `${tradeDate} · ${tradeTimingLabel}`
-        : '影响确认净值日',
+        : "影响确认净值日",
     },
-  ]
+  ];
 
   return (
     <section className="mb-6 overflow-hidden rounded-[34px] border border-cyan-400/18 bg-[var(--card-bg)]/86 p-5 shadow-[0_22px_54px_rgba(2,8,23,0.10)] glass">
@@ -159,10 +159,10 @@ export function HoldingRecordComposer({
               <div
                 key={step.label}
                 className={cn(
-                  'rounded-[20px] border px-3 py-3',
+                  "rounded-[20px] border px-3 py-3",
                   step.done
-                    ? 'border-emerald-400/25 bg-emerald-400/10'
-                    : 'border-[var(--card-border)] bg-[var(--input-bg)]/62',
+                    ? "border-emerald-400/25 bg-emerald-400/10"
+                    : "border-[var(--card-border)] bg-[var(--input-bg)]/62",
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -186,8 +186,8 @@ export function HoldingRecordComposer({
 
       <div
         className={cn(
-          'grid gap-5',
-          compact ? 'xl:grid-cols-1' : 'xl:grid-cols-[1.08fr_0.92fr]',
+          "grid gap-5",
+          compact ? "xl:grid-cols-1" : "xl:grid-cols-[1.08fr_0.92fr]",
         )}
       >
         <div className="space-y-4">
@@ -209,28 +209,28 @@ export function HoldingRecordComposer({
               </div>
               <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
                 {visibleRecentAggregates.map((aggregate) => {
-                  const active = resolvedFundID === aggregate.fund_id
+                  const active = resolvedFundID === aggregate.fund_id;
                   return (
                     <button
                       key={aggregate.fund_id}
                       type="button"
                       onClick={() => onSelectAggregate(aggregate)}
                       className={cn(
-                        'min-w-[180px] rounded-[20px] border px-4 py-3 text-left transition-all duration-200',
+                        "min-w-[180px] rounded-[20px] border px-4 py-3 text-left transition-all duration-200",
                         active
-                          ? 'border-amber-400/55 bg-amber-400/16 shadow-[0_12px_26px_rgba(251,191,36,0.12)]'
-                          : 'border-[var(--input-border)] bg-[var(--card-bg)]/78 hover:border-amber-400/35',
+                          ? "border-amber-400/55 bg-amber-400/16 shadow-[0_12px_26px_rgba(251,191,36,0.12)]"
+                          : "border-[var(--input-border)] bg-[var(--card-bg)]/78 hover:border-amber-400/35",
                       )}
                     >
                       <div className="truncate text-sm font-semibold text-theme-primary">
                         {aggregate.fund?.name || aggregate.fund_id}
                       </div>
                       <div className="mt-1 text-xs text-theme-muted">
-                        {aggregate.holding_count} 笔 · 本金{' '}
+                        {aggregate.holding_count} 笔 · 本金{" "}
                         {formatInlineMoney(aggregate.total_principal)}
                       </div>
                     </button>
-                  )
+                  );
                 })}
               </div>
             </div>
@@ -251,7 +251,7 @@ export function HoldingRecordComposer({
                 <span className="block truncate text-xs text-theme-muted">
                   {hasFund
                     ? `${selectedFundLabel} · ${resolvedFundID}`
-                    : '选中后会自动进入待记录状态'}
+                    : "选中后会自动进入待记录状态"}
                 </span>
               </label>
 
@@ -261,23 +261,23 @@ export function HoldingRecordComposer({
                 </div>
                 <div>真实市值与今日盈亏</div>
                 <div>量化建议与风险标签</div>
-                <div>组合级 VIP 分析入口</div>
+                <div>组合风险与结构回顾</div>
               </div>
             </div>
 
             <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
               {results.slice(0, 6).map((fund) => {
-                const active = resolvedFundID === fund.id
+                const active = resolvedFundID === fund.id;
                 return (
                   <button
                     key={fund.id}
                     type="button"
                     onClick={() => onSelectFund(fund)}
                     className={cn(
-                      'flex min-w-0 items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-all duration-200',
+                      "flex min-w-0 items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-all duration-200",
                       active
-                        ? 'border-cyan-400/50 bg-cyan-400/14 shadow-[0_12px_26px_rgba(34,211,238,0.12)]'
-                        : 'border-[var(--input-border)] bg-[var(--card-bg)]/76 hover:border-cyan-500/40',
+                        ? "border-cyan-400/50 bg-cyan-400/14 shadow-[0_12px_26px_rgba(34,211,238,0.12)]"
+                        : "border-[var(--input-border)] bg-[var(--card-bg)]/76 hover:border-cyan-500/40",
                     )}
                   >
                     <span className="min-w-0">
@@ -294,7 +294,7 @@ export function HoldingRecordComposer({
                       <Plus className="h-4 w-4 shrink-0 text-cyan-300" />
                     )}
                   </button>
-                )
+                );
               })}
 
               {results.length === 0 && (
@@ -325,7 +325,7 @@ export function HoldingRecordComposer({
                   <button
                     key={option}
                     type="button"
-                    onClick={() => onAmountChange(option.replace(/,/g, ''))}
+                    onClick={() => onAmountChange(option.replace(/,/g, ""))}
                     className="rounded-full border border-[var(--input-border)] bg-[var(--card-bg)]/78 px-3 py-1.5 text-xs text-theme-secondary transition-colors hover:border-cyan-400/35 hover:text-theme-primary"
                   >
                     ¥{option}
@@ -356,10 +356,10 @@ export function HoldingRecordComposer({
                     type="button"
                     onClick={() => onNoteChange(preset)}
                     className={cn(
-                      'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors',
+                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors",
                       note === preset
-                        ? 'border-amber-400/45 bg-amber-400/14 text-amber-100'
-                        : 'border-[var(--input-border)] bg-[var(--card-bg)]/78 text-theme-secondary hover:border-amber-400/35 hover:text-theme-primary',
+                        ? "border-amber-400/45 bg-amber-400/14 text-amber-100"
+                        : "border-[var(--input-border)] bg-[var(--card-bg)]/78 text-theme-secondary hover:border-amber-400/35 hover:text-theme-primary",
                     )}
                   >
                     <Tags className="h-3 w-3" />
@@ -416,14 +416,14 @@ export function HoldingRecordComposer({
               {(
                 [
                   {
-                    id: 'before_close',
-                    title: '15:00 前',
-                    description: '按当日收盘净值确认',
+                    id: "before_close",
+                    title: "15:00 前",
+                    description: "按当日收盘净值确认",
                   },
                   {
-                    id: 'after_close',
-                    title: '15:00 后',
-                    description: '顺延至下个交易日确认',
+                    id: "after_close",
+                    title: "15:00 后",
+                    description: "顺延至下个交易日确认",
                   },
                 ] as const
               ).map((option) => (
@@ -432,10 +432,10 @@ export function HoldingRecordComposer({
                   type="button"
                   onClick={() => onTradeTimingChange(option.id)}
                   className={cn(
-                    'rounded-[20px] border px-4 py-3 text-left transition-all duration-200',
+                    "rounded-[20px] border px-4 py-3 text-left transition-all duration-200",
                     tradeTiming === option.id
-                      ? 'border-cyan-400/55 bg-cyan-400/14 text-cyan-100 shadow-[0_12px_26px_rgba(34,211,238,0.12)]'
-                      : 'border-[var(--input-border)] bg-[var(--card-bg)]/72 text-theme-secondary hover:border-cyan-400/35 hover:text-theme-primary',
+                      ? "border-cyan-400/55 bg-cyan-400/14 text-cyan-100 shadow-[0_12px_26px_rgba(34,211,238,0.12)]"
+                      : "border-[var(--input-border)] bg-[var(--card-bg)]/72 text-theme-secondary hover:border-cyan-400/35 hover:text-theme-primary",
                   )}
                   aria-pressed={tradeTiming === option.id}
                 >
@@ -452,28 +452,28 @@ export function HoldingRecordComposer({
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            {['今天', '上个交易日', '下个交易日'].map((shortcut) => {
+            {["今天", "上个交易日", "下个交易日"].map((shortcut) => {
               const shortcutDate =
-                shortcut === '今天'
+                shortcut === "今天"
                   ? todayTradeDate
-                  : shortcut === '上个交易日'
+                  : shortcut === "上个交易日"
                     ? previousTradeDate
-                    : nextTradeDate
+                    : nextTradeDate;
               return (
                 <button
                   key={shortcut}
                   type="button"
                   onClick={() => onTradeDateChange(shortcutDate)}
                   className={cn(
-                    'rounded-full border px-3 py-1.5 text-xs transition-all duration-200',
+                    "rounded-full border px-3 py-1.5 text-xs transition-all duration-200",
                     tradeDate === shortcutDate
-                      ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-100 shadow-[0_10px_22px_rgba(34,211,238,0.12)]'
-                      : 'border-[var(--input-border)] bg-[var(--input-bg)]/70 text-theme-secondary hover:border-cyan-400/35 hover:text-theme-primary',
+                      ? "border-cyan-400/50 bg-cyan-400/15 text-cyan-100 shadow-[0_10px_22px_rgba(34,211,238,0.12)]"
+                      : "border-[var(--input-border)] bg-[var(--input-bg)]/70 text-theme-secondary hover:border-cyan-400/35 hover:text-theme-primary",
                   )}
                 >
                   {shortcut}
                 </button>
-              )
+              );
             })}
           </div>
 
@@ -486,7 +486,7 @@ export function HoldingRecordComposer({
                 <div className="text-sm font-medium text-theme-primary">
                   {tradeDate
                     ? `${tradeDate} · ${tradeTimingLabel}`
-                    : '请选择交易日期'}
+                    : "请选择交易日期"}
                 </div>
                 {!compact && (
                   <div className="mt-1 text-xs leading-5 text-theme-secondary">
@@ -497,7 +497,7 @@ export function HoldingRecordComposer({
               <div className="shrink-0 text-right">
                 <div className="text-xs text-theme-muted">确认净值日</div>
                 <div className="mt-1 text-lg font-semibold text-cyan-100">
-                  {pricingDatePreview || '--'}
+                  {pricingDatePreview || "--"}
                 </div>
               </div>
             </div>
@@ -517,13 +517,13 @@ export function HoldingRecordComposer({
               <div>
                 <div className="text-xs text-theme-muted">本金</div>
                 <div className="mt-1 font-semibold text-theme-primary">
-                  {hasAmount ? formatInlineMoney(String(amountValue)) : '--'}
+                  {hasAmount ? formatInlineMoney(String(amountValue)) : "--"}
                 </div>
               </div>
               <div>
                 <div className="text-xs text-theme-muted">备注</div>
                 <div className="mt-1 truncate font-semibold text-theme-primary">
-                  {note || '未填写'}
+                  {note || "未填写"}
                 </div>
               </div>
             </div>
@@ -534,10 +534,10 @@ export function HoldingRecordComposer({
             onClick={onAddHolding}
             disabled={!canSubmit}
             className={cn(
-              'group relative mt-5 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-4 py-3 text-sm font-medium text-white transition-all duration-200',
-              'hover:-translate-y-0.5 hover:shadow-[0_18px_35px_rgba(14,165,233,0.28)]',
-              'active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-70',
-              isAddingHolding && 'holding-action-button',
+              "group relative mt-5 inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-4 py-3 text-sm font-medium text-white transition-all duration-200",
+              "hover:-translate-y-0.5 hover:shadow-[0_18px_35px_rgba(14,165,233,0.28)]",
+              "active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-70",
+              isAddingHolding && "holding-action-button",
             )}
             aria-busy={isAddingHolding}
           >
@@ -549,14 +549,14 @@ export function HoldingRecordComposer({
             )}
             <span className="relative z-10">
               {isAddingHolding
-                ? '提交中...'
+                ? "提交中..."
                 : canSubmit
-                  ? '记录这笔持仓'
+                  ? "记录这笔持仓"
                   : remainingHint}
             </span>
           </button>
         </div>
       </div>
     </section>
-  )
+  );
 }

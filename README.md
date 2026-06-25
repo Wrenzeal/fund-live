@@ -34,7 +34,6 @@ FundLive（涨了多少）通过基金公开持仓、目标 ETF、实时行情�
 - **量化看板**：输出综合评分、建议分布、主/反证据、风险提示、事件链和数据可信度拆解。
 - **分类与主题暴露**：按行业/主题聚合持仓，可叠加管理员人工分类修正。
 - **账号与认证**：支持邮箱密码登录、Google 登录、HttpOnly Cookie 会话和认证失败限流。
-- **VIP / 报告雏形**：保留会员、任务、报告与微信支付配置边界，便于后续生产化。
 
 ### 技术栈
 
@@ -72,7 +71,7 @@ fundlive.example.yaml        后端配置模板
 cp fundlive.example.yaml fundlive.yaml
 ```
 
-按需修改 PostgreSQL、认证和支付配置。环境变量会覆盖 YAML 中的同名配置。
+按需修改 PostgreSQL 和认证配置。环境变量会覆盖 YAML 中的同名配置。
 
 Google 登录需要后端和前端使用同一个 Web Client ID：
 
@@ -160,7 +159,6 @@ FundLive estimates intraday fund movement from public holdings, target ETFs, rea
 - **Quant dashboard**: Provides scores, recommendation distribution, supporting/opposing evidence, risks, events, and confidence breakdowns.
 - **Sector and theme exposure**: Aggregates holdings by sector/theme and supports admin classification overrides.
 - **Authentication**: Supports email/password login, Google Sign-In, HttpOnly cookie sessions, and rate limiting.
-- **VIP/report foundation**: Keeps membership, task, report, and WeChat Pay integration boundaries for future production use.
 
 ### Stack
 
@@ -198,7 +196,7 @@ fundlive.example.yaml        Backend config template
 cp fundlive.example.yaml fundlive.yaml
 ```
 
-Edit PostgreSQL, auth, and payment settings as needed. Environment variables override YAML values.
+Edit PostgreSQL and auth settings as needed. Environment variables override YAML values.
 
 Google Sign-In requires the same Web Client ID on both backend and frontend:
 

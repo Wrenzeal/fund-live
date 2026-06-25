@@ -31,11 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **QDII 海外固定行情源配置化与选型文档**
   - 新增 `quote.overseas_source` / `QUOTE_OVERSEAS_SOURCE`，QDII / 海外持仓估值可在 `tencent` 与 `sina` 两个既有 provider 间切换。
   - 默认海外固定源保持 `tencent`，避免影响现有 QDII 估值链路；用户级国内行情源偏好仍不影响海外估值。
-  - 新增 `docs/overseas-data-source-selection.md`，记录 Polygon / Alpaca / Twelve Data / Intrinio 的中期选型边界，并明确本轮不接 VIP / 付费官方 API。
+  - 新增 `docs/overseas-data-source-selection.md`，记录 Polygon / Alpaca / Twelve Data / Intrinio 的中期选型边界，并明确本轮不接付费官方 API。
 
 - **持仓页待补齐过滤与高频排序**
   - 持仓页信息架构改为工作台导航：`总览 / 记录 / 持仓 / 风险 / 流水 / 工具` 六个功能块，顶部快捷入口直达记账、持仓列表、风险检查和流水记录；默认不再一次性展开全部长模块。
-  - 各功能块说明文案压缩为短标题与短说明，记录、导入、VIP、流水筛选等操作放回对应功能区，降低首屏文字密度。
+  - 各功能块说明文案压缩为短标题与短说明，记录、导入、流水筛选等操作放回对应功能区，降低首屏文字密度。
   - 持仓总览补齐“总价值 / 总收益”资产指标：官方口径按已就绪本金计算，盘中口径按已确认份额计算，并展示对应收益率，避免累计收益缺口。
   - 持仓页新增“只看待补齐”过滤器，支持在按基金聚合和分笔明细两种视图下快速定位未确认份额、官方净值未同步或真实口径未就绪的记录。
   - 过滤开启后会显示当前筛选范围和命中数量；无命中时展示空态并可一键恢复全部持仓。
@@ -81,7 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 新增后端回归测试覆盖实时事件命中能源暴露、消费成本缓和映射、低暴露不触发，以及事件转证据时保留来源溯源字段。
 
 - **前端高帧率与移动端显示优化**
-  - 移动端禁用高成本 `backdrop-filter`、fixed background 与 cyber 主题无限背景动画，降低小屏滚动时的重绘压力；实时状态点、慢速旋转、VIP 闪烁类无限动画在小屏降级为静态展示。
+  - 移动端禁用高成本 `backdrop-filter`、fixed background 与 cyber 主题无限背景动画，降低小屏滚动时的重绘压力；实时状态点、慢速旋转、高频闪烁类无限动画在小屏降级为静态展示。
   - `ScrollReveal` 从 `transition-all` 收口为只过渡 `opacity` / `transform`，并缩短进入时长，避免无关属性参与合成。
   - 首页估值卡移动端缩小主涨跌数字与趋势图标、减少内层 glass 嵌套、净值信息改为小屏单列，降低拥挤与模糊层叠成本。
   - 分时走势图与持仓明细在移动端改为更稳的纵向表头和紧凑 padding；持仓表增加最小宽度、touch 横向滚动与小屏滑动提示，避免列被压缩。
@@ -112,7 +112,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 默认深色背景从蓝紫 AI 渐变弱化为金融深色径向光感 + 细网格纹理，保留业务涨跌色和更克制的主操作色。
   - 新增全局 skip link，恢复移动端页面缩放能力，并补充品牌化 404、隐私政策、服务条款和统一页脚，减少用户流程死胡同。
   - `LoadingIndicator` 新增布局骨架屏，基金数据加载从纯旋转圈升级为结构化 loading 面板。
-  - VIP 介绍、开通页与样例报告文案从“低吸 / 看结论 / 操作方向”降级为“证据链 / 风险观察 / 复核条件”，继续强调不构成投资建议或交易指令。
 - **认证错误与生产 Cookie 安全收口**
   - 登录邮箱格式错误统一按 `INVALID_CREDENTIALS` 处理，不再区分“格式错误 / 账号不存在 / 密码错误”。
   - 认证默认异常响应改为通用 `Authentication failed`，避免向客户端暴露底层错误原文。
@@ -156,7 +155,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **前端主要页面滚动进入动效统一**
   - 新增 `web/src/components/scroll-reveal.tsx`，将滚动进入监听、渐显、轻微上移/缩放和 stagger 列表动画抽成共享组件，继续使用原生 IntersectionObserver/CSS transition，不新增依赖。
-  - 首页、持仓、自选、想法、公告、登录/注册、VIP 介绍/开通/任务/报告、公告详情、想法详情与持仓流水详情已接入区块级或卡片级滚动渐显。
+  - 首页、持仓、自选、想法、公告、登录/注册、公告详情、想法详情与持仓流水详情已接入区块级或卡片级滚动渐显。
   - `analysis-layout.tsx` 现在复用共享滚动 reveal 能力，保留量化详情页/排行榜的 section heading 兼容导出。
 
 - **量化详情页局部布局修正**
@@ -185,6 +184,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 基金自身事件默认作为辅助低权重信号，仅在基金经理变更、清盘/限购、费率、规模异常等直接影响产品的事件上提升权重。
   - 行业/主题热点必须先匹配到基金当前行业/主题暴露，并达到最低暴露权重后才进入宏观/政策事件层。
   - 前端量化标签和结论文案弱化投资建议口吻，从“偏加仓 / 偏减仓 / 偏持有”调整为“结构偏积极 / 风险偏高 / 适合观察”。
+
+### Removed
+- **VIP 模块下线**
+  - 删除前端 `/vip` 会员、开通、任务、报告页面，以及持仓页 / 自选页 / 账号壳层中的会员分析入口、任务创建和额度状态展示。
+  - 删除后端 `/api/v1/vip/*` 路由、VIP handler / service / repository / domain、微信支付订单链路、VIP 相关 model / migration 注册与测试。
+  - `fundlive.example.yaml` 移除 `payment.wechat_pay` 配置模板；历史数据库表不随部署自动 DROP，生产物理清理需在备份后人工处理。
 
 ## [2026.4.27] - 2026-04-27
 

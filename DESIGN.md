@@ -3,7 +3,7 @@
 ## Source of truth
 - Status: Active
 - Last refreshed: 2026-06-04
-- Primary product surfaces: Fund home `/`, analysis detail `/analysis/[fundId]`, analysis rankings `/analysis/rankings`, holdings `/holdings`, watchlist `/watchlist`, VIP pages.
+- Primary product surfaces: Fund home `/`, analysis detail `/analysis/[fundId]`, analysis rankings `/analysis/rankings`, holdings `/holdings`, watchlist `/watchlist`, issues, and announcements.
 - Evidence reviewed:
   - `web/src/app/analysis/[fundId]/page-client.tsx`
   - `web/src/components/fund-analysis-card.tsx`
@@ -53,7 +53,7 @@
   - Slow or partial data states where confidence and limitations matter.
 
 ## Information architecture
-- Primary navigation: Home, Analysis Rankings, Holdings, Watchlist, Issues, Announcements, VIP.
+- Primary navigation: Home, Analysis Rankings, Holdings, Watchlist, Issues, Announcements.
 - Core routes/screens:
   - `/`: fund search, valuation, intraday chart, holdings, analysis summary.
   - `/analysis/[fundId]`: full analysis board.
@@ -158,5 +158,4 @@
 - Test/screenshot expectations: At minimum run `npm run lint` and `npm run build`; for high-risk visual changes, capture browser screenshots or run visual QA when available.
 
 ## Open questions
-- [ ] Whether VIP pages should get the same section-heading/reveal pattern after classic theme visual review / owner: product+frontend / impact: theme consistency.
 - [ ] Whether `RevealSection` and `SectionHeading` should be promoted from route-local helpers to shared components after reuse appears on two or more pages / owner: frontend / impact: component governance.

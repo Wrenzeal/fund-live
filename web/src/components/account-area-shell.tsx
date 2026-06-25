@@ -1,92 +1,101 @@
-'use client'
+"use client";
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { ArrowUp, ChevronRight, Crown, Layers3, ShieldAlert, Sparkles, Wallet } from 'lucide-react'
-import { BrandMark } from '@/components/brand-mark'
-import { HeaderFundSearch } from '@/components/header-fund-search'
-import { ThemeSwitcher } from '@/components/theme-switcher'
-import { UserAccountMenu } from '@/components/user-account-menu'
-import { ScrollReveal } from '@/components/scroll-reveal'
-import { SiteFooter } from '@/components/site-footer'
-import { useCurrentUser } from '@/hooks/use-auth'
-import { useMobileTopSection } from '@/hooks/use-mobile-top-section'
-import { useUIPreferences } from '@/hooks/use-ui-preferences'
-import { cn } from '@/lib/utils'
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { ArrowUp, ChevronRight, Layers3, Sparkles, Wallet } from "lucide-react";
+import { BrandMark } from "@/components/brand-mark";
+import { HeaderFundSearch } from "@/components/header-fund-search";
+import { ThemeSwitcher } from "@/components/theme-switcher";
+import { UserAccountMenu } from "@/components/user-account-menu";
+import { SiteFooter } from "@/components/site-footer";
+import { useMobileTopSection } from "@/hooks/use-mobile-top-section";
+import { useUIPreferences } from "@/hooks/use-ui-preferences";
+import { cn } from "@/lib/utils";
 
 interface AccountAreaShellProps {
-  title: string
-  description: string
-  children: React.ReactNode
+  title: string;
+  description: string;
+  children: React.ReactNode;
 }
 
 const tabs = [
-  { href: '/watchlist', label: '我的自选', icon: Layers3 },
-  { href: '/holdings', label: '持仓明细', icon: Wallet },
-  { href: '/vip', label: 'VIP 分析', icon: Crown },
-]
+  { href: "/watchlist", label: "我的自选", icon: Layers3 },
+  { href: "/holdings", label: "持仓明细", icon: Wallet },
+];
 
-const MOBILE_BREAKPOINT_QUERY = '(min-width: 768px)'
-const MIN_ANCHOR_OFFSET_PX = 112
-const ANCHOR_OFFSET_GAP_PX = 16
+const MOBILE_BREAKPOINT_QUERY = "(min-width: 768px)";
+const MIN_ANCHOR_OFFSET_PX = 112;
+const ANCHOR_OFFSET_GAP_PX = 16;
 
-export function AccountAreaShell({ title, description, children }: AccountAreaShellProps) {
-  const pathname = usePathname()
-  const { user, isLoading: isUserLoading } = useCurrentUser()
-  const { themeType, setThemeType, viewMode, setViewMode } = useUIPreferences()
-  const { isAtTop, showBackToTop, scrollToTop } = useMobileTopSection()
-  const headerRef = useRef<HTMLElement | null>(null)
-  const topBarRef = useRef<HTMLDivElement | null>(null)
-  const [anchorOffsetPx, setAnchorOffsetPx] = useState(MIN_ANCHOR_OFFSET_PX)
-  const canAccessVIP = Boolean(user?.is_admin)
-  const isVIPPath = pathname.startsWith('/vip')
-  const shouldBlockVIPPage = isVIPPath && (isUserLoading || !canAccessVIP)
-  const visibleTabs = tabs.filter((tab) => tab.href !== '/vip' || canAccessVIP)
+export function AccountAreaShell({
+  title,
+  description,
+  children,
+}: AccountAreaShellProps) {
+  const pathname = usePathname();
+  const { themeType, setThemeType, viewMode, setViewMode } = useUIPreferences();
+  const { isAtTop, showBackToTop, scrollToTop } = useMobileTopSection();
+  const headerRef = useRef<HTMLElement | null>(null);
+  const topBarRef = useRef<HTMLDivElement | null>(null);
+  const [anchorOffsetPx, setAnchorOffsetPx] = useState(MIN_ANCHOR_OFFSET_PX);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return
+    if (typeof window === "undefined") {
+      return;
     }
 
     const updateAnchorOffset = () => {
-      const headerHeight = headerRef.current?.getBoundingClientRect().height ?? 0
-      const topBarHeight = topBarRef.current?.getBoundingClientRect().height ?? 0
-      const isDesktop = window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches
-      const measuredHeight = isDesktop ? headerHeight : (topBarHeight || headerHeight)
-      const nextOffset = Math.max(Math.ceil(measuredHeight + ANCHOR_OFFSET_GAP_PX), MIN_ANCHOR_OFFSET_PX)
-      setAnchorOffsetPx(nextOffset)
-    }
+      const headerHeight =
+        headerRef.current?.getBoundingClientRect().height ?? 0;
+      const topBarHeight =
+        topBarRef.current?.getBoundingClientRect().height ?? 0;
+      const isDesktop = window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches;
+      const measuredHeight = isDesktop
+        ? headerHeight
+        : topBarHeight || headerHeight;
+      const nextOffset = Math.max(
+        Math.ceil(measuredHeight + ANCHOR_OFFSET_GAP_PX),
+        MIN_ANCHOR_OFFSET_PX,
+      );
+      setAnchorOffsetPx(nextOffset);
+    };
 
-    updateAnchorOffset()
+    updateAnchorOffset();
 
     const resizeObserver = new ResizeObserver(() => {
-      updateAnchorOffset()
-    })
+      updateAnchorOffset();
+    });
 
     if (headerRef.current) {
-      resizeObserver.observe(headerRef.current)
+      resizeObserver.observe(headerRef.current);
     }
     if (topBarRef.current) {
-      resizeObserver.observe(topBarRef.current)
+      resizeObserver.observe(topBarRef.current);
     }
 
-    window.addEventListener('resize', updateAnchorOffset)
+    window.addEventListener("resize", updateAnchorOffset);
     return () => {
-      resizeObserver.disconnect()
-      window.removeEventListener('resize', updateAnchorOffset)
-    }
-  }, [])
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateAnchorOffset);
+    };
+  }, []);
 
   const shellStyle = {
-    '--account-shell-anchor-offset': `${anchorOffsetPx}px`,
-  } as CSSProperties
+    "--account-shell-anchor-offset": `${anchorOffsetPx}px`,
+  } as CSSProperties;
 
   return (
     <div className="min-h-[100dvh]" style={shellStyle}>
-      <header ref={headerRef} className="sticky top-0 z-50 border-b border-[var(--card-border)] glass-strong">
+      <header
+        ref={headerRef}
+        className="sticky top-0 z-50 border-b border-[var(--card-border)] glass-strong"
+      >
         <div className="container mx-auto px-4 py-4">
-          <div ref={topBarRef} className="flex items-center justify-between gap-4">
+          <div
+            ref={topBarRef}
+            className="flex items-center justify-between gap-4"
+          >
             <div className="flex items-center gap-4">
               <BrandMark subtitle="用户模块" />
 
@@ -114,11 +123,11 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
 
           <div
             className={cn(
-              'overflow-hidden transition-all duration-300 md:overflow-visible md:transition-none',
+              "overflow-hidden transition-all duration-300 md:overflow-visible md:transition-none",
               isAtTop
-                ? 'mt-4 max-h-[32rem] opacity-100'
-                : 'mt-0 max-h-0 opacity-0 pointer-events-none md:pointer-events-auto',
-              'md:mt-4 md:max-h-none md:opacity-100'
+                ? "mt-4 max-h-[32rem] opacity-100"
+                : "mt-0 max-h-0 opacity-0 pointer-events-none md:pointer-events-auto",
+              "md:mt-4 md:max-h-none md:opacity-100",
             )}
           >
             <div className="md:hidden">
@@ -132,7 +141,9 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
                   我的空间
                 </div>
                 <div>
-                  <h1 className="text-3xl font-black text-theme-primary sm:text-4xl">{title}</h1>
+                  <h1 className="text-3xl font-black text-theme-primary sm:text-4xl">
+                    {title}
+                  </h1>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-theme-secondary sm:text-base">
                     {description}
                   </p>
@@ -140,53 +151,40 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
               </div>
 
               <nav className="flex flex-wrap gap-3">
-                {visibleTabs.map((tab) => {
-                  const Icon = tab.icon
-                  const isVIPTab = tab.href === '/vip'
-                  const active = tab.href === '/vip'
-                    ? pathname.startsWith('/vip')
-                    : pathname === tab.href
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const active = pathname === tab.href;
                   return (
                     <Link
                       key={tab.href}
                       href={tab.href}
                       className={cn(
-                        'group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl border px-4 py-2.5 text-sm transition-all duration-200',
-                        'hover:-translate-y-0.5 active:scale-[0.985]',
-                        isVIPTab && 'vip-tab-shell',
-                        isVIPTab
-                          ? active
-                            ? 'vip-tab-shell-active'
-                            : 'vip-tab-shell-idle'
-                          : active
-                            ? 'account-standard-tab account-standard-tab-active border-cyan-500/40 bg-cyan-500/15 text-cyan-300 shadow-[0_14px_28px_rgba(34,211,238,0.14)]'
-                            : 'account-standard-tab account-standard-tab-idle border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-400/35 hover:bg-cyan-400/10 hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)]'
+                        "group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl border px-4 py-2.5 text-sm transition-all duration-200",
+                        "hover:-translate-y-0.5 active:scale-[0.985]",
+                        active
+                          ? "account-standard-tab account-standard-tab-active border-cyan-500/40 bg-cyan-500/15 text-cyan-300 shadow-[0_14px_28px_rgba(34,211,238,0.14)]"
+                          : "account-standard-tab account-standard-tab-idle border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-400/35 hover:bg-cyan-400/10 hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)]",
                       )}
                     >
-                      <span className={cn(isVIPTab ? 'vip-tab-shine' : 'account-tab-shine')} />
-                      {isVIPTab && <span className="vip-tab-glow" />}
+                      <span className="account-tab-shine" />
                       <span
                         className={cn(
-                          'relative z-10 flex items-center gap-2',
-                          active && (isVIPTab ? 'vip-tab-active' : 'account-tab-active')
+                          "relative z-10 flex items-center gap-2",
+                          active && "account-tab-active",
                         )}
                       >
                         <Icon
                           className={cn(
-                            'h-4 w-4 transition-transform duration-300',
-                            isVIPTab
-                              ? active
-                                ? 'scale-110'
-                                : 'group-hover:rotate-6 group-hover:scale-115'
-                              : active
-                                ? 'scale-105'
-                                : 'group-hover:-rotate-6 group-hover:scale-110'
+                            "h-4 w-4 transition-transform duration-300",
+                            active
+                              ? "scale-105"
+                              : "group-hover:-rotate-6 group-hover:scale-110",
                           )}
                         />
                         {tab.label}
                       </span>
                     </Link>
-                  )
+                  );
                 })}
               </nav>
             </div>
@@ -195,33 +193,7 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
       </header>
 
       <main id="main-content" className="container mx-auto px-4 py-8">
-        {shouldBlockVIPPage ? (
-          <ScrollReveal variant="scale-in">
-            <section className="mx-auto max-w-2xl rounded-[32px] border border-amber-500/25 bg-amber-500/10 p-6 glass">
-              <div className="flex items-start gap-3 text-theme-primary">
-                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-200" />
-                <div>
-                  <div className="text-lg font-bold">
-                    {isUserLoading ? '正在校验访问权限' : '仅管理员可查看 VIP 页面'}
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-theme-secondary">
-                    {isUserLoading
-                      ? '请稍候，系统正在读取当前账号信息。'
-                      : 'VIP 功能当前仅对管理员开放内测访问。普通用户暂时不会看到这些页面。'}
-                  </p>
-                  {!isUserLoading && !user && (
-                    <Link
-                      href="/auth/login"
-                      className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm font-medium text-theme-primary"
-                    >
-                      去登录管理员账号
-                    </Link>
-                  )}
-                </div>
-              </div>
-            </section>
-          </ScrollReveal>
-        ) : children}
+        {children}
       </main>
 
       <SiteFooter compact />
@@ -238,5 +210,5 @@ export function AccountAreaShell({ title, description, children }: AccountAreaSh
         </button>
       )}
     </div>
-  )
+  );
 }

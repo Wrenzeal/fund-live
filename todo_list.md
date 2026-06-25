@@ -1,5 +1,34 @@
 # 活跃待办
 
+## VIP 模块删除执行清单（2026-06-24）
+
+### 目标
+- 删除项目中的 VIP 功能模块、页面入口、前端 hook/mock、后端 API/service/repository/domain 代码与活跃文档引用。
+- 保留非 VIP 主流程：基金首页、量化详情、排行榜、持仓、自选、公告、反馈、认证、基金分析。
+- 不新增依赖，不改动基金估值/量化分析核心逻辑。
+- **不自动创建 DROP TABLE 迁移**：本轮删除应用层 VIP 模块；生产历史 VIP 表如需物理清理，应由人工 DBA/运维在备份后单独处理，避免部署时误删历史数据。
+
+### 影响面分析
+- 后端入口：`cmd/server/main.go` 注册 `/api/v1/vip/*` 路由并打印 VIP API 日志。
+- 后端模块：`internal/domain/vip.go`、`internal/handler/vip_handler.go`、`internal/service/vip_service.go`、`internal/service/vip_templates.go`、`internal/repository/*vip_repo.go`、`internal/database/vip_*`。
+- 后端测试：`internal/handler/vip_handler_test.go`、`internal/service/vip_service_test.go`。
+- 前端页面：`web/src/app/vip/**`。
+- 前端数据层：`web/src/hooks/use-vip-preview.ts`、`web/src/mocks/vip.ts`。
+- 前端入口组件：`web/src/components/vip-analysis-entry.tsx`、`account-area-shell.tsx`、`holdings-workspace-nav.tsx`、`holding-record-composer.tsx`，以及 `/holdings`、`/watchlist` 页面内 VIP CTA/任务创建逻辑。
+- 前端样式：`web/src/app/globals.css` 中 `.vip-*` 与主题覆写。
+- 文档/计划：`DESIGN.md`、`README.md`、`docs/overseas-data-source-selection.md`、`CHANGELOG.md`、本文件旧的 VIP 待办段落。
+
+### 执行步骤
+1. [x] 删除前端 `/vip` 路由目录、VIP hook/mock、`VIPAnalysisEntry` 组件。
+2. [x] 从账号壳层、持仓页、自选页、工作台导航、记录组件中移除 VIP 导航、CTA、任务创建、额度/会员状态展示。
+3. [x] 清理 `globals.css` 中全部 `.vip-*` keyframes、基础样式、classic/cyber 主题覆写及移动端动画降级引用。
+4. [x] 从后端 server wiring 中移除 VIP service/repository/handler 初始化、`/api/v1/vip/*` 路由和日志。
+5. [x] 删除后端 VIP domain/service/handler/repository/database model/migration 文件与 VIP 测试文件，并修复 migration 注册引用。
+6. [x] 清理 README/DESIGN/海外数据源文档中把 VIP 作为活跃模块的描述；CHANGELOG 增加删除记录。
+7. [x] 用 `rg "\\bVIP\\b|\\bvip\\b|Vip"` 检查残留，仅允许历史 CHANGELOG/todo 说明类引用。
+8. [x] 运行验证：后端 `go test ./...`，前端 `cd web && npm run lint && npm run build`。
+9. [x] 完成后勾选本清单，保留删除记录供后续 push/发布说明使用。
+
 更新时间：2026-06-18
 
 说明：
@@ -65,7 +94,7 @@
   2. **P2b 已完成第一轮：AI 解释层边界、引用校验与降级策略**
   3. **P2c 已完成第一轮：解释层 / 事件层缓存快照收口；2026-06-18 已将分析版本推进到 `baseline_v4`，以失效缺少事件溯源字段的旧快照**
   4. **2026-06-18 量化实时事件雷达与溯源已完成：摘要卡与 `/analysis/[fundId]` 均展示实时宏观/持仓/主线事件，并透出来源、发布时间、来源置信度和暴露映射依据；后续若要更强实时性，应引入独立新闻/宏观事件源与缓存，而不是继续扩写无来源种子**
-  5. **2026-05-29 前端看板与排行榜重构已完成，并扩展到主要页面滚动进入动效统一：`/analysis/[fundId]` 已改为结论证据优先的分段布局，`/analysis/rankings` 已改为首屏概览 + 三类观察池 + 首位样本 + 分榜列表；2026-06-01 已按视觉反馈保留上方积极池/观察池/风险池统计卡并列展示，并把下方“结构偏积极 / 最值得观察 / 高风险关注”分榜改为上下排布；新增 `scroll-reveal.tsx` 后，首页/持仓/自选/反馈/公告/VIP/详情类长页均已接入区块或列表卡片渐显；下一步仍是接真实 provider 或继续做样本校准**
+  5. **2026-05-29 前端看板与排行榜重构已完成，并扩展到主要页面滚动进入动效统一：`/analysis/[fundId]` 已改为结论证据优先的分段布局，`/analysis/rankings` 已改为首屏概览 + 三类观察池 + 首位样本 + 分榜列表；2026-06-01 已按视觉反馈保留上方积极池/观察池/风险池统计卡并列展示，并把下方“结构偏积极 / 最值得观察 / 高风险关注”分榜改为上下排布；新增 `scroll-reveal.tsx` 后，首页/持仓/自选/反馈/公告/详情类长页均已接入区块或列表卡片渐显；下一步仍是接真实 provider 或继续做样本校准**
   6. **2026-05-29 基金人工分类标签覆盖层第一版已完成：管理员可维护主分类、主板块、主主题、人工标签与备注；Dashboard 返回 `classification_override`，前端持仓分类卡展示人工校正但保留自动权重拆解**
   7. **2026-06-01 持仓总览补齐总价值与总收益：官方口径按已就绪本金，盘中口径按已确认份额，新增收益率说明，避免只显示今日盈亏而缺少累计收益视角**
   8. **2026-06-01 持仓页信息架构已收敛为工作台导航：总览/记录/持仓/风险/流水/工具六块分区展示，默认不再一屏堆满全部模块；顶部快捷按钮明确“记一笔 / 看持仓 / 查风险 / 看流水”**
@@ -112,7 +141,7 @@
 
 ## 1. 海外数据源选型建议文档
 - 状态：`in_progress`
-- 当前阶段：**VIP / 付费 API 先不做；已完成官方资料初筛与短期固定海外源配置化，后续仅在确认采购/授权后接正式 provider**
+- 当前阶段：**付费官方 API 暂不做；已完成官方资料初筛与短期固定海外源配置化，后续仅在确认采购/授权后接正式 provider**
 - 产物：[`docs/overseas-data-source-selection.md`](docs/overseas-data-source-selection.md)
 - 目标：
   - 为 QDII / 海外股票后续的分时图、正式生产环境实时估值和更稳的行情链路预留选型结论
@@ -132,7 +161,7 @@
 | Intrinio | 长期企业级 | 强 | 强 | 有实时产品体系 | 中-高 | 高 | 更偏正式企业采购与授权清晰路线 | 长期备选 |
 
 - 当前已完成：
-  - [x] 明确本轮不接 VIP / 付费官方 API，只做 provider 边界和文档
+  - [x] 明确本轮不接付费官方 API，只做 provider 边界和文档
   - [x] 官方资料初筛：Polygon / Alpaca / Twelve Data / Intrinio 均具备可用于中期评估的实时或分时能力，但正式实时、SIP/全市场覆盖、再分发和缓存需要逐项确认授权
   - [x] QDII 固定海外行情源配置化：`quote.overseas_source` / `QUOTE_OVERSEAS_SOURCE`，默认 `tencent`，支持 `sina`
 - 后续评估点：
@@ -143,56 +172,6 @@
   - 是否便于给当前 `FundLive` 增加“正式海外源 + 当前固定海外源兜底”双路策略
   - 采购前必须确认 API key 管理、限流、缓存时长、页面展示授权和用户再分发边界
 
-## 2. VIP 真实数据源与模型链路
-- 状态：`pending`
-- 目标：
-  - 从“后端真实骨架 + 模板化内容”迈向真实投研能力
-- 待做：
-  - 接入市场数据源
-  - 接入政策信息源
-  - 接入财报信息源
-  - 接入新闻 / 宏观信息源
-  - 将当前模板化异步状态替换为真实任务调度 / worker
-  - 设计大模型上下文构建流程
-  - 生成带来源引用的结构化报告
-
-## 3. VIP 权益与额度规则落地
-- 状态：`pending`
-- 当前规则：
-  - 每交易日 2 次板块分析
-  - 每交易日 2 次组合分析
-- 待做：
-  - 失败任务是否扣次
-  - 同一输入命中缓存是否扣次
-  - 额度按哪个交易日重置
-  - 到期会员如何处理历史报告访问
-
-## 4. VIP 支付生产化与渠道扩展
-- 状态：`pending`
-- 当前情况：
-  - 已支持微信支付 `Native` 下单、查单与回调，开发环境保留预览开通后备入口
-- 待做：
-  - 明确正式商户资质与进件方案（普通商户 / 服务商 / 聚合支付）
-  - 评估支付宝或第三方聚合支付接入可行性
-  - 补齐退款 / 售后 / 关单策略
-  - 明确支付失败、订单过期和人工补单处理流程
-
-## 5. VIP 页面主题验收与定点修整
-- 状态：`in_progress`
-- 当前情况：
-  - `dark` 主题最稳定
-  - `cyber` 已完成两轮样式补强
-  - 非 VIP 页面（`/`、`/watchlist`、`/holdings`、`/issues`、`/announcements`）已完成主题收尾
-  - `classic` 在 VIP 页面仍需按页面验收式微调
-  - 2026-05-25 已完成 `classic` 首轮统一样式收口：VIP 主标题渐变、Hero 光斑、主 CTA、持仓/自选 VIP 入口按钮在浅色主题下改为更稳的金色/蓝色浅底样式，并修正 VIP 介绍页 / 开通页局部 JSX 缩进
-- 待做：
-  - 有浏览器截图或人工验收条件时，继续按页面复核 `classic`
-  - 如有需要继续微调 `cyber`
-  - 优先关注：
-    - `/vip`
-    - `/vip/checkout`
-    - `/vip/tasks`
-    - `/vip/reports/:id`
 
 ## 已完成事项归档提示
 - 持仓页前端体验增强（排序 / 筛选 / 未补齐过滤）、持仓校正、对账、组合体检、交易流水、批量导入与提醒系统均已在 2026-05-25 至 2026-06-01 期间完成第一轮或增强版收口。

@@ -16,7 +16,6 @@ type Config struct {
 	Database DatabaseConfig `yaml:"database" json:"database"`
 	Quote    QuoteConfig    `yaml:"quote" json:"quote"`
 	Auth     AuthConfig     `yaml:"auth" json:"auth"`
-	Payment  PaymentConfig  `yaml:"payment" json:"payment"`
 }
 
 type ServerConfig struct {
@@ -54,23 +53,6 @@ type AuthConfig struct {
 	MaxPasswordFailures      int    `yaml:"max_password_failures" json:"max_password_failures"`
 	MaxRegisterFailures      int    `yaml:"max_register_failures" json:"max_register_failures"`
 	MaxGoogleLoginFailures   int    `yaml:"max_google_login_failures" json:"max_google_login_failures"`
-}
-
-type PaymentConfig struct {
-	WeChatPay WeChatPayConfig `yaml:"wechat_pay" json:"wechat_pay"`
-}
-
-type WeChatPayConfig struct {
-	Enabled                     bool   `yaml:"enabled" json:"enabled"`
-	AppID                       string `yaml:"app_id" json:"app_id"`
-	MerchantID                  string `yaml:"merchant_id" json:"merchant_id"`
-	MerchantCertificateSerialNo string `yaml:"merchant_certificate_serial_no" json:"merchant_certificate_serial_no"`
-	MerchantPrivateKeyPath      string `yaml:"merchant_private_key_path" json:"merchant_private_key_path"`
-	APIV3Key                    string `yaml:"api_v3_key" json:"api_v3_key"`
-	NotifyURL                   string `yaml:"notify_url" json:"notify_url"`
-	PlatformCertificatePath     string `yaml:"platform_certificate_path" json:"platform_certificate_path"`
-	PlatformPublicKeyPath       string `yaml:"platform_public_key_path" json:"platform_public_key_path"`
-	PlatformSerialNo            string `yaml:"platform_serial_no" json:"platform_serial_no"`
 }
 
 var (

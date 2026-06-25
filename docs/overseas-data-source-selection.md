@@ -4,7 +4,7 @@
 
 ## 结论
 
-- **本阶段不接 VIP / 付费官方 API**：先把现有 QDII 固定海外行情源做成可配置边界，默认仍使用 `tencent`，保证现有行为不变。
+- **本阶段不接付费官方 API**：先把现有 QDII 固定海外行情源做成可配置边界，默认仍使用 `tencent`，保证现有行为不变。
 - **短期生产策略**：保留 `tencent` / `sina` 两个既有公开行情适配器，用 `quote.overseas_source` 或 `QUOTE_OVERSEAS_SOURCE` 切换；前端和估值链路继续把海外估值标记为 `overseas_fixed`，避免被用户级国内行情源偏好影响。
 - **中期正式接入首选**：优先评估 Polygon / Massive，原因是其股票 WebSocket 覆盖分钟聚合、逐笔成交、NBBO quote 等实时数据形态，最贴近 QDII 分时图和实时估值需求。
 - **中期备选**：Alpaca Market Data、Twelve Data。Alpaca 适合后续扩展券商 / Broker 生态；Twelve Data 适合快速接多市场统一格式。
@@ -55,7 +55,7 @@ QUOTE_OVERSEAS_SOURCE=sina go run ./cmd/server
 
 ## 本轮不做的事项
 
-- 不接 VIP 权益、额度、报告或支付链路。
+- 不接付费权益、额度、报告或支付链路。
 - 不引入新的行情 SDK 或第三方依赖。
 - 不存储官方数据源密钥。
 - 不把 AI / 大模型链路用于修复行情数据可信度。
