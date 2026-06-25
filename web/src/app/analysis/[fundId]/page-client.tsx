@@ -10,8 +10,10 @@ import { FundSectorCard } from '@/components/fund-sector-card'
 import { HoldingsTable } from '@/components/holdings-table'
 import { TargetETFHoldingsCard } from '@/components/target-etf-holdings-card'
 import { AnalysisEventTraceMeta } from '@/components/analysis-event-trace-meta'
+import { FundAnalysisDecisionList } from '@/components/fund-analysis-decision-points'
 import { useFundAnalysis, useFundDashboard, useFundHoldings, type Fund, type FundAnalysis, type FundAnalysisEventImpact, type FundAnalysisModuleScore, type FundClassificationOverride, type FundEstimate, type FundSectorSnapshot, type FundThemeSnapshot } from '@/hooks/use-fund-data'
 import { cn } from '@/lib/utils'
+import { buildFundAnalysisDecision, type FundAnalysisDecisionView } from '@/lib/fund-analysis-decision'
 import {
   confidenceLevelLabel,
   eventHorizonLabel,
@@ -68,6 +70,7 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
   const riskModules = (analysis?.module_scores || []).filter((item) => isRiskModule(item.code))
   const positiveModules = (analysis?.module_scores || []).filter((item) => !isRiskModule(item.code))
   const recommendationItems = buildRecommendationItems(analysis)
+  const decision = buildFundAnalysisDecision(analysis)
 
   return (
     <main className="min-h-[100dvh]">
@@ -101,6 +104,7 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
           <RevealSection>
             <AnalysisHeroVisual
               analysis={analysis}
+              decision={decision}
               isLoading={isAnalysisLoading}
               sectorName={sectorSnapshot?.primary_sector_name}
               themeName={themeSnapshot?.primary_theme_name}
@@ -110,6 +114,7 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
           <RevealSection delay={80}>
             <InsightStrip
               analysis={analysis}
+              decision={decision}
               sectorName={sectorSnapshot?.primary_sector_name}
               themeName={themeSnapshot?.primary_theme_name}
             />
@@ -123,14 +128,14 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
           </RevealSection>
 
           <RevealSection delay={120}>
-            <EvidenceFocusGrid analysis={analysis} isLoading={isAnalysisPending} />
+            <EvidenceFocusGrid analysis={analysis} decision={decision} isLoading={isAnalysisPending} />
           </RevealSection>
 
           <RevealSection delay={120}>
             <div className="space-y-5">
               <RealtimeEventRadar events={realtimeRadarEvents} isLoading={isAnalysisPending} />
               <EventSignalBoard events={timelineEvents} isLoading={isAnalysisPending} />
-              <RiskBreakdownCard analysis={analysis} riskModules={riskModules} isLoading={isAnalysisPending} />
+              <RiskBreakdownCard analysis={analysis} decision={decision} riskModules={riskModules} isLoading={isAnalysisPending} />
             </div>
           </RevealSection>
 
@@ -190,7 +195,7 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
           )}
 
           <RevealSection delay={120}>
-            <MethodCompactCard analysis={analysis} />
+            <MethodCompactCard analysis={analysis} decision={decision} />
           </RevealSection>
         </div>
       </div>
@@ -268,11 +273,13 @@ function dominantRecommendationItem(items: RecommendationItem[]) {
 
 function AnalysisHeroVisual({
   analysis,
+  decision,
   isLoading,
   sectorName,
   themeName,
 }: {
   analysis?: FundAnalysis
+  decision?: FundAnalysisDecisionView | null
   isLoading?: boolean
   sectorName?: string
   themeName?: string
@@ -287,96 +294,69 @@ function AnalysisHeroVisual({
     )
   }
 
+  const view = decision || buildFundAnalysisDecision(analysis)
   const recommendationItems = buildRecommendationItems(analysis)
   const dominant = dominantRecommendationItem(recommendationItems)
-  const primary = analysis.primary_evidence?.[0]
-  const counter = analysis.counter_evidence?.[0]
 
   return (
     <section className="glass overflow-hidden rounded-3xl p-5 sm:p-6">
       <div className="relative h-full">
-        <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full bg-cyan-500/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-16 left-16 h-40 w-40 rounded-full bg-fuchsia-500/20 blur-3xl" />
+        <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full bg-cyan-500/16 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-16 left-16 h-40 w-40 rounded-full bg-sky-500/12 blur-3xl" />
 
-        <div className="relative grid items-stretch gap-5 xl:grid-cols-[17rem_minmax(0,1fr)_19rem]">
+        <div className="relative grid items-stretch gap-5 xl:grid-cols-[17rem_minmax(0,1fr)_22rem]">
           <div className="flex min-h-[17rem] items-center justify-center">
             <AnimatedScoreGauge value={analysis.total_score} label="TOTAL SCORE" variant="hero" />
           </div>
 
           <div className="flex min-h-[17rem] flex-col justify-center">
             <div className="mb-3 flex flex-wrap gap-2">
-              <span className={cn('rounded-full border px-3 py-1 text-xs', dominant.tone)}>{dominant.label}</span>
+              <span className={cn('rounded-full border px-3 py-1 text-xs', dominant.tone)}>{view?.result.label || dominant.label}</span>
               <span className="rounded-full border border-[var(--card-border)] bg-[var(--input-bg)]/60 px-3 py-1 text-xs text-theme-secondary">
-                {analysis.analysis_basis}
+                {view?.basisLabel || analysis.analysis_basis}
               </span>
               <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-100">
-                {confidenceLevelLabel(analysis.confidence)}
+                {view?.confidenceLabel || confidenceLevelLabel(analysis.confidence)}
               </span>
             </div>
             <h1 className="text-2xl font-black leading-tight text-theme-primary md:text-3xl">
-              {analysis.summary}
+              {view?.result.summary || analysis.summary}
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-theme-secondary">
-              看板优先展示结论、主证据、风险限制和事件脉络，详细评分放在下方展开查看。
+              当前看板先回答结果，再把原因拆成主证据、风险限制和可追溯来源。
             </p>
 
-            <div className="mt-5 grid items-stretch gap-3 sm:grid-cols-2">
-              <HeroEvidencePill
-                title="主证据"
-                value={primary?.title || '主证据待补充'}
-                detail={primary?.summary || '当前证据链有限，建议结合持仓和行情继续观察。'}
-                icon={<Target className="h-4 w-4 text-cyan-200" />}
-              />
-              <HeroEvidencePill
-                title="风险限制"
-                value={counter?.title || '反方证据待补充'}
-                detail={counter?.summary || '暂未识别到明显反方证据，但仍需控制仓位风险。'}
-                icon={<ShieldAlert className="h-4 w-4 text-amber-200" />}
-                amber
+            <div className="mt-5">
+              <FundAnalysisDecisionList
+                points={view?.mainReasons || []}
+                emptyText="主原因仍在生成，先按弱观察处理。"
+                compact
               />
             </div>
           </div>
 
           <div className="flex min-h-[17rem] flex-col justify-center rounded-[2rem] border border-[var(--card-border)] bg-[var(--card-bg)]/40 p-5">
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-theme-primary">
-              <Gauge className="h-4 w-4 text-fuchsia-200" />
-              结构定位
+              <ShieldAlert className="h-4 w-4 text-amber-200" />
+              风险与口径
             </div>
-            <div className="space-y-3">
-              <MetaRow label="风险等级" value={riskLevelLabel(analysis.risk_level)} />
+            <div className="space-y-3 text-sm">
+              <MetaRow label="风险等级" value={view?.riskLabel || riskLevelLabel(analysis.risk_level)} />
               <MetaRow label="主行业" value={sectorName || '--'} />
               <MetaRow label="主主题" value={themeName || '--'} />
-              <MetaRow label="披露期" value={analysis.latest_holding_period || '--'} />
+              <MetaRow label="披露期" value={view?.holdingPeriodLabel || analysis.latest_holding_period || '--'} />
+            </div>
+            <div className="mt-4">
+              <FundAnalysisDecisionList
+                points={(view?.riskReasons || []).slice(0, 2)}
+                emptyText="当前没有明显反方证据。"
+                compact
+              />
             </div>
           </div>
         </div>
       </div>
     </section>
-  )
-}
-
-function HeroEvidencePill({
-  icon,
-  title,
-  value,
-  detail,
-  amber = false,
-}: {
-  icon: ReactNode
-  title: string
-  value: string
-  detail: string
-  amber?: boolean
-}) {
-  return (
-    <div className={cn('flex h-full min-h-[8.5rem] flex-col justify-center rounded-2xl border p-4', amber ? 'border-amber-500/20 bg-amber-500/10' : 'border-cyan-500/20 bg-cyan-500/10')}>
-      <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-theme-primary">
-        {icon}
-        {title}
-      </div>
-      <div className="text-sm font-semibold text-theme-primary">{value}</div>
-      <div className="mt-2 line-clamp-3 text-xs leading-5 text-theme-secondary">{detail}</div>
-    </div>
   )
 }
 
@@ -391,26 +371,29 @@ function QuickStat({ label, value }: { label: string; value: string }) {
 
 function InsightStrip({
   analysis,
+  decision,
   sectorName,
   themeName,
 }: {
   analysis?: FundAnalysis
+  decision?: FundAnalysisDecisionView | null
   sectorName?: string
   themeName?: string
 }) {
   const dominant = dominantRecommendationItem(buildRecommendationItems(analysis))
+  const view = decision || buildFundAnalysisDecision(analysis)
   const facts = [
     {
       icon: <BarChart3 className="h-4 w-4 text-cyan-200" />,
       label: '当前方向',
-      value: analysis ? dominant.label : '--',
-      detail: analysis ? `${formatAnalysisPercent(dominant.value)} · 阈值规则口径` : '等待量化结果',
+      value: view?.result.label || (analysis ? dominant.label : '--'),
+      detail: view ? `${view.result.percentLabel}，规则阈值口径` : '等待量化结果',
     },
     {
       icon: <ShieldCheck className="h-4 w-4 text-emerald-200" />,
       label: '可信覆盖',
-      value: confidenceLevelLabel(analysis?.confidence),
-      detail: analysis?.latest_holding_period ? `持仓披露：${analysis.latest_holding_period}` : '持仓披露待补齐',
+      value: view?.confidenceLabel || confidenceLevelLabel(analysis?.confidence),
+      detail: view?.holdingPeriodLabel ? `持仓披露：${view.holdingPeriodLabel}` : '持仓披露待补齐',
     },
     {
       icon: <Layers3 className="h-4 w-4 text-fuchsia-200" />,
@@ -421,8 +404,8 @@ function InsightStrip({
     {
       icon: <FileText className="h-4 w-4 text-amber-200" />,
       label: '证据数量',
-      value: `${(analysis?.primary_evidence || []).length} / ${(analysis?.counter_evidence || []).length}`,
-      detail: '主证据 / 反方限制，避免重复堆叠规则文本',
+      value: view?.evidenceCountLabel || `${(analysis?.primary_evidence || []).length} / ${(analysis?.counter_evidence || []).length}`,
+      detail: view?.topSignal?.title || '主证据 / 反方限制，避免重复堆叠规则文本',
     },
   ]
 
@@ -525,28 +508,33 @@ function DataContextPanel({
   )
 }
 
-function MethodCompactCard({ analysis }: { analysis?: FundAnalysis }) {
-  const deductions = analysis?.confidence_deductions || []
-  const limitations = analysis?.ai_explanation?.limitations || []
-  const mergedLimits = [...deductions, ...limitations].slice(0, 4)
+function MethodCompactCard({
+  analysis,
+  decision,
+}: {
+  analysis?: FundAnalysis
+  decision?: FundAnalysisDecisionView | null
+}) {
+  const view = decision || buildFundAnalysisDecision(analysis)
+  const notes = view?.methodNotes || []
 
   return (
     <section className="glass rounded-3xl p-5 md:p-6">
       <SectionHeading
         icon={<FileText className="h-4 w-4 text-amber-200" />}
         title="方法与限制"
-        description="保留必要边界说明，避免和上方证据、事件、风险模块重复。"
+        description="只保留口径边界，避免重复上方风险与事件。"
       />
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm leading-6 text-theme-secondary">
-          量化看板会统一估值、持仓、分类与事件快照，再输出观察分布、模块分与证据链；解释说明不会改写评分或风险等级。
+          量化看板统一估值、持仓、分类与事件快照；解释层只增强可读性，不改评分或风险等级。
         </div>
         <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-          {mergedLimits.length === 0 ? (
+          {notes.length === 0 ? (
             <EmptyInline text="当前没有额外可信度扣分或限制说明。" />
           ) : (
             <div className="space-y-2">
-              {mergedLimits.map((item, index) => (
+              {notes.map((item, index) => (
                 <div key={`${item}-${index}`} className="flex gap-3 text-sm leading-6 text-theme-secondary">
                   <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0 text-amber-200" />
                   <span>{item}</span>
@@ -815,15 +803,33 @@ function ModuleRadarPanel({ modules, isLoading = false }: { modules: FundAnalysi
   )
 }
 
-function EvidenceFocusGrid({ analysis, isLoading = false }: { analysis?: FundAnalysis; isLoading?: boolean }) {
-  const primary = analysis?.primary_evidence || []
-  const counter = analysis?.counter_evidence || []
+function EvidenceFocusGrid({
+  analysis,
+  decision,
+  isLoading = false,
+}: {
+  analysis?: FundAnalysis
+  decision?: FundAnalysisDecisionView | null
+  isLoading?: boolean
+}) {
+  const view = decision || buildFundAnalysisDecision(analysis)
   const ai = analysis?.ai_explanation
 
   return (
     <section className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_20rem]">
-      <EvidenceColumn title="主证据" icon={<Target className="h-4 w-4 text-cyan-200" />} items={primary} isLoading={isLoading} />
-      <EvidenceColumn title="反方证据 / 限制" icon={<ShieldAlert className="h-4 w-4 text-amber-200" />} items={counter} isLoading={isLoading} amber />
+      <DecisionEvidenceColumn
+        title="为什么是这个结果"
+        icon={<Target className="h-4 w-4 text-cyan-200" />}
+        points={view?.mainReasons || []}
+        isLoading={isLoading}
+      />
+      <DecisionEvidenceColumn
+        title="反方证据与限制"
+        icon={<ShieldAlert className="h-4 w-4 text-amber-200" />}
+        points={view?.riskReasons || []}
+        isLoading={isLoading}
+        amber
+      />
       <div className="glass flex h-full min-h-[18rem] flex-col rounded-3xl p-5 md:p-6">
         <SectionHeading
           icon={<Sparkles className="h-4 w-4 text-fuchsia-200" />}
@@ -859,39 +865,34 @@ function EvidenceFocusGrid({ analysis, isLoading = false }: { analysis?: FundAna
   )
 }
 
-function EvidenceColumn({
+function DecisionEvidenceColumn({
   title,
   icon,
-  items,
+  points,
   isLoading = false,
   amber = false,
 }: {
   title: string
   icon: ReactNode
-  items: NonNullable<FundAnalysis['primary_evidence']>
+  points: FundAnalysisDecisionView['mainReasons']
   isLoading?: boolean
   amber?: boolean
 }) {
   return (
     <div className={cn('glass flex h-full min-h-[18rem] flex-col rounded-3xl p-5 md:p-6', amber ? 'bg-amber-500/5' : 'bg-cyan-500/5')}>
       <SectionHeading icon={icon} title={title} />
-      <div className={cn('mt-4 flex flex-1 flex-col gap-3', items.length === 0 && 'justify-center')}>
-        {items.length === 0 && isLoading ? (
+      <div className={cn('mt-4 flex flex-1 flex-col gap-3', points.length === 0 && 'justify-center')}>
+        {points.length === 0 && isLoading ? (
           <EvidenceSkeletonList amber={amber} />
-        ) : items.length === 0 ? (
+        ) : points.length === 0 ? (
           <EmptyPanel code={amber ? 'COUNTER_EVIDENCE_EMPTY' : 'PRIMARY_EVIDENCE_EMPTY'} text={`${title}未返回`} />
-        ) : items.slice(0, 3).map((item, index) => (
-          <div key={`${item.code}-${index}`} className={cn('min-h-[7.5rem] rounded-2xl border p-4 transition-transform duration-300 hover:-translate-y-0.5', amber ? 'border-amber-500/20 bg-amber-500/10' : 'border-cyan-500/20 bg-cyan-500/10')}>
-            <div className="text-sm font-semibold text-theme-primary">{item.title}</div>
-            <div className="mt-2 line-clamp-3 text-xs leading-5 text-theme-secondary">{item.summary}</div>
-            <AnalysisEventTraceMeta trace={item} dense />
-            <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-theme-muted">
-              {item.source_scope && <span>{item.source_scope}</span>}
-              {item.strength && <span>强度：{eventStrengthLabel(item.strength)}</span>}
-              {item.horizon && <span>{eventHorizonLabel(item.horizon)}</span>}
-            </div>
-          </div>
-        ))}
+        ) : (
+          <FundAnalysisDecisionList
+            points={points}
+            emptyText={`${title}未返回`}
+            compact
+          />
+        )}
       </div>
     </div>
   )
@@ -1150,32 +1151,48 @@ function QuarterlyDiffCard({ events }: { events: FundAnalysisEventImpact[] }) {
 
 function RiskBreakdownCard({
   analysis,
+  decision,
   riskModules,
   isLoading = false,
 }: {
   analysis?: FundAnalysis
+  decision?: FundAnalysisDecisionView | null
   riskModules: FundAnalysisModuleScore[]
   isLoading?: boolean
 }) {
+  const view = decision || buildFundAnalysisDecision(analysis)
+
   return (
     <section className="glass flex h-full flex-col rounded-3xl p-5 md:p-6">
       <SectionHeading
         icon={<ShieldAlert className="h-4 w-4 text-amber-200" />}
         title="风险拆解"
-        description="合并风险模块与 warning，减少重复风险文案。"
+        description="先看统一风险原因，再展开风险模块分。"
       />
 
       <div className="mt-4 space-y-4">
         <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <div className="text-[11px] font-semibold tracking-[0.22em] text-amber-100/80">CURRENT RISK</div>
-              <div className="mt-2 text-3xl font-black text-theme-primary">{riskLevelLabel(analysis?.risk_level)}</div>
+              <div className="text-[11px] font-semibold tracking-[0.22em] text-amber-100/80">RISK LEVEL</div>
+              <div className="mt-2 text-3xl font-black text-theme-primary">{view?.riskLabel || riskLevelLabel(analysis?.risk_level)}</div>
             </div>
             <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-4 py-3 text-sm text-theme-secondary">
-              总分 <span className="ml-2 text-lg font-bold text-theme-primary">{formatAnalysisScore(analysis?.total_score)}</span>
+              总分 <span className="ml-2 text-lg font-bold text-theme-primary">{view?.scoreLabel || formatAnalysisScore(analysis?.total_score)}</span>
             </div>
           </div>
+        </div>
+
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-4">
+          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-theme-primary">
+            <AlertTriangle className="h-4 w-4 text-amber-200" />
+            风险原因链
+          </div>
+          <FundAnalysisDecisionList
+            points={view?.riskReasons || []}
+            emptyText={isLoading ? '风险原因正在生成。' : '当前没有明显反方证据。'}
+            compact
+          />
         </div>
 
         <div className={cn('grid gap-3 md:grid-cols-2', riskModules.length === 0 && 'block')}>
@@ -1196,25 +1213,7 @@ function RiskBreakdownCard({
               )}
             </div>
           ))}
-
         </div>
-
-        {(analysis?.warnings || []).length > 0 && (
-          <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4">
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-theme-primary">
-              <AlertTriangle className="h-4 w-4 text-amber-200" />
-              重点风险提示
-            </div>
-            <div className="space-y-2">
-              {analysis?.warnings.map((warning, index) => (
-                <div key={`${warning}-${index}`} className="flex gap-3 rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/30 px-3 py-2 text-sm leading-6 text-theme-secondary">
-                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300" />
-                  <span>{warning}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </section>
   )

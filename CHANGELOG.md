@@ -59,6 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
 ### Changed
+- **量化模块结论与原因展示收口**
+  - 新增统一量化决策 ViewModel，将 summary、主证据、反方证据、事件影响、模块分和可信度限制收敛为“当前结果 / 主要原因 / 风险限制 / 方法提示”四类展示数据。
+  - 首页量化摘要卡改为先展示结论、主方向、风险等级和证据计数，再用统一原因卡片解释“为什么是这个结论”和“需要注意什么”，减少规则文案与事件文案混排。
+  - `/analysis/[fundId]` 首屏和证据区改为复用同一套原因链，按“结果、原因、风险、来源”组织内容，保留实时事件雷达、建议分布和六维模块。
+  - 排行榜与列表中的量化提示改为读取统一 top signal，避免只取第一条事件导致原因与主结论不一致。
+
 - **首页分时图首帧尺寸稳定性修复**
   - `IntradayChart` 为 Recharts `ResponsiveContainer` 增加首帧正尺寸，避免 Playwright / 首次挂载时出现 `width(-1) and height(-1)` 控制台 warning。
 

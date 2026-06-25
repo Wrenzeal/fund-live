@@ -2,35 +2,25 @@
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Gauge, ShieldAlert, Sparkles, TrendingUp } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { ArrowRight, ShieldAlert, Sparkles, Target } from 'lucide-react'
+import { AnimatedScoreGauge } from '@/components/animated-score-gauge'
+import { AnalysisEventTraceMeta } from '@/components/analysis-event-trace-meta'
+import { FundAnalysisDecisionList } from '@/components/fund-analysis-decision-points'
+import { LoadingSpinner } from '@/components/loading-indicator'
+import type { FundAnalysis } from '@/hooks/use-fund-data'
+import { buildFundAnalysisDecision, type FundAnalysisDecisionPoint } from '@/lib/fund-analysis-decision'
 import {
-  confidenceLevelLabel,
-  dominantAnalysisRecommendation,
   eventImpactTone,
   formatAnalysisPercent,
   parseAnalysisNumber,
-  riskLevelLabel,
   type FundAnalysisRecommendationCode,
 } from '@/lib/fund-analysis-display'
-import type { FundAnalysis } from '@/hooks/use-fund-data'
-import { AnimatedScoreGauge } from '@/components/animated-score-gauge'
-import { LoadingSpinner } from '@/components/loading-indicator'
-import { AnalysisEventTraceMeta } from '@/components/analysis-event-trace-meta'
+import { cn } from '@/lib/utils'
 
 interface FundAnalysisCardProps {
   analysis?: FundAnalysis
   fundId?: string
   isLoading?: boolean
-}
-
-function confidenceLabel(level?: string) {
-  return confidenceLevelLabel(level, {
-    high: '可信度较高',
-    medium: '可信度一般',
-    low: '可信度有限',
-    unknown: '可信度未知',
-  })
 }
 
 function recommendationTone(code: FundAnalysisRecommendationCode) {
@@ -41,7 +31,6 @@ function recommendationTone(code: FundAnalysisRecommendationCode) {
         color: 'text-rose-100',
         soft: 'border-rose-500/20 bg-rose-500/10',
         bar: 'from-rose-500 via-fuchsia-500 to-pink-500',
-        dot: 'bg-rose-300',
       }
     case 'decrease':
       return {
@@ -49,7 +38,6 @@ function recommendationTone(code: FundAnalysisRecommendationCode) {
         color: 'text-emerald-100',
         soft: 'border-emerald-500/20 bg-emerald-500/10',
         bar: 'from-emerald-500 via-teal-500 to-cyan-500',
-        dot: 'bg-emerald-300',
       }
     default:
       return {
@@ -57,7 +45,6 @@ function recommendationTone(code: FundAnalysisRecommendationCode) {
         color: 'text-slate-100',
         soft: 'border-slate-500/20 bg-slate-500/10',
         bar: 'from-slate-500 via-slate-400 to-cyan-400',
-        dot: 'bg-slate-300',
       }
   }
 }
@@ -84,6 +71,11 @@ export function FundAnalysisCard({ analysis, fundId, isLoading = false }: FundAn
     )
   }
 
+  const decision = buildFundAnalysisDecision(analysis)
+  if (!decision) {
+    return null
+  }
+
   const increase = parseAnalysisNumber(analysis.increase_percent)
   const hold = parseAnalysisNumber(analysis.hold_percent)
   const decrease = parseAnalysisNumber(analysis.decrease_percent)
@@ -92,86 +84,76 @@ export function FundAnalysisCard({ analysis, fundId, isLoading = false }: FundAn
     { code: 'hold' as const, value: hold },
     { code: 'decrease' as const, value: decrease },
   ]
-  const dominantTone = recommendationTone(dominantAnalysisRecommendation(analysis))
-  const primaryPoints = [
-    ...(analysis.primary_evidence || []).map((item) => item.summary || item.title),
-    ...(analysis.reasons || []),
-  ].filter(Boolean).slice(0, 2)
-  const riskPoints = [
-    ...(analysis.counter_evidence || []).map((item) => item.summary || item.title),
-    ...(analysis.warnings || []),
-  ].filter(Boolean).slice(0, 2)
+  const dominantTone = recommendationTone(decision.result.code)
   const radarEvents = buildSummaryRadarEvents(analysis.event_impacts || [])
 
   return (
     <section className="glass rounded-3xl p-5 sm:p-6">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-stretch">
-        <div className="flex min-h-[22rem] flex-1 flex-col justify-center rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/40 p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="rounded-2xl bg-fuchsia-500/15 p-3">
-                <Gauge className="h-5 w-5 text-fuchsia-200" />
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-theme-primary">量化观察摘要</div>
-                <div className="mt-1 text-xs leading-5 text-theme-muted">
-                  只展示核心结论；完整证据、规则和事件拆解请进入量化看板。
-                </div>
-              </div>
-            </div>
-            <span className={cn('shrink-0 rounded-full border px-3 py-1 text-xs', dominantTone.soft, dominantTone.color)}>
-              {dominantTone.label}
-            </span>
-          </div>
-
-          <div className="mt-5 grid gap-5 md:grid-cols-[9rem_minmax(0,1fr)] md:items-center">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(23rem,0.9fr)]">
+        <div className="relative overflow-hidden rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/42 p-5">
+          <div className="pointer-events-none absolute -right-16 -top-20 h-44 w-44 rounded-full bg-cyan-500/12 blur-3xl" />
+          <div className="relative grid gap-5 md:grid-cols-[9rem_minmax(0,1fr)] md:items-center">
             <AnimatedScoreGauge value={analysis.total_score} label="SCORE" variant="summary" />
 
-            <div>
-              <div className="text-base font-semibold text-theme-primary">{analysis.summary}</div>
-              <div className="mt-3 flex flex-wrap gap-2">
+            <div className="min-w-0">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className={cn('rounded-full border px-3 py-1 text-xs', dominantTone.soft, dominantTone.color)}>
+                  {decision.result.label}
+                </span>
                 <span className="rounded-full border border-[var(--card-border)] bg-[var(--input-bg)]/60 px-3 py-1 text-xs text-theme-secondary">
-                  {analysis.analysis_basis || '分析口径待定'}
+                  {decision.basisLabel}
                 </span>
                 <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-100">
-                  {confidenceLabel(analysis.confidence)}
-                </span>
-                <span className={cn('rounded-full border px-3 py-1 text-xs', analysis.risk_level === 'high' ? 'border-rose-500/20 bg-rose-500/10 text-rose-100' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100')}>
-                  {riskLevelLabel(analysis.risk_level, '风险待判定')}
+                  {decision.confidenceLabel}
                 </span>
               </div>
 
-              <div className="mt-5 space-y-2">
-                {recommendationItems.map((item) => {
-                  const tone = recommendationTone(item.code)
-                  return (
-                    <div key={item.code} className="grid grid-cols-[5.5rem_minmax(0,1fr)_3.5rem] items-center gap-3 text-xs">
-                      <span className="text-theme-muted">{tone.label}</span>
-                      <div className="h-2 overflow-hidden rounded-full bg-[var(--input-bg)]">
-                        <div className={cn('h-full rounded-full bg-gradient-to-r transition-all duration-700', tone.bar)} style={{ width: `${Math.max(item.value, 0)}%` }} />
-                      </div>
-                      <span className="text-right font-medium text-theme-primary">{formatAnalysisPercent(item.value)}</span>
-                    </div>
-                  )
-                })}
+              <h2 className="text-xl font-black leading-tight text-theme-primary md:text-2xl">
+                {decision.result.summary}
+              </h2>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-theme-secondary">
+                先给结论，再把原因压缩成主证据、风险限制和数据口径，避免规则文案重复堆叠。
+              </p>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <DecisionMetric label="主方向" value={`${decision.result.label} ${decision.result.percentLabel}`} />
+                <DecisionMetric label="风险" value={decision.riskLabel} />
+                <DecisionMetric label="证据" value={decision.evidenceCountLabel} />
               </div>
             </div>
+          </div>
+
+          <div className="mt-5 grid gap-2 md:grid-cols-3">
+            {recommendationItems.map((item) => {
+              const tone = recommendationTone(item.code)
+              return (
+                <div key={item.code} className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-3 py-3">
+                  <div className="mb-2 flex items-center justify-between gap-2 text-xs">
+                    <span className="text-theme-muted">{tone.label}</span>
+                    <span className="font-semibold text-theme-primary">{formatAnalysisPercent(item.value)}</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-[var(--input-bg)]">
+                    <div className={cn('h-full rounded-full bg-gradient-to-r transition-all duration-700', tone.bar)} style={{ width: `${Math.max(item.value, 0)}%` }} />
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
 
-        <div className="grid gap-4 lg:w-[22rem] lg:grid-rows-2">
-          <SummaryMiniPanel
-            icon={<TrendingUp className="h-4 w-4 text-cyan-200" />}
-            title="看这两点"
-            items={primaryPoints}
+        <div className="grid gap-4">
+          <NarrativePanel
+            icon={<Target className="h-4 w-4 text-cyan-200" />}
+            title="为什么是这个结论"
+            points={decision.mainReasons}
             emptyText="当前主证据不足，建议按弱观察处理。"
           />
-          <SummaryMiniPanel
+          <NarrativePanel
             icon={<ShieldAlert className="h-4 w-4 text-amber-200" />}
-            title="主要限制"
-            items={riskPoints}
+            title="需要注意什么"
+            points={decision.riskReasons.slice(0, 2)}
             emptyText="暂未识别到明显反方证据。"
-            amber
+            warning
           />
         </div>
       </div>
@@ -183,18 +165,51 @@ export function FundAnalysisCard({ analysis, fundId, isLoading = false }: FundAn
           <Link
             href={`/analysis/${fundId}`}
             className={cn(
-              'group inline-flex h-full min-h-[5.5rem] items-center justify-center gap-2 rounded-2xl border border-fuchsia-500/25',
-              'bg-gradient-to-r from-fuchsia-500/15 to-cyan-500/15 px-5 py-3 text-sm font-semibold text-theme-primary',
-              'transition-all duration-300 hover:-translate-y-0.5 hover:border-fuchsia-400/45 hover:shadow-[0_16px_34px_rgba(34,211,238,0.12)]'
+              'group inline-flex h-full min-h-[5.5rem] items-center justify-center gap-2 rounded-2xl border border-cyan-500/25',
+              'bg-cyan-500/10 px-5 py-3 text-sm font-semibold text-theme-primary',
+              'transition-all duration-300 hover:-translate-y-0.5 hover:border-cyan-300/45 hover:shadow-[0_16px_34px_rgba(34,211,238,0.12)]'
             )}
           >
-            <Sparkles className="h-4 w-4 text-fuchsia-200" />
+            <Sparkles className="h-4 w-4 text-cyan-200" />
             查看完整量化看板
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </Link>
         )}
       </div>
     </section>
+  )
+}
+
+function DecisionMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-3 py-3">
+      <div className="text-[11px] text-theme-muted">{label}</div>
+      <div className="mt-1 truncate text-sm font-semibold text-theme-primary">{value}</div>
+    </div>
+  )
+}
+
+function NarrativePanel({
+  icon,
+  title,
+  points,
+  emptyText,
+  warning = false,
+}: {
+  icon: ReactNode
+  title: string
+  points: FundAnalysisDecisionPoint[]
+  emptyText: string
+  warning?: boolean
+}) {
+  return (
+    <div className={cn('rounded-3xl border p-4', warning ? 'border-amber-500/18 bg-amber-500/5' : 'border-cyan-500/18 bg-cyan-500/5')}>
+      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-theme-primary">
+        {icon}
+        {title}
+      </div>
+      <FundAnalysisDecisionList points={points} emptyText={emptyText} compact />
+    </div>
   )
 }
 
@@ -262,37 +277,4 @@ function eventRadarScopeLabel(scope?: string) {
     default:
       return '事件'
   }
-}
-
-function SummaryMiniPanel({
-  icon,
-  title,
-  items,
-  emptyText,
-  amber = false,
-}: {
-  icon: ReactNode
-  title: string
-  items: string[]
-  emptyText: string
-  amber?: boolean
-}) {
-  return (
-    <div className={cn('flex h-full min-h-[10rem] flex-col rounded-3xl border p-4', amber ? 'border-amber-500/20 bg-amber-500/10' : 'border-cyan-500/20 bg-cyan-500/10')}>
-      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-theme-primary">
-        {icon}
-        {title}
-      </div>
-      <div className="flex flex-1 flex-col justify-center gap-2">
-        {items.length === 0 ? (
-          <div className="text-xs leading-5 text-theme-muted">{emptyText}</div>
-        ) : items.map((item, index) => (
-          <div key={`${title}-${index}`} className="flex gap-2 text-xs leading-5 text-theme-secondary">
-            <span className={cn('mt-2 h-1.5 w-1.5 shrink-0 rounded-full', amber ? 'bg-amber-200' : 'bg-cyan-200')} />
-            <span>{compactText(item)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
 }
