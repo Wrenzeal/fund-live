@@ -32,23 +32,40 @@ const SAMPLE_FUNDS = [
 
 export function FundSearch({ onSelect, currentFundId, className }: FundSearchProps) {
     const [inputValue, setInputValue] = useState('')
-    const [isOpen, setIsOpen] = useState(false)
-    const [overlayEntered, setOverlayEntered] = useState(false)
+    const [isMounted, setIsMounted] = useState(false)
+    const [overlayVisible, setOverlayVisible] = useState(false)
     const searchTitleId = useId()
     const expandedInputRef = useRef<HTMLInputElement | null>(null)
+    const closeTimerRef = useRef<number | null>(null)
     const { recentFunds, quickSelectFunds } = useSearchPreferences()
 
     const debouncedQuery = useDebounce(inputValue, 300)
     const { results, isLoading } = useFundSearch(debouncedQuery)
 
     const openSearch = useCallback(() => {
-        setOverlayEntered(false)
-        setIsOpen(true)
+        if (closeTimerRef.current !== null) {
+            window.clearTimeout(closeTimerRef.current)
+            closeTimerRef.current = null
+        }
+
+        setIsMounted(true)
+        window.requestAnimationFrame(() => {
+            setOverlayVisible(true)
+            expandedInputRef.current?.focus({ preventScroll: true })
+        })
     }, [])
 
     const closeSearch = useCallback(() => {
-        setOverlayEntered(false)
-        setIsOpen(false)
+        setOverlayVisible(false)
+
+        if (closeTimerRef.current !== null) {
+            window.clearTimeout(closeTimerRef.current)
+        }
+
+        closeTimerRef.current = window.setTimeout(() => {
+            setIsMounted(false)
+            closeTimerRef.current = null
+        }, 260)
     }, [])
 
     const handleSelect = useCallback((fundId: string) => {
@@ -74,26 +91,20 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
     }
 
     useEffect(() => {
-        if (!isOpen) {
+        if (!isMounted) {
             return
         }
 
         const previousOverflow = document.body.style.overflow
         document.body.style.overflow = 'hidden'
 
-        const frame = window.requestAnimationFrame(() => {
-            setOverlayEntered(true)
-            expandedInputRef.current?.focus({ preventScroll: true })
-        })
-
         return () => {
-            window.cancelAnimationFrame(frame)
             document.body.style.overflow = previousOverflow
         }
-    }, [isOpen])
+    }, [isMounted])
 
     useEffect(() => {
-        if (!isOpen) {
+        if (!isMounted) {
             return
         }
 
@@ -105,59 +116,43 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
 
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [closeSearch, isOpen])
+    }, [closeSearch, isMounted])
+
+    useEffect(() => {
+        return () => {
+            if (closeTimerRef.current !== null) {
+                window.clearTimeout(closeTimerRef.current)
+            }
+        }
+    }, [])
 
     const showResults = results.length > 0
     const showEmpty = Boolean(inputValue && debouncedQuery && !isLoading && !showResults)
     const showDiscovery = !showResults && !showEmpty
 
     return (
-        <div className={cn('relative', className)}>
-            <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-muted" />
-                <input
-                    type="text"
-                    value={inputValue}
-                    onChange={(e) => {
-                        setInputValue(e.target.value)
-                        openSearch()
-                    }}
-                    onFocus={openSearch}
-                    placeholder="搜索基金代码或名称..."
-                    className={cn(
-                        'w-full pl-12 pr-12 py-3 rounded-xl',
-                        'search-input border border-[var(--input-border)]',
-                        'text-theme-primary placeholder:text-theme-muted',
-                        'focus:outline-none focus:ring-2 focus:ring-[var(--input-focus)] focus:border-transparent',
-                        'transition-all duration-200 hover:border-[var(--input-focus)]',
-                        isOpen && 'ring-2 ring-[var(--input-focus)]/35'
-                    )}
-                />
-                {inputValue && !isLoading && (
-                    <button
-                        onClick={handleClear}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-theme-muted hover:text-theme-primary transition-colors"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
+        <div className={cn('relative inline-flex', className)}>
+            <button
+                type="button"
+                onClick={openSearch}
+                className={cn(
+                    'fund-search-trigger group inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border',
+                    'transition-all duration-300 ease-out hover:-translate-y-0.5 active:scale-[0.97]',
+                    overlayVisible && 'ring-2 ring-[var(--input-focus)]/35'
                 )}
-                {isLoading && (
-                    <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-cyan-400 animate-spin" />
-                )}
-            </div>
+                aria-label="搜索基金代码或名称"
+                title="搜索基金"
+            >
+                <Search className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" />
+            </button>
 
-            {isOpen && typeof document !== 'undefined' && createPortal(
+            {isMounted && typeof document !== 'undefined' && createPortal(
                 <>
                     <div
                         className={cn(
-                            'fixed inset-0 z-[80] transition-opacity duration-300',
-                            overlayEntered ? 'opacity-100' : 'opacity-0'
+                            'search-overlay-backdrop fixed inset-0 z-[80] transition-all duration-300 ease-out',
+                            overlayVisible ? 'opacity-100' : 'opacity-0'
                         )}
-                        style={{
-                            background: 'color-mix(in srgb, var(--background) 72%, rgba(2, 8, 23, 0.62))',
-                            backdropFilter: 'blur(9px)',
-                            WebkitBackdropFilter: 'blur(9px)',
-                        }}
                         onClick={closeSearch}
                     />
 
@@ -167,9 +162,9 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
                         aria-labelledby={searchTitleId}
                         className={cn(
                             'fixed left-3 right-3 top-4 z-[90] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-[28px] border border-[var(--card-border)]',
-                            'search-expanded-panel shadow-[0_32px_90px_rgba(2,8,23,0.42)] transition-all duration-300 ease-out',
+                            'search-expanded-panel shadow-[0_32px_90px_rgba(2,8,23,0.42)] transition-all duration-300 ease-[cubic-bezier(.2,.8,.2,1)]',
                             'sm:left-1/2 sm:right-auto sm:top-20 sm:w-[min(48rem,calc(100vw-2rem))] sm:-translate-x-1/2',
-                            overlayEntered ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-5 scale-[0.97] opacity-0'
+                            overlayVisible ? 'translate-y-0 scale-100 opacity-100 blur-0' : 'translate-y-4 scale-[0.975] opacity-0 blur-[2px]'
                         )}
                     >
                         <div className="border-b border-[var(--card-border)] px-4 py-4 sm:px-5">

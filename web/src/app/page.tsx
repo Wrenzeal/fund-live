@@ -243,7 +243,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
             <BrandMark subtitle="FundLive - 实时基金估值" />
 
             {/* Search */}
-            <div className="hidden min-w-[18rem] max-w-2xl flex-[1.4] md:block">
+            <div className="hidden shrink-0 md:block">
               <FundSearchWrapper onSelect={handleFundSelect} currentFundId={currentFundId} />
             </div>
 
@@ -300,7 +300,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
           </div>
 
           {/* Mobile search */}
-          <div className="mt-4 md:hidden">
+          <div className="mt-4 flex justify-end md:hidden">
             <FundSearchWrapper onSelect={handleFundSelect} currentFundId={currentFundId} />
           </div>
         </div>

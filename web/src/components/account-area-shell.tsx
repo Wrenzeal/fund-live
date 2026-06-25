@@ -105,7 +105,7 @@ export function AccountAreaShell({
               </div>
             </div>
 
-            <div className="hidden max-w-md flex-1 md:block">
+            <div className="hidden shrink-0 md:block">
               <HeaderFundSearch />
             </div>
 
@@ -130,7 +130,7 @@ export function AccountAreaShell({
               "md:mt-4 md:max-h-none md:opacity-100",
             )}
           >
-            <div className="md:hidden">
+            <div className="flex justify-end md:hidden">
               <HeaderFundSearch />
             </div>
 

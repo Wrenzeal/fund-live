@@ -61,7 +61,7 @@ export function AuthShell({
               <BrandMark subtitle="账户中心" href={null} />
             </div>
 
-            <div className="hidden max-w-md flex-1 md:block">
+            <div className="hidden shrink-0 md:block">
               <HeaderFundSearch />
             </div>
 
@@ -74,7 +74,7 @@ export function AuthShell({
             />
           </div>
 
-          <div className="mt-4 md:hidden">
+          <div className="mt-4 flex justify-end md:hidden">
             <HeaderFundSearch />
           </div>
         </div>
