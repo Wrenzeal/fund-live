@@ -88,12 +88,21 @@ export function FundAnalysisCard({ analysis, fundId, isLoading = false }: FundAn
   const radarEvents = buildSummaryRadarEvents(analysis.event_impacts || [])
 
   return (
-    <section className="glass rounded-3xl p-5 sm:p-6">
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(23rem,0.9fr)]">
+    <section className="glass scroll-mt-36 rounded-3xl p-5 sm:p-6 md:scroll-mt-24">
+      <div className="space-y-5">
         <div className="relative overflow-hidden rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/42 p-5">
           <div className="pointer-events-none absolute -right-16 -top-20 h-44 w-44 rounded-full bg-cyan-500/12 blur-3xl" />
-          <div className="relative grid gap-5 md:grid-cols-[9rem_minmax(0,1fr)] md:items-center">
-            <AnimatedScoreGauge value={analysis.total_score} label="SCORE" variant="summary" />
+          <div className="pointer-events-none absolute -bottom-20 left-8 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl" />
+
+          <div className="relative grid items-center gap-5 lg:grid-cols-[minmax(14rem,0.44fr)_minmax(0,0.56fr)]">
+            <div className="rounded-[2rem] border border-cyan-500/14 bg-cyan-500/5 px-4 py-5">
+              <AnimatedScoreGauge
+                value={analysis.total_score}
+                label="SCORE"
+                variant="summary"
+                className="h-44 w-44 sm:h-48 sm:w-48"
+              />
+            </div>
 
             <div className="min-w-0">
               <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -111,8 +120,8 @@ export function FundAnalysisCard({ analysis, fundId, isLoading = false }: FundAn
               <h2 className="text-xl font-black leading-tight text-theme-primary md:text-2xl">
                 {decision.result.summary}
               </h2>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-theme-secondary">
-                先给结论，再把原因压缩成主证据、风险限制和数据口径，避免规则文案重复堆叠。
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-theme-secondary">
+                先看评分，再看方向、风险和证据数量，结论与原因保持同一阅读路径。
               </p>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -122,31 +131,41 @@ export function FundAnalysisCard({ analysis, fundId, isLoading = false }: FundAn
               </div>
             </div>
           </div>
-
-          <div className="mt-5 grid gap-2 md:grid-cols-3">
-            {recommendationItems.map((item) => {
-              const tone = recommendationTone(item.code)
-              return (
-                <div key={item.code} className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-3 py-3">
-                  <div className="mb-2 flex items-center justify-between gap-2 text-xs">
-                    <span className="text-theme-muted">{tone.label}</span>
-                    <span className="font-semibold text-theme-primary">{formatAnalysisPercent(item.value)}</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-[var(--input-bg)]">
-                    <div className={cn('h-full rounded-full bg-gradient-to-r transition-all duration-700', tone.bar)} style={{ width: `${Math.max(item.value, 0)}%` }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
         </div>
 
-        <div className="grid gap-4">
+        <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(18rem,0.74fr)_minmax(0,1.26fr)]">
+          {decision.topSignal && (
+            <div className="flex h-full flex-col rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/32 p-4">
+              <div className="text-[11px] tracking-[0.18em] text-theme-muted">TOP SIGNAL</div>
+              <div className="mt-2 text-sm font-semibold text-theme-primary">{decision.topSignal.title}</div>
+              <div className="mt-1 text-xs leading-5 text-theme-secondary">
+                {decision.topSignal.summary}
+              </div>
+              <div className="mt-auto flex flex-wrap gap-2 pt-4 text-[10px] text-theme-muted">
+                <span className="rounded-full border border-[var(--card-border)] bg-[var(--input-bg)]/55 px-2.5 py-1">
+                  {decision.topSignal.sourceLabel}
+                </span>
+                {decision.topSignal.metaLabel && (
+                  <span className="rounded-full border border-[var(--card-border)] bg-[var(--input-bg)]/55 px-2.5 py-1">
+                    {decision.topSignal.metaLabel}
+                  </span>
+                )}
+                <span className="rounded-full border border-[var(--card-border)] bg-[var(--input-bg)]/55 px-2.5 py-1">
+                  {decision.confidenceLabel}
+                </span>
+              </div>
+            </div>
+          )}
+          <RecommendationDistribution items={recommendationItems} />
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
           <NarrativePanel
             icon={<Target className="h-4 w-4 text-cyan-200" />}
             title="为什么是这个结论"
             points={decision.mainReasons}
             emptyText="当前主证据不足，建议按弱观察处理。"
+            className="h-full"
           />
           <NarrativePanel
             icon={<ShieldAlert className="h-4 w-4 text-amber-200" />}
@@ -154,6 +173,7 @@ export function FundAnalysisCard({ analysis, fundId, isLoading = false }: FundAn
             points={decision.riskReasons.slice(0, 2)}
             emptyText="暂未识别到明显反方证据。"
             warning
+            className="h-full"
           />
         </div>
       </div>
@@ -195,20 +215,62 @@ function NarrativePanel({
   points,
   emptyText,
   warning = false,
+  className,
 }: {
   icon: ReactNode
   title: string
   points: FundAnalysisDecisionPoint[]
   emptyText: string
   warning?: boolean
+  className?: string
 }) {
   return (
-    <div className={cn('rounded-3xl border p-4', warning ? 'border-amber-500/18 bg-amber-500/5' : 'border-cyan-500/18 bg-cyan-500/5')}>
+    <div className={cn('rounded-3xl border p-4', warning ? 'border-amber-500/18 bg-amber-500/5' : 'border-cyan-500/18 bg-cyan-500/5', className)}>
       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-theme-primary">
         {icon}
         {title}
       </div>
       <FundAnalysisDecisionList points={points} emptyText={emptyText} compact />
+    </div>
+  )
+}
+
+function RecommendationDistribution({
+  items,
+}: {
+  items: Array<{ code: FundAnalysisRecommendationCode; value: number }>
+}) {
+  return (
+    <div className="rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/32 p-4">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-theme-primary">建议分布</div>
+          <div className="mt-1 text-xs text-theme-muted">把评分拆成积极、观察和风险三类权重</div>
+        </div>
+        <div className="rounded-full border border-[var(--card-border)] bg-[var(--input-bg)]/55 px-3 py-1 text-[11px] text-theme-muted">
+          RULE WEIGHT
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        {items.map((item) => {
+          const tone = recommendationTone(item.code)
+          return (
+            <div key={item.code} className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-3 py-3">
+              <div className="mb-2 flex items-center justify-between gap-2 text-xs">
+                <span className="text-theme-muted">{tone.label}</span>
+                <span className="font-semibold text-theme-primary">{formatAnalysisPercent(item.value)}</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-[var(--input-bg)]">
+                <div
+                  className={cn('h-full rounded-full bg-gradient-to-r transition-all duration-700', tone.bar)}
+                  style={{ width: `${Math.max(item.value, 0)}%` }}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
