@@ -67,6 +67,8 @@ type stubFundSectorStore struct {
 	themesByFund           map[string]*domain.FundThemeSnapshot
 	classificationOverride *domain.FundClassificationOverride
 	classificationOptions  *domain.FundClassificationOptions
+	upsertCalls            int
+	resolveCategoryCalls   int
 }
 
 type stubAnalysisRankingCandidateProvider struct {
@@ -85,6 +87,7 @@ func (s *stubAnalysisRankingCandidateProvider) ListRankingCandidateFundIDs(ctx c
 }
 
 func (s *stubFundSectorStore) UpsertFromHoldings(ctx context.Context, fundID string, holdings []domain.StockHolding, source string) (*domain.FundSectorSnapshot, error) {
+	s.upsertCalls++
 	if s.snapshotsByFund != nil {
 		if snapshot, ok := s.snapshotsByFund[fundID]; ok && snapshot != nil {
 			copySnapshot := *snapshot
@@ -153,6 +156,7 @@ func (s *stubFundSectorStore) GetLatestThemeSnapshot(ctx context.Context, fundID
 }
 
 func (s *stubFundSectorStore) ResolveFundCategory(ctx context.Context, fund *domain.Fund, snapshot *domain.FundSectorSnapshot) (*domain.FundCategory, error) {
+	s.resolveCategoryCalls++
 	if fund == nil {
 		return nil, nil
 	}
@@ -694,6 +698,52 @@ func TestGetHoldingsUsesTargetETFHoldingsWhenTargetLayerHasLookthrough(t *testin
 	}
 	if response.Meta == nil || response.Meta.DataSource != "target_etf:159813" {
 		t.Fatalf("meta = %+v, want target_etf:159813", response.Meta)
+	}
+}
+
+func TestSearchWithoutFiltersSkipsClassificationWork(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	fundRepo := repository.NewMemoryFundRepository()
+	sectorStore := &stubFundSectorStore{
+		snapshot: &domain.FundSectorSnapshot{
+			FundID:            "005827",
+			AsOfDate:          "2025-12-31",
+			PrimarySectorCode: "liquor",
+			PrimarySectorName: "白酒",
+		},
+	}
+	handler := &FundHandler{
+		fundRepo:    fundRepo,
+		sectorStore: sectorStore,
+	}
+
+	router := gin.New()
+	router.GET("/api/v1/fund/search", handler.Search)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fund/search?q=混合", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var response struct {
+		Success bool          `json:"success"`
+		Data    []domain.Fund `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Data) == 0 {
+		t.Fatal("len(data) = 0, want search results")
+	}
+	if sectorStore.upsertCalls != 0 {
+		t.Fatalf("sector upsert calls = %d, want 0 for unfiltered search", sectorStore.upsertCalls)
+	}
+	if sectorStore.resolveCategoryCalls != 0 {
+		t.Fatalf("category resolve calls = %d, want 0 for unfiltered search", sectorStore.resolveCategoryCalls)
 	}
 }
 

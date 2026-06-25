@@ -59,6 +59,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
 ### Changed
+- **基金搜索性能与目录刷新**
+  - `/api/v1/fund/search` 普通搜索改为基金目录快路径：无 `category` / `sector` 筛选时直接返回 `SearchFunds` 结果，不再逐条触发持仓、行业快照和分类解析，避免输入后搜索结果被后处理放大到十秒级延迟。
+  - 带分类或板块筛选的搜索仍保留原过滤逻辑；仅在真正需要 `sector` 筛选时构建行业快照，`category` 筛选只解析基金分类。
+  - 2026-06-25 已重新执行全量基金目录同步：上游返回 27,067 条，系统 upsert 27,067 条，本次新增录入 187 条；当前本地 `funds` 表 27,115 条，其中 `active=26,877`、`unavailable=190`、`catalog_missing=48`。
+
 - **基金搜索聚焦体验重构**
   - 顶部基金搜索从窄下拉框升级为点击后展开的上层搜索面板，背景增加半透明蒙版与虚化，减少页面内容干扰。
   - 展开态搜索框扩大为桌面宽面板和移动端安全宽度面板，保留历史搜索、快速选择、搜索结果、清空与基金切换逻辑。

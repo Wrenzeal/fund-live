@@ -252,14 +252,27 @@ func (h *FundHandler) Search(c *gin.Context) {
 		return
 	}
 
+	if categoryFilter == "" && sectorFilter == "" {
+		c.JSON(http.StatusOK, APIResponse{
+			Success: true,
+			Data:    funds,
+		})
+		return
+	}
+
 	filteredFunds := make([]*domain.Fund, 0, len(funds))
 	for _, fund := range funds {
 		if fund == nil {
 			continue
 		}
-		snapshot, sectorErr := h.buildFundSectorSnapshot(c.Request.Context(), fund.ID, fund)
-		if sectorErr != nil {
-			log.Printf("⚠️ Search sector snapshot failed for %s: %v", fund.ID, sectorErr)
+
+		var snapshot *domain.FundSectorSnapshot
+		if sectorFilter != "" {
+			var sectorErr error
+			snapshot, sectorErr = h.buildFundSectorSnapshot(c.Request.Context(), fund.ID, fund)
+			if sectorErr != nil {
+				log.Printf("⚠️ Search sector snapshot failed for %s: %v", fund.ID, sectorErr)
+			}
 		}
 		if h.sectorStore != nil {
 			category, categoryErr := h.resolveFundCategory(c.Request.Context(), fund, snapshot)
