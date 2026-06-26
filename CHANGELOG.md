@@ -59,6 +59,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
 ### Changed
+- **默认主题切换为 Classic**
+  - 新用户或未保存主题偏好的首访页面默认使用 Classic 暖白主题，服务端首屏 `data-theme` 同步为 `classic`，避免先渲染深色主题再切换。
+  - 已有用户保留本地保存的主题选择，不强制覆盖 `dark` / `cyber` 偏好。
+
 - **基金搜索性能与目录刷新**
   - `/api/v1/fund/search` 普通搜索改为基金目录快路径：无 `category` / `sector` 筛选时直接返回 `SearchFunds` 结果，不再逐条触发持仓、行业快照和分类解析，避免输入后搜索结果被后处理放大到十秒级延迟。
   - 带分类或板块筛选的搜索仍保留原过滤逻辑；仅在真正需要 `sector` 筛选时构建行业快照，`category` 筛选只解析基金分类。

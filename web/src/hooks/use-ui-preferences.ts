@@ -14,7 +14,7 @@ const STORAGE_KEY = 'fund-ui-preferences-v1'
 const UPDATE_EVENT = 'fund-ui-preferences-updated'
 
 const DEFAULT_STATE: UIPreferencesState = {
-  themeType: 'dark',
+  themeType: 'classic',
   viewMode: 'professional',
 }
 
