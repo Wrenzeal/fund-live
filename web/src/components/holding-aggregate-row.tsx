@@ -3,8 +3,9 @@
 import { useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronUp, Layers3 } from 'lucide-react'
 import { FundAnalysisBadge } from '@/components/fund-analysis-badge'
+import { FundHistoryTrend } from '@/components/fund-history-trend'
 import { FundAnalysisEventHint } from '@/components/fund-analysis-event-hint'
-import type { FundAnalysis } from '@/hooks/use-fund-data'
+import type { FundAnalysis, FundHistorySeries } from '@/hooks/use-fund-data'
 import { cn } from '@/lib/utils'
 import type {
   HoldingAggregateEntry,
@@ -16,6 +17,8 @@ interface HoldingAggregateRowProps {
   metricScope: 'official' | 'estimate'
   estimateMetrics?: HoldingEstimateAggregateMetrics
   analysis?: FundAnalysis | null
+  history?: FundHistorySeries
+  isHistoryLoading?: boolean
   children?: ReactNode
 }
 
@@ -49,7 +52,7 @@ function formatPercent(value?: string) {
   return `${parsed >= 0 ? '+' : ''}${parsed.toFixed(2)}%`
 }
 
-export function HoldingAggregateRow({ aggregate, metricScope, estimateMetrics, analysis, children }: HoldingAggregateRowProps) {
+export function HoldingAggregateRow({ aggregate, metricScope, estimateMetrics, analysis, history, isHistoryLoading = false, children }: HoldingAggregateRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const fundName = aggregate.fund?.name || aggregate.fund_id
   const hasChildren = Boolean(children)
@@ -110,7 +113,7 @@ export function HoldingAggregateRow({ aggregate, metricScope, estimateMetrics, a
 
   return (
     <div className="overflow-hidden rounded-[28px] border border-[var(--card-border)] glass">
-      <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1.35fr)_0.85fr_0.9fr_0.9fr_auto] lg:items-center">
+      <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(10rem,0.72fr)_0.8fr_0.85fr_0.85fr_auto] lg:items-center">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <div className="truncate text-base font-semibold text-theme-primary">{fundName}</div>
@@ -129,6 +132,17 @@ export function HoldingAggregateRow({ aggregate, metricScope, estimateMetrics, a
             <FundAnalysisEventHint analysis={analysis} />
           </div>
           <div className="mt-2 text-xs text-theme-secondary">{valueNote}</div>
+        </div>
+
+        <div className="min-w-0">
+          <div className="mb-2 text-xs text-theme-muted">近 {history?.days || 15} 日净值</div>
+          <FundHistoryTrend
+            points={history?.points || []}
+            days={history?.days || 15}
+            compact
+            isLoading={isHistoryLoading}
+            className="bg-[var(--input-bg)]/25"
+          />
         </div>
 
         <div>

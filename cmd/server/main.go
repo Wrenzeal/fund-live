@@ -139,7 +139,7 @@ func main() {
 	}
 
 	if dbInstance != nil {
-		officialNavSync := service.NewOfficialNAVSyncService(fundRepo, fundHoldingRepo)
+		officialNavSync := service.NewOfficialNAVSyncService(fundRepo, fundHoldingRepo, favoriteRepo, watchlistRepo)
 		officialNavSync.Start(context.Background())
 		log.Println("🕚 Official NAV sync scheduled for 23:00 Asia/Shanghai")
 
@@ -261,11 +261,13 @@ func main() {
 		fund := v1.Group("/fund")
 		{
 			fund.GET("/search", fundHandler.Search)
+			fund.GET("/history/batch", fundHandler.GetHistoryBatch)
 			fund.GET("/:id", fundHandler.GetFund)
 			fund.GET("/:id/dashboard", fundHandler.GetDashboard)
 			fund.GET("/:id/analysis", fundHandler.GetAnalysis)
 			fund.GET("/:id/estimate", fundHandler.GetEstimate)
 			fund.GET("/:id/holdings", fundHandler.GetHoldings)
+			fund.GET("/:id/history", fundHandler.GetHistory)
 			fund.GET("/:id/timeseries", fundHandler.GetTimeSeries)
 		}
 
@@ -372,6 +374,8 @@ func main() {
 		log.Printf("   GET /api/v1/fund/:id - Get fund info")
 		log.Printf("   GET /api/v1/fund/:id/estimate - Get real-time estimate")
 		log.Printf("   GET /api/v1/fund/:id/holdings - Get fund holdings")
+		log.Printf("   GET /api/v1/fund/:id/history?days=30 - Get official daily NAV history")
+		log.Printf("   GET /api/v1/fund/history/batch?fund_ids=<ids>&days=15 - Get daily NAV histories")
 		log.Printf("   GET /api/v1/fund/:id/timeseries - Get intraday time series")
 		log.Printf("   GET /api/v1/market/status - Get A-Share market status")
 		log.Printf("   GET /api/v1/market/pricing-date?trade_at=<RFC3339> - Preview holding pricing date")

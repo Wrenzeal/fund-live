@@ -32,6 +32,7 @@ type FundDetailFromJS struct {
 	PreviousNAV decimal.Decimal
 	AccumNAV    decimal.Decimal
 	NAVDate     string
+	History     []domain.FundHistory
 }
 
 // ParsePingzhongJS parses the pingzhongdata/{code}.js response.
@@ -55,15 +56,17 @@ func (p *EastmoneyAPIParser) ParsePingzhongJS(jsContent string, fundCode string)
 	// Format: var Data_netWorthTrend = [{x:1704038400000,y:1.2345,...},...];
 	navTrendRe := regexp.MustCompile(`var\s+Data_netWorthTrend\s*=\s*(\[[\s\S]*?\])\s*;`)
 	if matches := navTrendRe.FindStringSubmatch(jsContent); len(matches) > 1 {
-		nav, prevNav, navDate := p.parseNavTrend(matches[1])
+		nav, prevNav, navDate, histories := p.parseNavTrend(matches[1], fundCode)
 		result.NAV = nav
 		result.PreviousNAV = prevNav
 		result.NAVDate = navDate
+		result.History = histories
 	}
 
 	accWorthRe := regexp.MustCompile(`var\s+Data_ACWorthTrend\s*=\s*(\[[\s\S]*?\])\s*;`)
 	if matches := accWorthRe.FindStringSubmatch(jsContent); len(matches) > 1 {
 		result.AccumNAV = p.parseAccumulatedWorthTrend(matches[1])
+		p.attachAccumulatedWorthTrend(result.History, matches[1])
 	}
 
 	// Extract fund manager: var Data_currentFundManager = [{id:"xxx",name:"xxx",pic:"xxx"...}];
@@ -92,19 +95,44 @@ func (p *EastmoneyAPIParser) extractVar(content, varName string) string {
 }
 
 // parseNavTrend parses the nav trend array and returns the latest NAV.
-func (p *EastmoneyAPIParser) parseNavTrend(jsonArray string) (decimal.Decimal, decimal.Decimal, string) {
+func (p *EastmoneyAPIParser) parseNavTrend(jsonArray string, fundCode string) (decimal.Decimal, decimal.Decimal, string, []domain.FundHistory) {
 	type navPoint struct {
-		X int64   `json:"x"`
-		Y float64 `json:"y"`
+		X            int64    `json:"x"`
+		Y            float64  `json:"y"`
+		EquityReturn *float64 `json:"equityReturn"`
 	}
 
 	var points []navPoint
 	if err := json.Unmarshal([]byte(jsonArray), &points); err != nil {
-		return decimal.Zero, decimal.Zero, ""
+		return decimal.Zero, decimal.Zero, "", nil
 	}
 
 	if len(points) == 0 {
-		return decimal.Zero, decimal.Zero, ""
+		return decimal.Zero, decimal.Zero, "", nil
+	}
+
+	histories := make([]domain.FundHistory, 0, len(points))
+	var prev decimal.Decimal
+	for _, point := range points {
+		navValue := decimal.NewFromFloat(point.Y)
+		date := time.Unix(point.X/1000, 0).Format("2006-01-02")
+		dailyReturn := decimal.Zero
+		if point.EquityReturn != nil {
+			dailyReturn = decimal.NewFromFloat(*point.EquityReturn).Round(4)
+		} else if !prev.IsZero() {
+			dailyReturn = navValue.Sub(prev).
+				Div(prev).
+				Mul(decimal.NewFromInt(100)).
+				Round(4)
+		}
+		histories = append(histories, domain.FundHistory{
+			FundID:      fundCode,
+			Date:        date,
+			NetAssetVal: navValue,
+			DailyReturn: dailyReturn,
+			CreatedAt:   time.Now(),
+		})
+		prev = navValue
 	}
 
 	// Get the last point (most recent)
@@ -119,7 +147,7 @@ func (p *EastmoneyAPIParser) parseNavTrend(jsonArray string) (decimal.Decimal, d
 	t := time.Unix(lastPoint.X/1000, 0)
 	date := t.Format("2006-01-02")
 
-	return nav, prevNav, date
+	return nav, prevNav, date, histories
 }
 
 func (p *EastmoneyAPIParser) parseAccumulatedWorthTrend(jsonArray string) decimal.Decimal {
@@ -133,6 +161,32 @@ func (p *EastmoneyAPIParser) parseAccumulatedWorthTrend(jsonArray string) decima
 	}
 
 	return decimal.NewFromFloat(points[len(points)-1][1])
+}
+
+func (p *EastmoneyAPIParser) attachAccumulatedWorthTrend(histories []domain.FundHistory, jsonArray string) {
+	if len(histories) == 0 {
+		return
+	}
+
+	var points [][]float64
+	if err := json.Unmarshal([]byte(jsonArray), &points); err != nil {
+		return
+	}
+
+	accumByDate := make(map[string]decimal.Decimal, len(points))
+	for _, point := range points {
+		if len(point) < 2 {
+			continue
+		}
+		date := time.Unix(int64(point[0])/1000, 0).Format("2006-01-02")
+		accumByDate[date] = decimal.NewFromFloat(point[1])
+	}
+
+	for i := range histories {
+		if accum, ok := accumByDate[histories[i].Date]; ok {
+			histories[i].AccumVal = accum
+		}
+	}
 }
 
 // parseManager parses the fund manager JSON array.

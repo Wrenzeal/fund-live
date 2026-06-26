@@ -159,6 +159,13 @@ type FundHistory struct {
 	CreatedAt   time.Time       `json:"created_at"`
 }
 
+// FundHistorySeries groups official daily NAV snapshots for charting.
+type FundHistorySeries struct {
+	FundID string        `json:"fund_id"`
+	Days   int           `json:"days"`
+	Points []FundHistory `json:"points"`
+}
+
 // FundHistoryLookupKey identifies a single official NAV snapshot.
 type FundHistoryLookupKey struct {
 	FundID string

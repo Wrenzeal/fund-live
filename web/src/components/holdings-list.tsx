@@ -3,7 +3,7 @@
 import { HoldingAggregateRow } from '@/components/holding-aggregate-row'
 import { HoldingFundRow } from '@/components/holding-fund-row'
 import { ScrollReveal } from '@/components/scroll-reveal'
-import type { FundAnalysis, FundEstimate } from '@/hooks/use-fund-data'
+import type { FundAnalysis, FundEstimate, FundHistorySeries } from '@/hooks/use-fund-data'
 import type {
   AdjustHoldingSharesPayload,
   DividendHoldingPayload,
@@ -26,6 +26,8 @@ interface HoldingsListProps {
   aggregateMetrics: Record<string, HoldingEstimateAggregateMetrics>
   estimatesByFundID: Record<string, FundEstimate | null>
   analysesByFundID: Record<string, FundAnalysis | null>
+  historiesByFundID?: Record<string, FundHistorySeries>
+  isHistoryLoading?: boolean
   showIncompleteOnly: boolean
   onRemoveHolding: (holdingID: string) => void
   onUpdateHolding: (holdingID: string, payload: UpdateHoldingPayload) => Promise<void> | void
@@ -43,6 +45,8 @@ export function HoldingsList({
   aggregateMetrics,
   estimatesByFundID,
   analysesByFundID,
+  historiesByFundID = {},
+  isHistoryLoading = false,
   showIncompleteOnly,
   onRemoveHolding,
   onUpdateHolding,
@@ -60,6 +64,8 @@ export function HoldingsList({
                 metricScope={metricScope}
                 estimateMetrics={aggregateMetrics[aggregate.fund_id]}
                 analysis={analysesByFundID[aggregate.fund_id]}
+                history={historiesByFundID[aggregate.fund_id]}
+                isHistoryLoading={isHistoryLoading}
               >
                 {incompleteAggregateChildren(holdingsByFundID[aggregate.fund_id] ?? [], showIncompleteOnly).map((holding) => (
                   <HoldingFundRow

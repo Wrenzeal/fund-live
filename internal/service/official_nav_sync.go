@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"log"
+	"sort"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -18,6 +20,8 @@ var officialNAVSyncLocation = trading.TradingLocation()
 type OfficialNAVSyncService struct {
 	fundRepo        domain.FundRepository
 	fundHoldingRepo domain.UserFundHoldingRepository
+	favoriteRepo    domain.UserFavoriteRepository
+	watchlistRepo   domain.UserWatchlistRepository
 	crawler         *crawler.CrawlService
 	location        *time.Location
 	now             func() time.Time
@@ -29,10 +33,14 @@ type OfficialNAVSyncService struct {
 func NewOfficialNAVSyncService(
 	fundRepo domain.FundRepository,
 	fundHoldingRepo domain.UserFundHoldingRepository,
+	favoriteRepo domain.UserFavoriteRepository,
+	watchlistRepo domain.UserWatchlistRepository,
 ) *OfficialNAVSyncService {
 	return &OfficialNAVSyncService{
 		fundRepo:        fundRepo,
 		fundHoldingRepo: fundHoldingRepo,
+		favoriteRepo:    favoriteRepo,
+		watchlistRepo:   watchlistRepo,
 		crawler:         crawler.NewCrawlService(4),
 		location:        officialNAVSyncLocation,
 		now:             time.Now,
@@ -79,9 +87,9 @@ func (s *OfficialNAVSyncService) shouldSyncImmediately(ctx context.Context) bool
 		return false
 	}
 
-	fundIDs, err := s.fundHoldingRepo.ListDistinctFundIDs(ctx)
+	fundIDs, err := s.listSyncFundIDs(ctx)
 	if err != nil {
-		log.Printf("⚠️ Official NAV sync startup check failed to load holdings: %v", err)
+		log.Printf("⚠️ Official NAV sync startup check failed to load tracked funds: %v", err)
 		return true
 	}
 	if len(fundIDs) == 0 {
@@ -115,18 +123,18 @@ func (s *OfficialNAVSyncService) nextRunAt(now time.Time) time.Time {
 	return next
 }
 
-// SyncOnce fetches the latest official NAV data for all currently held funds.
+// SyncOnce fetches recent official NAV data for all currently tracked funds.
 func (s *OfficialNAVSyncService) SyncOnce(ctx context.Context) error {
-	fundIDs, err := s.fundHoldingRepo.ListDistinctFundIDs(ctx)
+	fundIDs, err := s.listSyncFundIDs(ctx)
 	if err != nil {
 		return err
 	}
 	if len(fundIDs) == 0 {
-		log.Printf("ℹ️ Official NAV sync skipped: no user holdings found")
+		log.Printf("ℹ️ Official NAV sync skipped: no user holdings, favorites, or watchlist funds found")
 		return nil
 	}
 
-	log.Printf("🕚 Official NAV sync started for %d held funds", len(fundIDs))
+	log.Printf("🕚 Official NAV sync started for %d tracked funds", len(fundIDs))
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(s.maxConcurrency)
@@ -137,23 +145,32 @@ func (s *OfficialNAVSyncService) SyncOnce(ctx context.Context) error {
 	for _, fundID := range fundIDs {
 		fundID := fundID
 		g.Go(func() error {
-			history, err := s.crawler.FetchLatestFundHistory(ctx, fundID)
+			histories, err := s.crawler.FetchRecentFundHistory(ctx, fundID, 30)
 			if err != nil {
 				failureCount.Add(1)
 				log.Printf("⚠️ Official NAV sync: fetch %s failed: %v", fundID, err)
 				return nil
 			}
-
-			if err := s.fundRepo.SaveFundHistory(ctx, history); err != nil {
+			if len(histories) == 0 {
 				failureCount.Add(1)
-				log.Printf("⚠️ Official NAV sync: save history %s failed: %v", fundID, err)
+				log.Printf("⚠️ Official NAV sync: no history returned for %s", fundID)
 				return nil
 			}
 
+			for index := range histories {
+				history := histories[index]
+				if err := s.fundRepo.SaveFundHistory(ctx, &history); err != nil {
+					failureCount.Add(1)
+					log.Printf("⚠️ Official NAV sync: save history %s/%s failed: %v", fundID, history.Date, err)
+					return nil
+				}
+			}
+
+			latestHistory := histories[len(histories)-1]
 			fund, err := s.fundRepo.GetFundByID(ctx, fundID)
 			if err == nil && fund != nil {
-				fund.NetAssetVal = history.NetAssetVal
-				fund.UpdatedAt = time.Now()
+				fund.NetAssetVal = latestHistory.NetAssetVal
+				fund.UpdatedAt = s.now()
 				if saveErr := s.fundRepo.SaveFund(ctx, fund); saveErr != nil {
 					log.Printf("⚠️ Official NAV sync: update fund nav %s failed: %v", fundID, saveErr)
 				}
@@ -183,6 +200,49 @@ func (s *OfficialNAVSyncService) SyncOnce(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (s *OfficialNAVSyncService) listSyncFundIDs(ctx context.Context) ([]string, error) {
+	seen := make(map[string]struct{})
+
+	addIDs := func(fundIDs []string) {
+		for _, fundID := range fundIDs {
+			fundID = strings.TrimSpace(fundID)
+			if fundID == "" {
+				continue
+			}
+			seen[fundID] = struct{}{}
+		}
+	}
+
+	holdingIDs, err := s.fundHoldingRepo.ListDistinctFundIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	addIDs(holdingIDs)
+
+	if s.favoriteRepo != nil {
+		favoriteIDs, err := s.favoriteRepo.ListDistinctFavoriteFundIDs(ctx)
+		if err != nil {
+			return nil, err
+		}
+		addIDs(favoriteIDs)
+	}
+
+	if s.watchlistRepo != nil {
+		watchlistIDs, err := s.watchlistRepo.ListDistinctWatchlistFundIDs(ctx)
+		if err != nil {
+			return nil, err
+		}
+		addIDs(watchlistIDs)
+	}
+
+	fundIDs := make([]string, 0, len(seen))
+	for fundID := range seen {
+		fundIDs = append(fundIDs, fundID)
+	}
+	sort.Strings(fundIDs)
+	return fundIDs, nil
 }
 
 func (s *OfficialNAVSyncService) backfillHoldingConfirmations(ctx context.Context) (int, error) {

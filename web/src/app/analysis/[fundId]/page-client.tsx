@@ -10,8 +10,9 @@ import { FundSectorCard } from '@/components/fund-sector-card'
 import { HoldingsTable } from '@/components/holdings-table'
 import { TargetETFHoldingsCard } from '@/components/target-etf-holdings-card'
 import { AnalysisEventTraceMeta } from '@/components/analysis-event-trace-meta'
+import { FundHistoryTrend } from '@/components/fund-history-trend'
 import { FundAnalysisDecisionList } from '@/components/fund-analysis-decision-points'
-import { useFundAnalysis, useFundDashboard, useFundHoldings, type Fund, type FundAnalysis, type FundAnalysisEventImpact, type FundAnalysisModuleScore, type FundClassificationOverride, type FundEstimate, type FundSectorSnapshot, type FundThemeSnapshot } from '@/hooks/use-fund-data'
+import { useFundAnalysis, useFundDashboard, useFundHistory, useFundHoldings, type Fund, type FundAnalysis, type FundAnalysisEventImpact, type FundAnalysisModuleScore, type FundClassificationOverride, type FundEstimate, type FundSectorSnapshot, type FundThemeSnapshot } from '@/hooks/use-fund-data'
 import { cn } from '@/lib/utils'
 import { buildFundAnalysisDecision, type FundAnalysisDecisionView } from '@/lib/fund-analysis-decision'
 import {
@@ -57,6 +58,8 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
     lookthroughAvailable,
     isLoading: isHoldingsLoading,
   } = useFundHoldings(fundId)
+
+  const { points: historyPoints, isLoading: isHistoryLoading } = useFundHistory(fundId, 30)
 
   const resolvedFund = dashboardFund || analysisFund || holdingsFund
   const lastUpdated = estimate?.calculated_at ? new Date(estimate.calculated_at) : null
@@ -149,6 +152,16 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
               />
               <QuarterlyDiffCard events={quarterlyEvents} />
             </div>
+          </RevealSection>
+
+          <RevealSection delay={120}>
+            <FundHistoryTrend
+              points={historyPoints}
+              days={30}
+              isLoading={isHistoryLoading}
+              title="近 30 日官方净值走势"
+              description="历史走势只读取每日官方收盘净值，用于观察区间变化，不与盘中估值混算。"
+            />
           </RevealSection>
 
           <RevealSection delay={120}>

@@ -11,7 +11,6 @@ import (
 
 	"github.com/RomaticDOG/fund/internal/domain"
 	"github.com/go-resty/resty/v2"
-	"github.com/shopspring/decimal"
 )
 
 // CrawlService provides fund data crawling capabilities.
@@ -97,6 +96,23 @@ func (s *CrawlService) FetchFundData(ctx context.Context, fundCode string) (*dom
 
 // FetchLatestFundHistory fetches the latest official NAV snapshot for a fund.
 func (s *CrawlService) FetchLatestFundHistory(ctx context.Context, fundCode string) (*domain.FundHistory, error) {
+	histories, err := s.FetchRecentFundHistory(ctx, fundCode, 1)
+	if err != nil {
+		return nil, err
+	}
+	if len(histories) == 0 {
+		return nil, fmt.Errorf("latest NAV not found for fund %s", fundCode)
+	}
+	history := histories[len(histories)-1]
+	return &history, nil
+}
+
+// FetchRecentFundHistory fetches recent official NAV snapshots for a fund.
+func (s *CrawlService) FetchRecentFundHistory(ctx context.Context, fundCode string, limit int) ([]domain.FundHistory, error) {
+	if limit <= 0 {
+		limit = 30
+	}
+
 	url := fmt.Sprintf("http://fund.eastmoney.com/pingzhongdata/%s.js", fundCode)
 
 	resp, err := s.client.R().
@@ -115,26 +131,15 @@ func (s *CrawlService) FetchLatestFundHistory(ctx context.Context, fundCode stri
 		return nil, fmt.Errorf("parse JS failed: %w", err)
 	}
 
-	if detail.NAV.IsZero() || detail.NAVDate == "" {
-		return nil, fmt.Errorf("latest NAV not found for fund %s", fundCode)
+	if len(detail.History) == 0 {
+		return nil, fmt.Errorf("official NAV history not found for fund %s", fundCode)
 	}
 
-	dailyReturn := decimal.Zero
-	if !detail.PreviousNAV.IsZero() {
-		dailyReturn = detail.NAV.Sub(detail.PreviousNAV).
-			Div(detail.PreviousNAV).
-			Mul(decimal.NewFromInt(100)).
-			Round(4)
+	if len(detail.History) > limit {
+		detail.History = detail.History[len(detail.History)-limit:]
 	}
 
-	return &domain.FundHistory{
-		FundID:      fundCode,
-		Date:        detail.NAVDate,
-		NetAssetVal: detail.NAV,
-		AccumVal:    detail.AccumNAV,
-		DailyReturn: dailyReturn,
-		CreatedAt:   time.Now(),
-	}, nil
+	return detail.History, nil
 }
 
 // fetchFundInfo fetches fund information from Eastmoney pingzhongdata JS.

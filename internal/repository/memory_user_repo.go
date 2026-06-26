@@ -183,6 +183,30 @@ func (r *MemoryUserRepository) ListFavoriteFunds(ctx context.Context, userID str
 	return favorites, nil
 }
 
+// ListDistinctFavoriteFundIDs returns all distinct legacy favorite fund IDs.
+func (r *MemoryUserRepository) ListDistinctFavoriteFundIDs(ctx context.Context) ([]string, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	seen := make(map[string]struct{})
+	for _, favoritesByFund := range r.favoriteFunds {
+		for fundID := range favoritesByFund {
+			fundID = strings.TrimSpace(fundID)
+			if fundID == "" {
+				continue
+			}
+			seen[fundID] = struct{}{}
+		}
+	}
+
+	result := make([]string, 0, len(seen))
+	for fundID := range seen {
+		result = append(result, fundID)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
 func (r *MemoryUserRepository) SaveFavoriteFund(ctx context.Context, favorite *domain.UserFavoriteFund) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -374,6 +398,31 @@ func (r *MemoryUserRepository) DeleteWatchlistFund(ctx context.Context, userID, 
 	}
 	groupFunds[groupID] = result
 	return nil
+}
+
+// ListDistinctWatchlistFundIDs returns all distinct funds tracked in grouped watchlists.
+func (r *MemoryUserRepository) ListDistinctWatchlistFundIDs(ctx context.Context) ([]string, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	seen := make(map[string]struct{})
+	for _, groupFunds := range r.watchlistFunds {
+		for _, funds := range groupFunds {
+			for _, fund := range funds {
+				if strings.TrimSpace(fund.FundID) == "" {
+					continue
+				}
+				seen[fund.FundID] = struct{}{}
+			}
+		}
+	}
+
+	result := make([]string, 0, len(seen))
+	for fundID := range seen {
+		result = append(result, fundID)
+	}
+	sort.Strings(result)
+	return result, nil
 }
 
 func (r *MemoryUserRepository) ListFundHoldings(ctx context.Context, userID string) ([]domain.UserFundHolding, error) {

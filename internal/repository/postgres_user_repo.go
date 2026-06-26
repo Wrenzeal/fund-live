@@ -178,6 +178,18 @@ func (r *PostgresUserRepository) ListFavoriteFunds(ctx context.Context, userID s
 	return favorites, nil
 }
 
+// ListDistinctFavoriteFundIDs returns all distinct legacy favorite fund IDs.
+func (r *PostgresUserRepository) ListDistinctFavoriteFundIDs(ctx context.Context) ([]string, error) {
+	var fundIDs []string
+	if err := r.db.WithContext(ctx).
+		Model(&database.UserFavoriteFund{}).
+		Distinct("fund_id").
+		Pluck("fund_id", &fundIDs).Error; err != nil {
+		return nil, fmt.Errorf("failed to list distinct favorite fund ids: %w", err)
+	}
+	return fundIDs, nil
+}
+
 func (r *PostgresUserRepository) SaveFavoriteFund(ctx context.Context, favorite *domain.UserFavoriteFund) error {
 	if favorite.CreatedAt.IsZero() {
 		favorite.CreatedAt = time.Now()
@@ -441,6 +453,18 @@ func (r *PostgresUserRepository) DeleteWatchlistFund(ctx context.Context, userID
 		return fmt.Errorf("failed to delete watchlist fund: %w", err)
 	}
 	return nil
+}
+
+// ListDistinctWatchlistFundIDs returns all distinct funds tracked in grouped watchlists.
+func (r *PostgresUserRepository) ListDistinctWatchlistFundIDs(ctx context.Context) ([]string, error) {
+	var fundIDs []string
+	if err := r.db.WithContext(ctx).
+		Model(&database.UserWatchlistFund{}).
+		Distinct("fund_id").
+		Pluck("fund_id", &fundIDs).Error; err != nil {
+		return nil, fmt.Errorf("failed to list distinct watchlist fund ids: %w", err)
+	}
+	return fundIDs, nil
 }
 
 func domainFundHoldingFromDB(holding database.UserFundHolding) domain.UserFundHolding {

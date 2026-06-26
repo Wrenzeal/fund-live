@@ -13,7 +13,7 @@ import (
 func TestOfficialNAVSyncServiceNextRunAt(t *testing.T) {
 	fundRepo := repository.NewMemoryFundRepository()
 	userRepo := repository.NewMemoryUserRepository()
-	service := NewOfficialNAVSyncService(fundRepo, userRepo)
+	service := NewOfficialNAVSyncService(fundRepo, userRepo, userRepo, userRepo)
 
 	beforeRun := time.Date(2026, 3, 31, 22, 15, 0, 0, officialNAVSyncLocation)
 	next := service.nextRunAt(beforeRun)
@@ -31,7 +31,7 @@ func TestOfficialNAVSyncServiceNextRunAt(t *testing.T) {
 func TestOfficialNAVSyncServiceShouldSyncImmediatelyWhenCurrentTradingDayMissing(t *testing.T) {
 	fundRepo := repository.NewMemoryFundRepository()
 	userRepo := repository.NewMemoryUserRepository()
-	service := NewOfficialNAVSyncService(fundRepo, userRepo)
+	service := NewOfficialNAVSyncService(fundRepo, userRepo, userRepo, userRepo)
 
 	if err := userRepo.SaveFundHolding(context.Background(), &domain.UserFundHolding{
 		ID:       "ufh_1",
@@ -55,7 +55,7 @@ func TestOfficialNAVSyncServiceShouldSyncImmediatelyWhenCurrentTradingDayMissing
 func TestOfficialNAVSyncServiceSkipsImmediateSyncWhenAlreadyUpToDate(t *testing.T) {
 	fundRepo := repository.NewMemoryFundRepository()
 	userRepo := repository.NewMemoryUserRepository()
-	service := NewOfficialNAVSyncService(fundRepo, userRepo)
+	service := NewOfficialNAVSyncService(fundRepo, userRepo, userRepo, userRepo)
 
 	if err := userRepo.SaveFundHolding(context.Background(), &domain.UserFundHolding{
 		ID:       "ufh_1",
@@ -89,7 +89,7 @@ func TestOfficialNAVSyncServiceSkipsImmediateSyncWhenAlreadyUpToDate(t *testing.
 func TestOfficialNAVSyncServiceSkipsImmediateSyncOnWeekend(t *testing.T) {
 	fundRepo := repository.NewMemoryFundRepository()
 	userRepo := repository.NewMemoryUserRepository()
-	service := NewOfficialNAVSyncService(fundRepo, userRepo)
+	service := NewOfficialNAVSyncService(fundRepo, userRepo, userRepo, userRepo)
 
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 4, 23, 15, 0, 0, officialNAVSyncLocation)
@@ -103,7 +103,7 @@ func TestOfficialNAVSyncServiceSkipsImmediateSyncOnWeekend(t *testing.T) {
 func TestOfficialNAVSyncServiceSkipsManualHoldingConfirmation(t *testing.T) {
 	fundRepo := repository.NewMemoryFundRepository()
 	userRepo := repository.NewMemoryUserRepository()
-	service := NewOfficialNAVSyncService(fundRepo, userRepo)
+	service := NewOfficialNAVSyncService(fundRepo, userRepo, userRepo, userRepo)
 
 	if err := userRepo.SaveFundHolding(context.Background(), &domain.UserFundHolding{
 		ID:                 "ufh_manual",
@@ -149,7 +149,7 @@ func TestOfficialNAVSyncServiceSkipsManualHoldingConfirmation(t *testing.T) {
 func TestOfficialNAVSyncServiceBackfillsHoldingConfirmationWhenHistoryExists(t *testing.T) {
 	fundRepo := repository.NewMemoryFundRepository()
 	userRepo := repository.NewMemoryUserRepository()
-	service := NewOfficialNAVSyncService(fundRepo, userRepo)
+	service := NewOfficialNAVSyncService(fundRepo, userRepo, userRepo, userRepo)
 
 	if err := userRepo.SaveFundHolding(context.Background(), &domain.UserFundHolding{
 		ID:       "ufh_1",
@@ -194,5 +194,64 @@ func TestOfficialNAVSyncServiceBackfillsHoldingConfirmationWhenHistoryExists(t *
 	}
 	if holdings[0].Shares.String() != "500" {
 		t.Fatalf("shares = %s, want 500", holdings[0].Shares.String())
+	}
+}
+
+func TestOfficialNAVSyncServiceListSyncFundIDsMergesTrackedSources(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewOfficialNAVSyncService(fundRepo, userRepo, userRepo, userRepo)
+
+	if err := userRepo.SaveFundHolding(context.Background(), &domain.UserFundHolding{
+		ID:       "ufh_1",
+		UserID:   "user-1",
+		FundID:   "005827",
+		Amount:   decimal.RequireFromString("1000"),
+		AsOfDate: "2026-03-31",
+	}); err != nil {
+		t.Fatalf("SaveFundHolding() error = %v", err)
+	}
+	if err := userRepo.SaveFavoriteFund(context.Background(), &domain.UserFavoriteFund{
+		UserID: "user-1",
+		FundID: "003095",
+	}); err != nil {
+		t.Fatalf("SaveFavoriteFund() error = %v", err)
+	}
+	group := domain.UserWatchlistGroup{
+		ID:        "watchlist-group-1",
+		UserID:    "user-1",
+		Name:      "观察",
+		Accent:    "cyan",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if err := userRepo.SaveWatchlistGroup(context.Background(), &group); err != nil {
+		t.Fatalf("SaveWatchlistGroup() error = %v", err)
+	}
+	if err := userRepo.SaveWatchlistFund(context.Background(), &domain.UserWatchlistFund{
+		GroupID: group.ID,
+		FundID:  "005827",
+	}); err != nil {
+		t.Fatalf("SaveWatchlistFund() duplicate error = %v", err)
+	}
+	if err := userRepo.SaveWatchlistFund(context.Background(), &domain.UserWatchlistFund{
+		GroupID: group.ID,
+		FundID:  "320007",
+	}); err != nil {
+		t.Fatalf("SaveWatchlistFund() error = %v", err)
+	}
+
+	fundIDs, err := service.listSyncFundIDs(context.Background())
+	if err != nil {
+		t.Fatalf("listSyncFundIDs() error = %v", err)
+	}
+	want := []string{"003095", "005827", "320007"}
+	if len(fundIDs) != len(want) {
+		t.Fatalf("fundIDs = %+v, want %+v", fundIDs, want)
+	}
+	for index := range want {
+		if fundIDs[index] != want[index] {
+			t.Fatalf("fundIDs = %+v, want %+v", fundIDs, want)
+		}
 	}
 }

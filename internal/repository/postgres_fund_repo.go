@@ -4,6 +4,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -384,6 +385,50 @@ func (r *PostgresFundRepository) GetLatestFundHistoriesByFundIDs(ctx context.Con
 			DailyReturn: record.DailyReturn,
 			CreatedAt:   record.CreatedAt,
 		}
+	}
+
+	return resultMap, nil
+}
+
+// ListFundHistoriesByFundIDs retrieves recent official NAV snapshots grouped by fund ID.
+func (r *PostgresFundRepository) ListFundHistoriesByFundIDs(ctx context.Context, fundIDs []string, days int) (map[string][]domain.FundHistory, error) {
+	resultMap := make(map[string][]domain.FundHistory)
+	uniqueIDs := uniqueStrings(fundIDs)
+	if len(uniqueIDs) == 0 || days <= 0 {
+		return resultMap, nil
+	}
+
+	if days > 180 {
+		days = 180
+	}
+
+	var records []database.FundHistory
+	if err := r.db.WithContext(ctx).
+		Where("fund_id IN ?", uniqueIDs).
+		Order("fund_id ASC, date DESC").
+		Find(&records).Error; err != nil {
+		return nil, fmt.Errorf("failed to list fund histories by ids: %w", err)
+	}
+
+	for _, record := range records {
+		if len(resultMap[record.FundID]) >= days {
+			continue
+		}
+		resultMap[record.FundID] = append(resultMap[record.FundID], domain.FundHistory{
+			FundID:      record.FundID,
+			Date:        record.Date.Format("2006-01-02"),
+			NetAssetVal: record.NetAssetVal,
+			AccumVal:    record.AccumVal,
+			DailyReturn: record.DailyReturn,
+			CreatedAt:   record.CreatedAt,
+		})
+	}
+
+	for fundID, histories := range resultMap {
+		sort.Slice(histories, func(i, j int) bool {
+			return histories[i].Date < histories[j].Date
+		})
+		resultMap[fundID] = histories
 	}
 
 	return resultMap, nil

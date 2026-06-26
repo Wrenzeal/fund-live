@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -211,6 +212,11 @@ type AnalysisRankingsResponse struct {
 type AnalysisBatchResponse struct {
 	Analyses map[string]*domain.FundAnalysis `json:"analyses"`
 }
+
+const (
+	defaultFundHistoryDays = 30
+	maxFundHistoryDays     = 180
+)
 
 // Search handles fund search requests.
 // GET /api/v1/fund/search?q=000001
@@ -722,6 +728,98 @@ func (h *FundHandler) GetAnalysisBatch(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, APIResponse{Success: true, Data: AnalysisBatchResponse{Analyses: result}})
+}
+
+// GetHistory returns recent official daily NAV history for one fund.
+// GET /api/v1/fund/:id/history?days=30
+func (h *FundHandler) GetHistory(c *gin.Context) {
+	fundID := strings.TrimSpace(c.Param("id"))
+	if fundID == "" {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_FUND_ID", Message: "Fund ID is required"},
+		})
+		return
+	}
+
+	days := parseHistoryDays(c.Query("days"))
+	historiesByFundID, err := h.fundRepo.ListFundHistoriesByFundIDs(c.Request.Context(), []string{fundID}, days)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "FUND_HISTORY_FAILED", Message: err.Error()},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, APIResponse{
+		Success: true,
+		Data: domain.FundHistorySeries{
+			FundID: fundID,
+			Days:   days,
+			Points: ensureFundHistorySlice(historiesByFundID[fundID]),
+		},
+	})
+}
+
+// GetHistoryBatch returns recent official daily NAV histories for multiple funds.
+// GET /api/v1/fund/history/batch?fund_ids=000001,000002&days=15
+func (h *FundHandler) GetHistoryBatch(c *gin.Context) {
+	fundIDs := uniqueStrings(strings.Split(strings.TrimSpace(c.Query("fund_ids")), ","))
+	if len(fundIDs) == 0 {
+		c.JSON(http.StatusBadRequest, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "INVALID_FUND_IDS", Message: "fund_ids is required"},
+		})
+		return
+	}
+
+	days := parseHistoryDays(c.Query("days"))
+	historiesByFundID, err := h.fundRepo.ListFundHistoriesByFundIDs(c.Request.Context(), fundIDs, days)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{
+			Success: false,
+			Error:   &APIError{Code: "FUND_HISTORY_FAILED", Message: err.Error()},
+		})
+		return
+	}
+
+	result := make(map[string]domain.FundHistorySeries, len(fundIDs))
+	for _, fundID := range fundIDs {
+		result[fundID] = domain.FundHistorySeries{
+			FundID: fundID,
+			Days:   days,
+			Points: ensureFundHistorySlice(historiesByFundID[fundID]),
+		}
+	}
+
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: result})
+}
+
+func ensureFundHistorySlice(points []domain.FundHistory) []domain.FundHistory {
+	if points == nil {
+		return []domain.FundHistory{}
+	}
+	return points
+}
+
+func parseHistoryDays(raw string) int {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultFundHistoryDays
+	}
+
+	days, err := strconv.Atoi(raw)
+	if err != nil {
+		return defaultFundHistoryDays
+	}
+	if days < 1 {
+		return 1
+	}
+	if days > maxFundHistoryDays {
+		return maxFundHistoryDays
+	}
+	return days
 }
 
 func (h *FundHandler) buildFundThemeSnapshot(ctx context.Context, fundID string, fund *domain.Fund) (*domain.FundThemeSnapshot, error) {

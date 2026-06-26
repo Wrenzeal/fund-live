@@ -64,6 +64,10 @@ func (r *countingCollectorFundRepository) GetLatestFundHistoriesByFundIDs(ctx co
 	return map[string]*domain.FundHistory{}, nil
 }
 
+func (r *countingCollectorFundRepository) ListFundHistoriesByFundIDs(ctx context.Context, fundIDs []string, days int) (map[string][]domain.FundHistory, error) {
+	return map[string][]domain.FundHistory{}, nil
+}
+
 func (r *countingCollectorFundRepository) GetFundHistoriesByLookupKeys(ctx context.Context, keys []domain.FundHistoryLookupKey) (map[domain.FundHistoryLookupKey]*domain.FundHistory, error) {
 	return map[domain.FundHistoryLookupKey]*domain.FundHistory{}, nil
 }

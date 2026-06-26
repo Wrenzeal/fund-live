@@ -251,6 +251,21 @@ export interface TimeSeriesPoint {
     estimate_nav: string
 }
 
+export interface FundHistoryPoint {
+    fund_id: string
+    date: string
+    net_asset_val: string
+    accum_val: string
+    daily_return: string
+    created_at: string
+}
+
+export interface FundHistorySeries {
+    fund_id: string
+    days: number
+    points: FundHistoryPoint[]
+}
+
 export interface OfficialCloseInfo {
     display_status: 'hidden' | 'pending' | 'ready'
     date?: string
@@ -930,6 +945,76 @@ export function useFundTopHoldings(fundIDs: string[]) {
         isValidating,
         isError: !!error,
     }
+}
+
+
+export function useFundHistory(fundId: string | null, days = 30) {
+    const normalizedDays = normalizeFundHistoryDays(days)
+    const swrKey = fundId
+        ? `${API_BASE_URL}/api/v1/fund/${encodeURIComponent(fundId)}/history?days=${normalizedDays}`
+        : null
+
+    const { data, error, isLoading, isValidating, mutate } = useSWR<{ data: FundHistorySeries; meta?: ResponseMeta }>(
+        swrKey,
+        fetchEnvelope,
+        {
+            revalidateOnFocus: false,
+            dedupingInterval: 60000,
+        }
+    )
+
+    return {
+        history: data?.data,
+        points: data?.data?.points || [],
+        days: data?.data?.days ?? normalizedDays,
+        isLoading,
+        isValidating,
+        isError: !!error,
+        error,
+        mutate,
+    }
+}
+
+async function fetchFundHistoryBatch(fundIDs: string[], days: number): Promise<Record<string, FundHistorySeries>> {
+    if (fundIDs.length === 0) {
+        return {}
+    }
+
+    const normalizedDays = normalizeFundHistoryDays(days)
+    const payload = await fetchEnvelope<Record<string, FundHistorySeries>>(
+        `${API_BASE_URL}/api/v1/fund/history/batch?fund_ids=${encodeURIComponent(fundIDs.join(','))}&days=${normalizedDays}`
+    )
+    return payload.data || {}
+}
+
+export function useFundHistoryBatch(fundIDs: string[], days = 15) {
+    const normalizedDays = normalizeFundHistoryDays(days)
+    const normalizedFundIDs = [...new Set(fundIDs.filter(Boolean))].sort()
+
+    const { data = {}, error, isLoading, isValidating, mutate } = useSWR<Record<string, FundHistorySeries>>(
+        normalizedFundIDs.length > 0 ? ['fund-history-batch', normalizedFundIDs.join(','), normalizedDays] : null,
+        () => fetchFundHistoryBatch(normalizedFundIDs, normalizedDays),
+        {
+            revalidateOnFocus: false,
+            dedupingInterval: 60000,
+        }
+    )
+
+    return {
+        historiesByFundID: data,
+        isLoading,
+        isValidating,
+        isError: !!error,
+        error,
+        mutate,
+    }
+}
+
+function normalizeFundHistoryDays(days: number) {
+    if (!Number.isFinite(days)) {
+        return 30
+    }
+    return Math.max(1, Math.min(180, Math.trunc(days)))
 }
 
 export function useFundAnalysis(fundId: string | null, options?: SWRConfiguration) {

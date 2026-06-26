@@ -25,6 +25,7 @@ type UserSessionRepository interface {
 // UserFavoriteRepository defines persistence operations for user favorite funds.
 type UserFavoriteRepository interface {
 	ListFavoriteFunds(ctx context.Context, userID string) ([]UserFavoriteFund, error)
+	ListDistinctFavoriteFundIDs(ctx context.Context) ([]string, error)
 	SaveFavoriteFund(ctx context.Context, favorite *UserFavoriteFund) error
 	DeleteFavoriteFund(ctx context.Context, userID, fundID string) error
 }
@@ -45,6 +46,7 @@ type UserWatchlistRepository interface {
 	ListWatchlistFundsByGroupIDs(ctx context.Context, userID string, groupIDs []string) (map[string][]UserWatchlistFund, error)
 	SaveWatchlistFund(ctx context.Context, fund *UserWatchlistFund) error
 	DeleteWatchlistFund(ctx context.Context, userID, groupID, fundID string) error
+	ListDistinctWatchlistFundIDs(ctx context.Context) ([]string, error)
 }
 
 // UserFundHoldingRepository defines persistence operations for user fund-level positions.

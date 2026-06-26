@@ -27,6 +27,7 @@ import { StatusBanner } from "@/components/ui/status-banner";
 import { useCurrentUser } from "@/hooks/use-auth";
 import {
   useFundAnalyses,
+  useFundHistoryBatch,
   useFundExposureSnapshots,
   useFundSearch,
   useFundTopHoldings,
@@ -142,6 +143,7 @@ export default function HoldingsPage() {
     [holdings],
   );
   const { analysesByFundID } = useFundAnalyses(fundIDsForAnalysis);
+  const { historiesByFundID, isLoading: isHistoryLoading } = useFundHistoryBatch(fundIDsForAnalysis, 15);
   const { exposureSnapshotsByFundID } =
     useFundExposureSnapshots(fundIDsForAnalysis);
   const { topHoldingsByFundID } = useFundTopHoldings(fundIDsForAnalysis);
@@ -812,6 +814,8 @@ export default function HoldingsPage() {
                 aggregateMetrics={aggregateMetrics}
                 estimatesByFundID={estimatesByFundID}
                 analysesByFundID={analysesByFundID}
+                historiesByFundID={historiesByFundID}
+                isHistoryLoading={isHistoryLoading}
                 showIncompleteOnly={showIncompleteOnly}
                 onRemoveHolding={removeHolding}
                 onUpdateHolding={updateHolding}

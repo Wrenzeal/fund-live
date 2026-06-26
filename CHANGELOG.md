@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **基金历史净值走势（第一阶段）**
+  - 后端复用 `fund_history` 保存每日官方收盘净值，夜间官方净值同步从“仅持仓基金”扩展为持仓、收藏和自选分组基金，并一次补齐近 30 日记录。
+  - 新增 `/api/v1/fund/:id/history?days=30` 与 `/api/v1/fund/history/batch?fund_ids=...&days=15`，支持单只与批量读取 1-180 日官方净值序列。
+  - 量化详情页新增近 30 日官方净值走势；自选卡片与持仓聚合行新增近 15 日迷你净值走势，空态明确提示等待夜间同步，避免与盘中估值混算。
+
 - **后端登录与鉴权安全加固**
   - `AuthService` 新增进程内失败限流：默认 15 分钟窗口内密码登录失败 5 次、注册失败 8 次、Google 登录失败 10 次后返回 `AUTH_RATE_LIMITED` / HTTP 429。
   - 注册密码策略升级为至少 10 位、包含字母和数字、不能包含空白字符，并拒绝常见弱密码；注册页同步前端提示与预校验。

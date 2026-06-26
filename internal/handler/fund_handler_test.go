@@ -1472,3 +1472,88 @@ func TestResolveOfficialCloseInfoHidesAfterNineEvenIfHistoryExists(t *testing.T)
 		t.Fatalf("info = %+v, want hidden", info)
 	}
 }
+
+func TestGetHistoryReturnsRecentDailyNAVSeries(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	fundRepo := repository.NewMemoryFundRepository()
+	for _, history := range []domain.FundHistory{
+		{FundID: "005827", Date: "2026-03-27", NetAssetVal: decimal.RequireFromString("1.7000"), DailyReturn: decimal.RequireFromString("0.1000")},
+		{FundID: "005827", Date: "2026-03-30", NetAssetVal: decimal.RequireFromString("1.7200"), DailyReturn: decimal.RequireFromString("1.1765")},
+		{FundID: "005827", Date: "2026-03-31", NetAssetVal: decimal.RequireFromString("1.7300"), DailyReturn: decimal.RequireFromString("0.5814")},
+	} {
+		if err := fundRepo.SaveFundHistory(context.Background(), &history); err != nil {
+			t.Fatalf("SaveFundHistory() error = %v", err)
+		}
+	}
+
+	handler := NewFundHandler(nil, fundRepo, nil)
+	router := gin.New()
+	router.GET("/api/v1/fund/:id/history", handler.GetHistory)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fund/005827/history?days=2", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	var response struct {
+		Success bool                     `json:"success"`
+		Data    domain.FundHistorySeries `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !response.Success || response.Data.FundID != "005827" || response.Data.Days != 2 {
+		t.Fatalf("response = %+v", response)
+	}
+	if len(response.Data.Points) != 2 {
+		t.Fatalf("points len = %d, want 2", len(response.Data.Points))
+	}
+	if response.Data.Points[0].Date != "2026-03-30" || response.Data.Points[1].Date != "2026-03-31" {
+		t.Fatalf("points dates = %+v", response.Data.Points)
+	}
+}
+
+func TestGetHistoryBatchReturnsSeriesForMultipleFunds(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	fundRepo := repository.NewMemoryFundRepository()
+	for _, history := range []domain.FundHistory{
+		{FundID: "005827", Date: "2026-03-31", NetAssetVal: decimal.RequireFromString("1.7300")},
+		{FundID: "003095", Date: "2026-03-31", NetAssetVal: decimal.RequireFromString("2.3300")},
+	} {
+		if err := fundRepo.SaveFundHistory(context.Background(), &history); err != nil {
+			t.Fatalf("SaveFundHistory() error = %v", err)
+		}
+	}
+
+	handler := NewFundHandler(nil, fundRepo, nil)
+	router := gin.New()
+	router.GET("/api/v1/fund/history/batch", handler.GetHistoryBatch)
+	router.GET("/api/v1/fund/:id/history", handler.GetHistory)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fund/history/batch?fund_ids=005827,003095&days=15", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	var response struct {
+		Success bool                                `json:"success"`
+		Data    map[string]domain.FundHistorySeries `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Data["005827"].Points) != 1 || len(response.Data["003095"].Points) != 1 {
+		t.Fatalf("response data = %+v", response.Data)
+	}
+	if response.Data["005827"].Points[0].NetAssetVal.String() != "1.73" {
+		t.Fatalf("005827 nav = %s", response.Data["005827"].Points[0].NetAssetVal.String())
+	}
+}

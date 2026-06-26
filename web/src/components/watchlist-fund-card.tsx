@@ -4,23 +4,25 @@ import Link from 'next/link'
 import { ArrowUpRight, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useMarketTradingState } from '@/hooks/use-market-status'
-import { useFundDashboard, type FundAnalysis } from '@/hooks/use-fund-data'
+import { useFundDashboard, type FundAnalysis, type FundHistorySeries } from '@/hooks/use-fund-data'
 import { FundAnalysisBadge } from '@/components/fund-analysis-badge'
 import { FundAnalysisEventHint } from '@/components/fund-analysis-event-hint'
-import { FundMiniTrend } from '@/components/fund-mini-trend'
+import { FundHistoryTrend } from '@/components/fund-history-trend'
 import { cn, formatPercent } from '@/lib/utils'
 
 interface WatchlistFundCardProps {
   fundId: string
   analysis?: FundAnalysis | null
+  history?: FundHistorySeries
+  isHistoryLoading?: boolean
   onRemove: () => Promise<void> | void
 }
 
-export function WatchlistFundCard({ fundId, analysis, onRemove }: WatchlistFundCardProps) {
+export function WatchlistFundCard({ fundId, analysis, history, isHistoryLoading = false, onRemove }: WatchlistFundCardProps) {
   const [isRemoving, setIsRemoving] = useState(false)
   const { session } = useMarketTradingState()
   const isCallAuction = session === 'call_auction'
-  const { estimate, fund, timeSeries, isLoading } = useFundDashboard(isCallAuction ? null : fundId)
+  const { estimate, fund, isLoading } = useFundDashboard(isCallAuction ? null : fundId)
 
   const fundName = fund?.name || estimate?.fund_name || fundId
   const percent = isCallAuction ? { text: '-', isPositive: false } : formatPercent(estimate?.change_percent)
@@ -77,7 +79,13 @@ export function WatchlistFundCard({ fundId, analysis, onRemove }: WatchlistFundC
         </button>
       </div>
 
-      <FundMiniTrend timeSeries={timeSeries} isPositive={percent.isPositive} isCallAuction={isCallAuction} />
+      <FundHistoryTrend
+        points={history?.points || []}
+        days={history?.days || 15}
+        compact
+        isLoading={isHistoryLoading}
+        className="bg-[var(--input-bg)]/25"
+      />
 
       <div className="mt-4 flex items-end justify-between gap-4">
         <div>
