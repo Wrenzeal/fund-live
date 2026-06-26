@@ -66,6 +66,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `/fund/:id/analysis` 改为 fresh snapshot-first；`/analysis/batch` 与 `/analysis/rankings` 会过滤过期快照。
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
+### Fixed
+- **自选页移动端滚动空白修复**
+  - `ScrollReveal` 懒显触发从“大块内容需进入视口 24%”调整为“任意进入视口即可触发（threshold=0）”，避免移动端自选分组列表容器过高时永远不显现，导致下滑后卡片区域保持空白。
+
 ### Changed
 - **默认主题切换为 Classic**
   - 新用户或未保存主题偏好的首访页面默认使用 Classic 暖白主题，服务端首屏 `data-theme` 同步为 `classic`，避免先渲染深色主题再切换。

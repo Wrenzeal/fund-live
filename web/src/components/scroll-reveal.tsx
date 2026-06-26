@@ -32,8 +32,8 @@ export function useLazyReveal<T extends HTMLElement>() {
         }
       },
       {
-        rootMargin: '0px 0px -12% 0px',
-        threshold: 0.24,
+        rootMargin: '0px 0px 12% 0px',
+        threshold: 0,
       }
     )
 
