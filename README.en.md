@@ -115,6 +115,9 @@ npm run build
 
 # Fast catalog-only fund sync
 go run ./cmd/crawler --list all --save-db --catalog-only
+
+# Backfill the latest 30 official NAV days for tracked funds
+go run ./cmd/crawler --history-only --tracked-only --history-days 30 --save-db
 ```
 
 ## Deployment Notes

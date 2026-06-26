@@ -115,6 +115,9 @@ npm run build
 
 # 快速刷新基金目录（只更新目录元数据）
 go run ./cmd/crawler --list all --save-db --catalog-only
+
+# 手动补采重点基金近 30 日官方净值历史（持仓/收藏/自选）
+go run ./cmd/crawler --history-only --tracked-only --history-days 30 --save-db
 ```
 
 ## 部署提示

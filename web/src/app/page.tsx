@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { useFundAnalysis, useFundDashboard, useFundHoldings, useTimeSeries } from '@/hooks/use-fund-data'
+import { useFundAnalysis, useFundDashboard, useFundHistory, useFundHoldings, useTimeSeries } from '@/hooks/use-fund-data'
 import { useMarketStatus, getSessionLabel, formatTimeUntil } from '@/hooks/use-market-status'
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
 import { FundSearch } from '@/components/fund-search'
@@ -10,6 +10,7 @@ import { EstimateCard } from '@/components/estimate-card'
 import { FundAnalysisCard } from '@/components/fund-analysis-card'
 import { FundSectorCard } from '@/components/fund-sector-card'
 import { IntradayChart } from '@/components/intraday-chart'
+import { FundHistoryTrend } from '@/components/fund-history-trend'
 import { HoldingsTable } from '@/components/holdings-table'
 import { TargetETFHoldingsCard } from '@/components/target-etf-holdings-card'
 import { ThemeSwitcher } from '@/components/theme-switcher'
@@ -137,6 +138,8 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     displayLevel: holdingsDisplayLevel,
     lookthroughAvailable,
   } = useFundHoldings(currentFundId)
+
+  const { points: historyPoints, isLoading: isHistoryLoading } = useFundHistory(isCallAuction ? null : currentFundId, 30)
 
   // 切换基金时使用 transition 避免阻塞
   const handleFundSelect = (fundId: string) => {
@@ -518,15 +521,24 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
             </div>
 
             {/* Chart Section */}
-            <IntradayChart
-              timeSeries={activeTimeSeries}
-              estimate={activeEstimate}
-              isLoading={isTimeSeriesLoading}
-              isCallAuction={isCallAuction}
-              displayDate={displayDate}
-              isHistorical={isHistorical}
-              officialClose={officialClose}
-            />
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
+              <IntradayChart
+                timeSeries={activeTimeSeries}
+                estimate={activeEstimate}
+                isLoading={isTimeSeriesLoading}
+                isCallAuction={isCallAuction}
+                displayDate={displayDate}
+                isHistorical={isHistorical}
+                officialClose={officialClose}
+              />
+              <FundHistoryTrend
+                points={isCallAuction ? [] : historyPoints}
+                days={30}
+                isLoading={!isCallAuction && isHistoryLoading}
+                title="近 30 日官方净值"
+                description="每日收盘净值走势，用于和盘中估值分开观察。"
+              />
+            </div>
 
             <FundSectorCard
               fund={activeFund}

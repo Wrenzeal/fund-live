@@ -4,7 +4,6 @@ package repository
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -402,18 +401,28 @@ func (r *PostgresFundRepository) ListFundHistoriesByFundIDs(ctx context.Context,
 		days = 180
 	}
 
-	var records []database.FundHistory
+	type rankedFundHistory struct {
+		database.FundHistory
+		Rank int `gorm:"column:history_rank"`
+	}
+
+	var records []rankedFundHistory
+	rankedSubquery := r.db.WithContext(ctx).
+		Model(&database.FundHistory{}).
+		Select(
+			"fund_history.*, ROW_NUMBER() OVER (PARTITION BY fund_id ORDER BY date DESC) AS history_rank",
+		).
+		Where("fund_id IN ?", uniqueIDs)
+
 	if err := r.db.WithContext(ctx).
-		Where("fund_id IN ?", uniqueIDs).
-		Order("fund_id ASC, date DESC").
+		Table("(?) AS ranked_history", rankedSubquery).
+		Where("history_rank <= ?", days).
+		Order("fund_id ASC, date ASC").
 		Find(&records).Error; err != nil {
 		return nil, fmt.Errorf("failed to list fund histories by ids: %w", err)
 	}
 
 	for _, record := range records {
-		if len(resultMap[record.FundID]) >= days {
-			continue
-		}
 		resultMap[record.FundID] = append(resultMap[record.FundID], domain.FundHistory{
 			FundID:      record.FundID,
 			Date:        record.Date.Format("2006-01-02"),
@@ -422,13 +431,6 @@ func (r *PostgresFundRepository) ListFundHistoriesByFundIDs(ctx context.Context,
 			DailyReturn: record.DailyReturn,
 			CreatedAt:   record.CreatedAt,
 		})
-	}
-
-	for fundID, histories := range resultMap {
-		sort.Slice(histories, func(i, j int) bool {
-			return histories[i].Date < histories[j].Date
-		})
-		resultMap[fundID] = histories
 	}
 
 	return resultMap, nil

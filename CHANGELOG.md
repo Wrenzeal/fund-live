@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 后端复用 `fund_history` 保存每日官方收盘净值，夜间官方净值同步从“仅持仓基金”扩展为持仓、收藏和自选分组基金，并一次补齐近 30 日记录。
   - 新增 `/api/v1/fund/:id/history?days=30` 与 `/api/v1/fund/history/batch?fund_ids=...&days=15`，支持单只与批量读取 1-180 日官方净值序列。
   - 量化详情页新增近 30 日官方净值走势；自选卡片与持仓聚合行新增近 15 日迷你净值走势，空态明确提示等待夜间同步，避免与盘中估值混算。
+  - `cmd/crawler` 新增 `--history-only --history-days --tracked-only`，可手动对持仓、收藏和自选基金补采近 1-180 日官方净值，例如 `go run ./cmd/crawler --history-only --tracked-only --history-days 30 --save-db`。
+  - 首页分时图旁新增近 30 日官方净值走势，将“盘中估值观察”和“每日收盘口径”并排展示，避免只在量化详情页才能查看历史走势。
+  - 批量历史净值查询改为数据库窗口函数按基金分别截取最近 N 日，避免一次拉取全部历史后再在 Go 层裁剪；解析层新增 `equityReturn` 优先与累计净值回填测试。
 
 - **后端登录与鉴权安全加固**
   - `AuthService` 新增进程内失败限流：默认 15 分钟窗口内密码登录失败 5 次、注册失败 8 次、Google 登录失败 10 次后返回 `AUTH_RATE_LIMITED` / HTTP 429。

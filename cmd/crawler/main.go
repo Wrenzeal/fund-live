@@ -8,13 +8,16 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/RomaticDOG/fund/internal/crawler"
 	"github.com/RomaticDOG/fund/internal/database"
 	"github.com/RomaticDOG/fund/internal/domain"
 	"github.com/RomaticDOG/fund/internal/repository"
+	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -31,11 +34,20 @@ func main() {
 	limit := flag.Int("limit", 0, "Limit number of funds to crawl (0 = no limit)")
 	fixNames := flag.Bool("fix-names", false, "Fix garbled stock names in database using Sina Finance API")
 	fixAllNames := flag.Bool("fix-all-names", false, "Refresh ALL stock names from Sina Finance API")
+	historyOnly := flag.Bool("history-only", false, "Fetch and save recent official daily NAV history only; requires --save-db")
+	historyDays := flag.Int("history-days", 30, "Number of recent official NAV days to save in --history-only mode")
+	trackedOnly := flag.Bool("tracked-only", false, "When used with --history-only, load fund codes from holdings, favorites, and watchlist groups")
 
 	flag.Parse()
 
 	if *catalogOnly && !*saveDB {
 		log.Fatalf("❌ --catalog-only requires --save-db")
+	}
+	if *historyOnly && !*saveDB {
+		log.Fatalf("❌ --history-only requires --save-db")
+	}
+	if *historyOnly && *catalogOnly {
+		log.Fatalf("❌ --history-only cannot be combined with --catalog-only")
 	}
 
 	// Handle --fix-names mode: fix garbled stock names in database
@@ -146,10 +158,13 @@ func main() {
 		for i := range fundCodes {
 			fundCodes[i] = strings.TrimSpace(fundCodes[i])
 		}
+	} else if *historyOnly && *trackedOnly {
+		fundCodes = []string{}
 	} else {
 		// Default codes
 		fundCodes = []string{"005827", "003095", "320007"}
 	}
+	fundCodes = uniqueFundCodes(fundCodes)
 
 	log.Printf("🚀 Starting Eastmoney Fund Crawler")
 	log.Printf("📊 Fund codes: %d funds", len(fundCodes))
@@ -160,10 +175,12 @@ func main() {
 
 	// Initialize database if saving to DB
 	var fundRepo *repository.PostgresFundRepository
+	var db *gorm.DB
 	if *saveDB {
 		log.Println("🔧 Connecting to PostgreSQL database...")
 		cfg := database.DefaultConfig()
-		db, err := database.InitDB(cfg, database.AllModels()...)
+		var err error
+		db, err = database.InitDB(cfg, database.AllModels()...)
 		if err != nil {
 			log.Fatalf("❌ Failed to connect to database: %v", err)
 		}
@@ -173,12 +190,46 @@ func main() {
 		log.Println("✅ Database connected")
 	}
 
+	if *historyOnly && *trackedOnly {
+		dbCtx, dbCancel := context.WithTimeout(context.Background(), *timeout)
+		trackedCodes, err := listTrackedHistoryFundCodes(dbCtx, db)
+		dbCancel()
+		if err != nil {
+			log.Fatalf("❌ Failed to load tracked fund codes: %v", err)
+		}
+		fundCodes = trackedCodes
+		log.Printf("📌 Loaded %d tracked fund codes from holdings/favorites/watchlists", len(fundCodes))
+	}
+
 	// Create crawler service
 	crawlService := crawler.NewCrawlService(*concurrency)
 
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
+
+	if *historyOnly {
+		if len(fundCodes) == 0 {
+			log.Println("ℹ️ No fund codes to sync history for")
+			return
+		}
+
+		days := normalizeHistoryDays(*historyDays)
+		log.Printf("🕚 Fetching recent official NAV history: %d funds, %d days", len(fundCodes), days)
+		startTime := time.Now()
+		stats, err := saveRecentFundHistories(ctx, crawlService, fundRepo, fundCodes, days, *concurrency)
+		if err != nil {
+			log.Fatalf("❌ Failed to save official NAV histories: %v", err)
+		}
+		log.Printf(
+			"✅ Official NAV history sync complete in %s: %d funds success, %d failed, %d history rows saved",
+			time.Since(startTime),
+			stats.SuccessFunds,
+			stats.FailedFunds,
+			stats.HistoryRows,
+		)
+		return
+	}
 
 	// Start crawling
 	startTime := time.Now()
@@ -367,6 +418,154 @@ func resolveFundCatalogStatus(fund crawler.FundListItem) string {
 		return domain.FundCatalogStatusUnavailable
 	}
 	return domain.FundCatalogStatusActive
+}
+
+type historySaveStats struct {
+	SuccessFunds int64
+	FailedFunds  int64
+	HistoryRows  int64
+}
+
+func saveRecentFundHistories(
+	ctx context.Context,
+	crawlService *crawler.CrawlService,
+	fundRepo domain.FundRepository,
+	fundCodes []string,
+	days int,
+	concurrency int,
+) (historySaveStats, error) {
+	if crawlService == nil || fundRepo == nil {
+		return historySaveStats{}, fmt.Errorf("crawler and fund repository are required")
+	}
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+
+	var stats historySaveStats
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(concurrency)
+
+	for _, fundCode := range uniqueFundCodes(fundCodes) {
+		fundCode := fundCode
+		g.Go(func() error {
+			histories, err := crawlService.FetchRecentFundHistory(ctx, fundCode, days)
+			if err != nil {
+				atomic.AddInt64(&stats.FailedFunds, 1)
+				log.Printf("   ⚠️ Failed to fetch history for %s: %v", fundCode, err)
+				return nil
+			}
+			if len(histories) == 0 {
+				atomic.AddInt64(&stats.FailedFunds, 1)
+				log.Printf("   ⚠️ No history returned for %s", fundCode)
+				return nil
+			}
+
+			for index := range histories {
+				history := histories[index]
+				if err := fundRepo.SaveFundHistory(ctx, &history); err != nil {
+					atomic.AddInt64(&stats.FailedFunds, 1)
+					log.Printf("   ⚠️ Failed to save history for %s/%s: %v", fundCode, history.Date, err)
+					return nil
+				}
+				atomic.AddInt64(&stats.HistoryRows, 1)
+			}
+
+			latestHistory := histories[len(histories)-1]
+			if fund, err := fundRepo.GetFundByID(ctx, fundCode); err == nil && fund != nil {
+				fund.NetAssetVal = latestHistory.NetAssetVal
+				fund.UpdatedAt = time.Now()
+				if saveErr := fundRepo.SaveFund(ctx, fund); saveErr != nil {
+					log.Printf("   ⚠️ Failed to update latest NAV for %s: %v", fundCode, saveErr)
+				}
+			}
+
+			if success := atomic.AddInt64(&stats.SuccessFunds, 1); success%20 == 0 {
+				log.Printf("   💾 History progress: %d funds saved...", success)
+			}
+			return nil
+		})
+	}
+
+	return stats, g.Wait()
+}
+
+func listTrackedHistoryFundCodes(ctx context.Context, db *gorm.DB) ([]string, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database is required")
+	}
+
+	seen := make(map[string]struct{})
+	addCodes := func(codes []string) {
+		for _, code := range codes {
+			code = strings.TrimSpace(code)
+			if code == "" {
+				continue
+			}
+			seen[code] = struct{}{}
+		}
+	}
+
+	var holdingCodes []string
+	if err := db.WithContext(ctx).
+		Model(&database.UserFundHolding{}).
+		Distinct("fund_id").
+		Pluck("fund_id", &holdingCodes).Error; err != nil {
+		return nil, fmt.Errorf("list holding fund codes: %w", err)
+	}
+	addCodes(holdingCodes)
+
+	var favoriteCodes []string
+	if err := db.WithContext(ctx).
+		Model(&database.UserFavoriteFund{}).
+		Distinct("fund_id").
+		Pluck("fund_id", &favoriteCodes).Error; err != nil {
+		return nil, fmt.Errorf("list favorite fund codes: %w", err)
+	}
+	addCodes(favoriteCodes)
+
+	var watchlistCodes []string
+	if err := db.WithContext(ctx).
+		Model(&database.UserWatchlistFund{}).
+		Distinct("fund_id").
+		Pluck("fund_id", &watchlistCodes).Error; err != nil {
+		return nil, fmt.Errorf("list watchlist fund codes: %w", err)
+	}
+	addCodes(watchlistCodes)
+
+	result := make([]string, 0, len(seen))
+	for code := range seen {
+		result = append(result, code)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+func normalizeHistoryDays(days int) int {
+	if days <= 0 {
+		return 30
+	}
+	if days > 180 {
+		return 180
+	}
+	return days
+}
+
+func uniqueFundCodes(codes []string) []string {
+	seen := make(map[string]struct{}, len(codes))
+	result := make([]string, 0, len(codes))
+	for _, code := range codes {
+		code = strings.TrimSpace(code)
+		if code == "" {
+			continue
+		}
+		if _, ok := seen[code]; ok {
+			continue
+		}
+		seen[code] = struct{}{}
+		result = append(result, code)
+	}
+	sort.Strings(result)
+	return result
 }
 
 // OutputData represents the JSON output structure.
