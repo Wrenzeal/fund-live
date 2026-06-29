@@ -1532,10 +1532,11 @@ func TestGetHistoryBatchReturnsSeriesForMultipleFunds(t *testing.T) {
 
 	handler := NewFundHandler(nil, fundRepo, nil)
 	router := gin.New()
+	router.GET("/api/v1/history/fund", handler.GetHistoryBatch)
 	router.GET("/api/v1/fund/history/batch", handler.GetHistoryBatch)
 	router.GET("/api/v1/fund/:id/history", handler.GetHistory)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/fund/history/batch?fund_ids=005827,003095&days=15", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/history/fund?fund_ids=005827,003095&days=15", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -1555,5 +1556,42 @@ func TestGetHistoryBatchReturnsSeriesForMultipleFunds(t *testing.T) {
 	}
 	if response.Data["005827"].Points[0].NetAssetVal.String() != "1.73" {
 		t.Fatalf("005827 nav = %s", response.Data["005827"].Points[0].NetAssetVal.String())
+	}
+}
+
+func TestGetHistoryBatchLegacyRouteStillReturnsSeries(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	fundRepo := repository.NewMemoryFundRepository()
+	if err := fundRepo.SaveFundHistory(context.Background(), &domain.FundHistory{
+		FundID:      "005827",
+		Date:        "2026-03-31",
+		NetAssetVal: decimal.RequireFromString("1.7300"),
+	}); err != nil {
+		t.Fatalf("SaveFundHistory() error = %v", err)
+	}
+
+	handler := NewFundHandler(nil, fundRepo, nil)
+	router := gin.New()
+	router.GET("/api/v1/fund/history/batch", handler.GetHistoryBatch)
+	router.GET("/api/v1/fund/:id/history", handler.GetHistory)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/fund/history/batch?fund_ids=005827&days=15", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	var response struct {
+		Success bool                                `json:"success"`
+		Data    map[string]domain.FundHistorySeries `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Data["005827"].Points) != 1 {
+		t.Fatalf("response data = %+v", response.Data)
 	}
 }

@@ -763,7 +763,8 @@ func (h *FundHandler) GetHistory(c *gin.Context) {
 }
 
 // GetHistoryBatch returns recent official daily NAV histories for multiple funds.
-// GET /api/v1/fund/history/batch?fund_ids=000001,000002&days=15
+// GET /api/v1/history/fund?fund_ids=000001,000002&days=15
+// GET /api/v1/fund/history/batch?fund_ids=000001,000002&days=15 (legacy)
 func (h *FundHandler) GetHistoryBatch(c *gin.Context) {
 	fundIDs := uniqueStrings(strings.Split(strings.TrimSpace(c.Query("fund_ids")), ","))
 	if len(fundIDs) == 0 {

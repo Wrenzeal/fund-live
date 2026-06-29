@@ -83,9 +83,6 @@ func (s *OfficialNAVSyncService) run(ctx context.Context) {
 
 func (s *OfficialNAVSyncService) shouldSyncImmediately(ctx context.Context) bool {
 	now := s.now().In(s.location)
-	if now.Hour() < s.syncHour || !trading.IsTradingDay(now) {
-		return false
-	}
 
 	fundIDs, err := s.listSyncFundIDs(ctx)
 	if err != nil {
@@ -96,7 +93,7 @@ func (s *OfficialNAVSyncService) shouldSyncImmediately(ctx context.Context) bool
 		return false
 	}
 
-	expectedDate := trading.GetLastTradingDay(now).Format("2006-01-02")
+	expectedDate := s.expectedOfficialNAVDate(now)
 	histories, err := s.fundRepo.GetLatestFundHistoriesByFundIDs(ctx, fundIDs)
 	if err != nil {
 		log.Printf("⚠️ Official NAV sync startup check failed to load histories: %v", err)
@@ -105,13 +102,21 @@ func (s *OfficialNAVSyncService) shouldSyncImmediately(ctx context.Context) bool
 
 	for _, fundID := range fundIDs {
 		history := histories[fundID]
-		if history == nil || history.Date != expectedDate {
+		if history == nil || history.Date < expectedDate {
 			return true
 		}
 	}
 
 	log.Printf("ℹ️ Official NAV sync already up to date for %s, skipping startup catch-up", expectedDate)
 	return false
+}
+
+func (s *OfficialNAVSyncService) expectedOfficialNAVDate(now time.Time) string {
+	local := now.In(s.location)
+	if trading.IsTradingDay(local) && local.Hour() >= s.syncHour {
+		return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, s.location).Format("2006-01-02")
+	}
+	return trading.GetPreviousTradingDay(local).Format("2006-01-02")
 }
 
 func (s *OfficialNAVSyncService) nextRunAt(now time.Time) time.Time {

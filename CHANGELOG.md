@@ -67,6 +67,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
 ### Fixed
+- **基金历史走势图刷新与自选迷你图修复**
+  - 自选 / 持仓卡片的批量历史净值请求切换到稳定路径 `/api/v1/history/fund?fund_ids=...&days=15`，并保留旧 `/api/v1/fund/history/batch` 后端兼容路由，避免与 `/fund/:id` 类接口部署顺序或代理规则冲突导致迷你走势图空白。
+  - 单只与批量历史净值 hook 在交易日 15:30-23:30（Asia/Shanghai）开启 5 分钟低频刷新，并支持重新聚焦 / 重连时刷新，保证夜间官方 NAV 发布后页面能自动补到最新点位。
+  - 官方 NAV 启动补偿同步改为在 23:00 前期待上一交易日、23:00 后才期待当天官方净值，避免白天误判当天官方净值缺失而反复显示历史未就绪。
+
 - **自选页移动端滚动空白修复**
   - `ScrollReveal` 懒显触发从“大块内容需进入视口 24%”调整为“任意进入视口即可触发（threshold=0）”，避免移动端自选分组列表容器过高时永远不显现，导致下滑后卡片区域保持空白。
 

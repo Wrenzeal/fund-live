@@ -271,6 +271,11 @@ func main() {
 			fund.GET("/:id/timeseries", fundHandler.GetTimeSeries)
 		}
 
+		history := v1.Group("/history")
+		{
+			history.GET("/fund", fundHandler.GetHistoryBatch)
+		}
+
 		market := v1.Group("/market")
 		{
 			market.GET("/status", fundHandler.GetMarketStatus)
@@ -375,6 +380,7 @@ func main() {
 		log.Printf("   GET /api/v1/fund/:id/estimate - Get real-time estimate")
 		log.Printf("   GET /api/v1/fund/:id/holdings - Get fund holdings")
 		log.Printf("   GET /api/v1/fund/:id/history?days=30 - Get official daily NAV history")
+		log.Printf("   GET /api/v1/history/fund?fund_ids=<ids>&days=15 - Get daily NAV histories")
 		log.Printf("   GET /api/v1/fund/history/batch?fund_ids=<ids>&days=15 - Get daily NAV histories")
 		log.Printf("   GET /api/v1/fund/:id/timeseries - Get intraday time series")
 		log.Printf("   GET /api/v1/market/status - Get A-Share market status")

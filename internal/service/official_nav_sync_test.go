@@ -28,6 +28,42 @@ func TestOfficialNAVSyncServiceNextRunAt(t *testing.T) {
 	}
 }
 
+func TestOfficialNAVSyncServiceExpectedOfficialNAVDate(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewOfficialNAVSyncService(fundRepo, userRepo, userRepo, userRepo)
+
+	tests := []struct {
+		name string
+		now  time.Time
+		want string
+	}{
+		{
+			name: "trading day before nightly publish window uses previous trading day",
+			now:  time.Date(2026, 3, 31, 15, 30, 0, 0, officialNAVSyncLocation),
+			want: "2026-03-30",
+		},
+		{
+			name: "trading day after nightly sync hour expects current trading day",
+			now:  time.Date(2026, 3, 31, 23, 15, 0, 0, officialNAVSyncLocation),
+			want: "2026-03-31",
+		},
+		{
+			name: "weekend uses previous trading day",
+			now:  time.Date(2026, 4, 4, 23, 15, 0, 0, officialNAVSyncLocation),
+			want: "2026-04-03",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := service.expectedOfficialNAVDate(tt.now); got != tt.want {
+				t.Fatalf("expectedOfficialNAVDate() = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestOfficialNAVSyncServiceShouldSyncImmediatelyWhenCurrentTradingDayMissing(t *testing.T) {
 	fundRepo := repository.NewMemoryFundRepository()
 	userRepo := repository.NewMemoryUserRepository()
@@ -83,6 +119,98 @@ func TestOfficialNAVSyncServiceSkipsImmediateSyncWhenAlreadyUpToDate(t *testing.
 
 	if service.shouldSyncImmediately(context.Background()) {
 		t.Fatalf("shouldSyncImmediately() = true, want false")
+	}
+}
+
+func TestOfficialNAVSyncServiceSkipsImmediateSyncWhenHistoryIsNewerThanExpected(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewOfficialNAVSyncService(fundRepo, userRepo, userRepo, userRepo)
+
+	if err := userRepo.SaveFundHolding(context.Background(), &domain.UserFundHolding{
+		ID:       "ufh_1",
+		UserID:   "user-1",
+		FundID:   "005827",
+		Amount:   decimal.RequireFromString("1000"),
+		AsOfDate: "2026-03-31",
+	}); err != nil {
+		t.Fatalf("SaveFundHolding() error = %v", err)
+	}
+	if err := fundRepo.SaveFundHistory(context.Background(), &domain.FundHistory{
+		FundID:      "005827",
+		Date:        "2026-03-31",
+		NetAssetVal: decimal.RequireFromString("1.8000"),
+		AccumVal:    decimal.RequireFromString("2.1000"),
+		DailyReturn: decimal.RequireFromString("1.2345"),
+		CreatedAt:   time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFundHistory() error = %v", err)
+	}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 3, 31, 15, 30, 0, 0, officialNAVSyncLocation)
+	}
+
+	if service.shouldSyncImmediately(context.Background()) {
+		t.Fatalf("shouldSyncImmediately() = true, want false when latest history is newer than expected date")
+	}
+}
+
+func TestOfficialNAVSyncServiceSkipsImmediateSyncBeforePublishWhenPreviousTradingDayPresent(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewOfficialNAVSyncService(fundRepo, userRepo, userRepo, userRepo)
+
+	if err := userRepo.SaveFundHolding(context.Background(), &domain.UserFundHolding{
+		ID:       "ufh_1",
+		UserID:   "user-1",
+		FundID:   "005827",
+		Amount:   decimal.RequireFromString("1000"),
+		AsOfDate: "2026-03-31",
+	}); err != nil {
+		t.Fatalf("SaveFundHolding() error = %v", err)
+	}
+	if err := fundRepo.SaveFundHistory(context.Background(), &domain.FundHistory{
+		FundID:      "005827",
+		Date:        "2026-03-30",
+		NetAssetVal: decimal.RequireFromString("1.8000"),
+		AccumVal:    decimal.RequireFromString("2.1000"),
+		DailyReturn: decimal.RequireFromString("1.2345"),
+		CreatedAt:   time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFundHistory() error = %v", err)
+	}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 3, 31, 15, 30, 0, 0, officialNAVSyncLocation)
+	}
+
+	if service.shouldSyncImmediately(context.Background()) {
+		t.Fatalf("shouldSyncImmediately() = true, want false before official NAV publish window")
+	}
+}
+
+func TestOfficialNAVSyncServiceSyncsImmediatelyBeforePublishWhenPreviousTradingDayMissing(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewOfficialNAVSyncService(fundRepo, userRepo, userRepo, userRepo)
+
+	if err := userRepo.SaveFundHolding(context.Background(), &domain.UserFundHolding{
+		ID:       "ufh_1",
+		UserID:   "user-1",
+		FundID:   "005827",
+		Amount:   decimal.RequireFromString("1000"),
+		AsOfDate: "2026-03-31",
+	}); err != nil {
+		t.Fatalf("SaveFundHolding() error = %v", err)
+	}
+
+	service.now = func() time.Time {
+		return time.Date(2026, 3, 31, 15, 30, 0, 0, officialNAVSyncLocation)
+	}
+
+	if !service.shouldSyncImmediately(context.Background()) {
+		t.Fatalf("shouldSyncImmediately() = false, want true when previous official NAV is missing")
 	}
 }
 

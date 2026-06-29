@@ -453,6 +453,37 @@ export interface FundAnalysis {
 // 默认 SWR 配置
 const DEFAULT_TRADING_INTERVAL = 30000  // 交易时段 30秒刷新
 const DEFAULT_CLOSED_INTERVAL = 0       // 休市时不刷新 (0 = disabled)
+const FUND_HISTORY_REFRESH_INTERVAL = 5 * 60 * 1000
+
+function getClockMinutesInTimezone(timezone: string) {
+    try {
+        const parts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: timezone || 'Asia/Shanghai',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+        }).formatToParts(new Date())
+        const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? '0')
+        const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? '0')
+        if (Number.isFinite(hour) && Number.isFinite(minute)) {
+            return (hour % 24) * 60 + minute
+        }
+    } catch {
+        // Fall through to local clock if the browser cannot resolve the market timezone.
+    }
+
+    const now = new Date()
+    return now.getHours() * 60 + now.getMinutes()
+}
+
+function shouldRefreshFundHistory(isTradingDay: boolean, timezone = 'Asia/Shanghai') {
+    if (!isTradingDay || typeof window === 'undefined') {
+        return false
+    }
+
+    const totalMinutes = getClockMinutesInTimezone(timezone)
+    return totalMinutes >= 15 * 60 + 30 && totalMinutes <= 23 * 60 + 30
+}
 
 /**
  * useFundEstimate - 获取基金实时估值
@@ -949,7 +980,9 @@ export function useFundTopHoldings(fundIDs: string[]) {
 
 
 export function useFundHistory(fundId: string | null, days = 30) {
+    const { isTradingDay, timezone } = useMarketTradingState()
     const normalizedDays = normalizeFundHistoryDays(days)
+    const shouldRefreshHistory = shouldRefreshFundHistory(isTradingDay, timezone)
     const swrKey = fundId
         ? `${API_BASE_URL}/api/v1/fund/${encodeURIComponent(fundId)}/history?days=${normalizedDays}`
         : null
@@ -958,7 +991,10 @@ export function useFundHistory(fundId: string | null, days = 30) {
         swrKey,
         fetchEnvelope,
         {
-            revalidateOnFocus: false,
+            refreshInterval: shouldRefreshHistory ? FUND_HISTORY_REFRESH_INTERVAL : 0,
+            revalidateOnFocus: true,
+            revalidateOnReconnect: true,
+            keepPreviousData: true,
             dedupingInterval: 60000,
         }
     )
@@ -982,20 +1018,25 @@ async function fetchFundHistoryBatch(fundIDs: string[], days: number): Promise<R
 
     const normalizedDays = normalizeFundHistoryDays(days)
     const payload = await fetchEnvelope<Record<string, FundHistorySeries>>(
-        `${API_BASE_URL}/api/v1/fund/history/batch?fund_ids=${encodeURIComponent(fundIDs.join(','))}&days=${normalizedDays}`
+        `${API_BASE_URL}/api/v1/history/fund?fund_ids=${encodeURIComponent(fundIDs.join(','))}&days=${normalizedDays}`
     )
     return payload.data || {}
 }
 
 export function useFundHistoryBatch(fundIDs: string[], days = 15) {
+    const { isTradingDay, timezone } = useMarketTradingState()
     const normalizedDays = normalizeFundHistoryDays(days)
     const normalizedFundIDs = [...new Set(fundIDs.filter(Boolean))].sort()
+    const shouldRefreshHistory = shouldRefreshFundHistory(isTradingDay, timezone)
 
     const { data = {}, error, isLoading, isValidating, mutate } = useSWR<Record<string, FundHistorySeries>>(
         normalizedFundIDs.length > 0 ? ['fund-history-batch', normalizedFundIDs.join(','), normalizedDays] : null,
         () => fetchFundHistoryBatch(normalizedFundIDs, normalizedDays),
         {
-            revalidateOnFocus: false,
+            refreshInterval: shouldRefreshHistory ? FUND_HISTORY_REFRESH_INTERVAL : 0,
+            revalidateOnFocus: true,
+            revalidateOnReconnect: true,
+            keepPreviousData: true,
             dedupingInterval: 60000,
         }
     )
