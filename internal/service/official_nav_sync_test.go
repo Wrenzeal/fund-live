@@ -10,6 +10,18 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+type stubOfficialNAVHistoryCrawler struct {
+	histories map[string][]domain.FundHistory
+}
+
+func (s stubOfficialNAVHistoryCrawler) FetchRecentFundHistory(ctx context.Context, fundCode string, limit int) ([]domain.FundHistory, error) {
+	histories := append([]domain.FundHistory(nil), s.histories[fundCode]...)
+	if limit > 0 && len(histories) > limit {
+		histories = histories[len(histories)-limit:]
+	}
+	return histories, nil
+}
+
 func TestOfficialNAVSyncServiceNextRunAt(t *testing.T) {
 	fundRepo := repository.NewMemoryFundRepository()
 	userRepo := repository.NewMemoryUserRepository()
@@ -225,6 +237,62 @@ func TestOfficialNAVSyncServiceSkipsImmediateSyncOnWeekend(t *testing.T) {
 
 	if service.shouldSyncImmediately(context.Background()) {
 		t.Fatalf("shouldSyncImmediately() = true, want false on weekend")
+	}
+}
+
+func TestOfficialNAVSyncServiceSyncOnceBackfillsAfterCrawlerGroupCompletes(t *testing.T) {
+	fundRepo := repository.NewMemoryFundRepository()
+	userRepo := repository.NewMemoryUserRepository()
+	service := NewOfficialNAVSyncService(fundRepo, userRepo, userRepo, userRepo)
+	service.crawler = stubOfficialNAVHistoryCrawler{
+		histories: map[string][]domain.FundHistory{
+			"005827": {
+				{
+					FundID:      "005827",
+					Date:        "2026-03-31",
+					NetAssetVal: decimal.RequireFromString("2.0000"),
+					AccumVal:    decimal.RequireFromString("2.0000"),
+					DailyReturn: decimal.RequireFromString("1.0000"),
+					CreatedAt:   time.Now(),
+				},
+			},
+		},
+	}
+
+	if err := fundRepo.SaveFund(context.Background(), &domain.Fund{
+		ID:          "005827",
+		Name:        "测试基金",
+		NetAssetVal: decimal.RequireFromString("1.0000"),
+		UpdatedAt:   time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveFund() error = %v", err)
+	}
+	if err := userRepo.SaveFundHolding(context.Background(), &domain.UserFundHolding{
+		ID:       "ufh_1",
+		UserID:   "user-1",
+		FundID:   "005827",
+		Amount:   decimal.RequireFromString("1000"),
+		AsOfDate: "2026-03-31",
+	}); err != nil {
+		t.Fatalf("SaveFundHolding() error = %v", err)
+	}
+
+	if err := service.SyncOnce(context.Background()); err != nil {
+		t.Fatalf("SyncOnce() error = %v", err)
+	}
+
+	holdings, err := userRepo.ListFundHoldings(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("ListFundHoldings() error = %v", err)
+	}
+	if len(holdings) != 1 {
+		t.Fatalf("holdings len = %d, want 1", len(holdings))
+	}
+	if holdings[0].ConfirmedNavDate != "2026-03-31" {
+		t.Fatalf("confirmed nav date = %s, want 2026-03-31", holdings[0].ConfirmedNavDate)
+	}
+	if holdings[0].Shares.String() != "500" {
+		t.Fatalf("shares = %s, want 500", holdings[0].Shares.String())
 	}
 }
 

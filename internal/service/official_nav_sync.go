@@ -16,13 +16,17 @@ import (
 
 var officialNAVSyncLocation = trading.TradingLocation()
 
+type officialNAVHistoryCrawler interface {
+	FetchRecentFundHistory(ctx context.Context, fundCode string, limit int) ([]domain.FundHistory, error)
+}
+
 // OfficialNAVSyncService fetches official end-of-day NAV data and reconciles held funds.
 type OfficialNAVSyncService struct {
 	fundRepo        domain.FundRepository
 	fundHoldingRepo domain.UserFundHoldingRepository
 	favoriteRepo    domain.UserFavoriteRepository
 	watchlistRepo   domain.UserWatchlistRepository
-	crawler         *crawler.CrawlService
+	crawler         officialNAVHistoryCrawler
 	location        *time.Location
 	now             func() time.Time
 	maxConcurrency  int
@@ -141,7 +145,7 @@ func (s *OfficialNAVSyncService) SyncOnce(ctx context.Context) error {
 
 	log.Printf("🕚 Official NAV sync started for %d tracked funds", len(fundIDs))
 
-	g, ctx := errgroup.WithContext(ctx)
+	g, groupCtx := errgroup.WithContext(ctx)
 	g.SetLimit(s.maxConcurrency)
 
 	var successCount atomic.Int64
@@ -150,7 +154,7 @@ func (s *OfficialNAVSyncService) SyncOnce(ctx context.Context) error {
 	for _, fundID := range fundIDs {
 		fundID := fundID
 		g.Go(func() error {
-			histories, err := s.crawler.FetchRecentFundHistory(ctx, fundID, 30)
+			histories, err := s.crawler.FetchRecentFundHistory(groupCtx, fundID, 30)
 			if err != nil {
 				failureCount.Add(1)
 				log.Printf("⚠️ Official NAV sync: fetch %s failed: %v", fundID, err)
@@ -164,7 +168,7 @@ func (s *OfficialNAVSyncService) SyncOnce(ctx context.Context) error {
 
 			for index := range histories {
 				history := histories[index]
-				if err := s.fundRepo.SaveFundHistory(ctx, &history); err != nil {
+				if err := s.fundRepo.SaveFundHistory(groupCtx, &history); err != nil {
 					failureCount.Add(1)
 					log.Printf("⚠️ Official NAV sync: save history %s/%s failed: %v", fundID, history.Date, err)
 					return nil
@@ -172,11 +176,11 @@ func (s *OfficialNAVSyncService) SyncOnce(ctx context.Context) error {
 			}
 
 			latestHistory := histories[len(histories)-1]
-			fund, err := s.fundRepo.GetFundByID(ctx, fundID)
+			fund, err := s.fundRepo.GetFundByID(groupCtx, fundID)
 			if err == nil && fund != nil {
 				fund.NetAssetVal = latestHistory.NetAssetVal
 				fund.UpdatedAt = s.now()
-				if saveErr := s.fundRepo.SaveFund(ctx, fund); saveErr != nil {
+				if saveErr := s.fundRepo.SaveFund(groupCtx, fund); saveErr != nil {
 					log.Printf("⚠️ Official NAV sync: update fund nav %s failed: %v", fundID, saveErr)
 				}
 			}
