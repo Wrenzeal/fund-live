@@ -4,25 +4,31 @@ import Link from 'next/link'
 import { ArrowUpRight, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useMarketTradingState } from '@/hooks/use-market-status'
-import { useFundDashboard, type FundAnalysis, type FundHistorySeries } from '@/hooks/use-fund-data'
+import { useFundDashboard, type FundAnalysis } from '@/hooks/use-fund-data'
 import { FundAnalysisBadge } from '@/components/fund-analysis-badge'
 import { FundAnalysisEventHint } from '@/components/fund-analysis-event-hint'
-import { FundHistoryTrend } from '@/components/fund-history-trend'
+import { FundMiniTrend } from '@/components/fund-mini-trend'
 import { cn, formatPercent } from '@/lib/utils'
 
 interface WatchlistFundCardProps {
   fundId: string
   analysis?: FundAnalysis | null
-  history?: FundHistorySeries
-  isHistoryLoading?: boolean
   onRemove: () => Promise<void> | void
 }
 
-export function WatchlistFundCard({ fundId, analysis, history, isHistoryLoading = false, onRemove }: WatchlistFundCardProps) {
+export function WatchlistFundCard({ fundId, analysis, onRemove }: WatchlistFundCardProps) {
   const [isRemoving, setIsRemoving] = useState(false)
   const { session } = useMarketTradingState()
   const isCallAuction = session === 'call_auction'
-  const { estimate, fund, isLoading } = useFundDashboard(isCallAuction ? null : fundId)
+  const {
+    estimate,
+    fund,
+    timeSeries,
+    displayDate,
+    isHistorical,
+    isLoading,
+    isValidating,
+  } = useFundDashboard(isCallAuction ? null : fundId)
 
   const fundName = fund?.name || estimate?.fund_name || fundId
   const percent = isCallAuction ? { text: '-', isPositive: false } : formatPercent(estimate?.change_percent)
@@ -63,9 +69,9 @@ export function WatchlistFundCard({ fundId, analysis, history, isHistoryLoading 
           disabled={isRemoving}
           className={cn(
             'group relative overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] p-2 text-theme-muted transition-all duration-200',
-            'hover:-translate-y-0.5 hover:border-rose-400/45 hover:bg-rose-500/12 hover:text-rose-200 active:scale-[0.95]',
+            'hover:-translate-y-0.5 hover:border-rose-400/45 hover:bg-rose-500/12 hover:text-down active:scale-[0.95]',
             'disabled:cursor-not-allowed disabled:opacity-80',
-            isRemoving && 'danger-button-pop border-rose-400/45 bg-rose-500/14 text-rose-100'
+            isRemoving && 'danger-button-pop border-rose-400/45 bg-rose-500/14 text-down'
           )}
           aria-label={`从自选中移除 ${fundName}`}
         >
@@ -79,12 +85,13 @@ export function WatchlistFundCard({ fundId, analysis, history, isHistoryLoading 
         </button>
       </div>
 
-      <FundHistoryTrend
-        points={history?.points || []}
-        days={history?.days || 15}
-        compact
-        isLoading={isHistoryLoading}
-        className="bg-[var(--input-bg)]/25"
+      <FundMiniTrend
+        timeSeries={isCallAuction ? [] : timeSeries}
+        isPositive={percent.isPositive}
+        isCallAuction={isCallAuction}
+        isHistorical={isHistorical}
+        displayDate={displayDate}
+        isLoading={!isCallAuction && (isLoading || isValidating)}
       />
 
       <div className="mt-4 flex items-end justify-between gap-4">

@@ -67,6 +67,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
 ### Fixed
+- **自选页分时走势图与主题可读性修复**
+  - 自选基金卡片的迷你走势图从 15 日官方净值历史切换为 dashboard 返回的当日 / 上一交易日分时涨跌幅，避免净值历史在小卡片中看起来近似直线且口径不符合“实时观察”预期。
+  - 迷你分时图新增今日 / 上一交易日标签、动态纵轴 padding 和主题化 tooltip，增强小幅波动的可读性。
+  - 自选页分组选择、导航、编辑弹层和 accent 标签清理深色主题专用浅色文字，改用主题语义色，提升 Classic / Dark / Cyber 三主题可读性。
+
 - **基金历史走势图刷新与自选迷你图修复**
   - 自选 / 持仓卡片的批量历史净值请求切换到稳定路径 `/api/v1/history/fund?fund_ids=...&days=15`，并保留旧 `/api/v1/fund/history/batch` 后端兼容路由，避免与 `/fund/:id` 类接口部署顺序或代理规则冲突导致迷你走势图空白。
   - 单只与批量历史净值 hook 在交易日 15:30-23:30（Asia/Shanghai）开启 5 分钟低频刷新，并支持重新聚焦 / 重连时刷新，保证夜间官方 NAV 发布后页面能自动补到最新点位。

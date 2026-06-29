@@ -25,7 +25,7 @@ import { FloatingListbox } from "@/components/floating-listbox";
 import { ScrollReveal, ScrollRevealStack } from "@/components/scroll-reveal";
 import { WatchlistFundCard } from "@/components/watchlist-fund-card";
 import { useCurrentUser } from "@/hooks/use-auth";
-import { useFundAnalyses, useFundHistoryBatch, useFundSearch } from "@/hooks/use-fund-data";
+import { useFundAnalyses, useFundSearch } from "@/hooks/use-fund-data";
 import {
   useUserPortfolio,
   type WatchlistGroup,
@@ -118,7 +118,6 @@ export default function WatchlistPage() {
     [watchlistGroups],
   );
   const { analysesByFundID } = useFundAnalyses(watchlistFundIDs);
-  const { historiesByFundID, isLoading: isHistoryLoading } = useFundHistoryBatch(watchlistFundIDs, 15);
 
   const orderedWatchlistGroups = useMemo(() => {
     if (
@@ -718,7 +717,7 @@ export default function WatchlistPage() {
                     className={cn(
                       "relative z-10 flex w-full items-start justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors",
                       !selectedGroup
-                        ? "bg-cyan-500/14 text-cyan-100"
+                        ? "bg-cyan-500/14 text-theme-primary"
                         : "text-theme-secondary hover:bg-[var(--input-bg)] hover:text-theme-primary",
                     )}
                     role="option"
@@ -748,7 +747,7 @@ export default function WatchlistPage() {
                         className={cn(
                           "relative z-10 flex w-full items-start justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors",
                           active
-                            ? "bg-cyan-500/14 text-cyan-100"
+                            ? "bg-cyan-500/14 text-theme-primary"
                             : "text-theme-secondary hover:bg-[var(--input-bg)] hover:text-theme-primary",
                         )}
                         role="option"
@@ -1036,7 +1035,7 @@ export default function WatchlistPage() {
                               "group relative shrink-0 overflow-hidden rounded-full border px-3 py-2 text-xs transition-all duration-200",
                               "hover:-translate-y-0.5 hover:shadow-[0_10px_22px_rgba(34,211,238,0.10)] active:scale-[0.97]",
                               active
-                                ? "border-cyan-400/50 bg-cyan-400/15 text-cyan-100 shadow-[0_10px_22px_rgba(34,211,238,0.12)]"
+                                ? "border-cyan-400/50 bg-cyan-400/15 text-theme-primary shadow-[0_10px_22px_rgba(34,211,238,0.12)]"
                                 : "border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-400/35 hover:text-theme-primary",
                               animatingNavGroupId === group.id &&
                                 "action-button-pop",
@@ -1119,7 +1118,7 @@ export default function WatchlistPage() {
                                     "group/drag inline-flex cursor-grab select-none items-center gap-1 rounded-full border border-[var(--input-border)] bg-[var(--input-bg)]/70 px-2 py-1 text-[11px] text-theme-muted transition-all duration-200 active:cursor-grabbing",
                                     "hover:border-cyan-400/35 hover:bg-cyan-400/10 hover:text-theme-primary",
                                     isDragging &&
-                                      "border-cyan-400/45 bg-cyan-400/14 text-cyan-100 action-button-pop",
+                                      "border-cyan-400/45 bg-cyan-400/14 text-theme-primary action-button-pop",
                                   )}
                                   aria-label={`拖拽调整 ${group.name} 的排序`}
                                   title="拖拽调整排序"
@@ -1215,7 +1214,7 @@ export default function WatchlistPage() {
                                 "hover:-translate-y-0.5 hover:border-rose-400/40 hover:bg-rose-500/12 hover:text-rose-200 active:scale-[0.985]",
                                 "disabled:cursor-not-allowed disabled:opacity-80",
                                 deletingGroupID === group.id &&
-                                  "danger-button-pop border-rose-400/45 bg-rose-500/14 text-rose-100",
+                                  "danger-button-pop border-rose-400/45 bg-rose-500/14 text-down",
                               )}
                             >
                               <span className="action-button-shine" />
@@ -1253,8 +1252,6 @@ export default function WatchlistPage() {
                               <WatchlistFundCard
                                 fundId={item.fund_id}
                                 analysis={analysesByFundID[item.fund_id]}
-                                history={historiesByFundID[item.fund_id]}
-                                isHistoryLoading={isHistoryLoading}
                                 onRemove={() =>
                                   void removeFundFromGroup(
                                     group.id,
@@ -1367,7 +1364,7 @@ export default function WatchlistPage() {
                                 </span>
                               </div>
                               {active && (
-                                <Check className="h-4 w-4 text-cyan-100" />
+                                <Check className="h-4 w-4 text-theme-primary" />
                               )}
                             </div>
                           </button>
@@ -1398,7 +1395,7 @@ export default function WatchlistPage() {
                     }}
                     disabled={savingGroupId !== null}
                     className={cn(
-                      "group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-5 py-3 text-sm font-medium text-white transition-all duration-200",
+                      "group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-5 py-3 text-sm font-medium text-theme-primary transition-all duration-200",
                       "hover:-translate-y-0.5 hover:shadow-[0_18px_35px_rgba(14,165,233,0.28)] active:scale-[0.985]",
                       "disabled:cursor-not-allowed disabled:opacity-80",
                       savingGroupId !== null && "action-button-pop",

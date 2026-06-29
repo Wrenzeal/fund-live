@@ -1,8 +1,8 @@
 export const GROUP_ACCENT_OPTIONS = [
-  { value: 'cyan', label: '清爽蓝', shell: 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100', dot: 'bg-cyan-300' },
-  { value: 'emerald', label: '自然绿', shell: 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100', dot: 'bg-emerald-300' },
-  { value: 'amber', label: '暖金橙', shell: 'border-amber-400/35 bg-amber-500/12 text-amber-100', dot: 'bg-amber-300' },
-  { value: 'fuchsia', label: '紫红调', shell: 'border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100', dot: 'bg-fuchsia-300' },
+  { value: 'cyan', label: '清爽蓝', shell: 'border-cyan-400/35 bg-cyan-500/12 text-theme-primary', dot: 'bg-cyan-300' },
+  { value: 'emerald', label: '自然绿', shell: 'border-emerald-400/35 bg-emerald-500/12 text-theme-primary', dot: 'bg-emerald-300' },
+  { value: 'amber', label: '暖金橙', shell: 'border-amber-400/35 bg-amber-500/12 text-theme-primary', dot: 'bg-amber-300' },
+  { value: 'fuchsia', label: '紫红调', shell: 'border-fuchsia-400/35 bg-fuchsia-500/12 text-theme-primary', dot: 'bg-fuchsia-300' },
 ] as const
 
 export type WatchlistAccent = (typeof GROUP_ACCENT_OPTIONS)[number]['value']
@@ -36,12 +36,12 @@ export function watchlistAccentLabel(accent: string) {
 export function watchlistAccentBadgeClass(accent: string) {
   switch (accent) {
     case 'emerald':
-      return 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100'
+      return 'border-emerald-400/35 bg-emerald-500/12 text-theme-primary'
     case 'amber':
-      return 'border-amber-400/35 bg-amber-500/12 text-amber-100'
+      return 'border-amber-400/35 bg-amber-500/12 text-theme-primary'
     case 'fuchsia':
-      return 'border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100'
+      return 'border-fuchsia-400/35 bg-fuchsia-500/12 text-theme-primary'
     default:
-      return 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100'
+      return 'border-cyan-400/35 bg-cyan-500/12 text-theme-primary'
   }
 }
