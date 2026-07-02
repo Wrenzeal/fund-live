@@ -20,6 +20,12 @@ function getInitials(name: string) {
   return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase()
 }
 
+const accountMenuOptionClass =
+  'account-menu-option group flex items-center gap-3 rounded-2xl px-3 py-3 text-left'
+
+const accountMenuButtonClass =
+  'account-menu-option group flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left disabled:cursor-not-allowed disabled:opacity-60'
+
 export function UserAccountMenu() {
   const { user, isLoading, mutate } = useCurrentUser()
   const [isOpen, setIsOpen] = useState(false)
@@ -175,12 +181,17 @@ export function UserAccountMenu() {
               </div>
 
               <div className="border-b border-[var(--card-border)] p-2">
+                <div className="px-3 pb-2 pt-1">
+                  <div className="account-menu-section-title">账户入口</div>
+                  <div className="text-xs text-theme-muted">常用页面与账户相关功能</div>
+                </div>
+
                 <Link
                   href="/watchlist"
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-[var(--input-bg)]"
+                  className={accountMenuOptionClass}
                 >
-                  <div className="rounded-xl bg-cyan-500/15 p-2 text-cyan-300">
+                  <div className="account-menu-icon rounded-xl bg-cyan-500/15 p-2 text-cyan-300">
                     <Layers3 className="h-4 w-4" />
                   </div>
                   <div>
@@ -192,9 +203,9 @@ export function UserAccountMenu() {
                 <Link
                   href="/holdings"
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-[var(--input-bg)]"
+                  className={accountMenuOptionClass}
                 >
-                  <div className="rounded-xl bg-amber-500/15 p-2 text-amber-300">
+                  <div className="account-menu-icon rounded-xl bg-amber-500/15 p-2 text-amber-300">
                     <Wallet className="h-4 w-4" />
                   </div>
                   <div>
@@ -206,9 +217,9 @@ export function UserAccountMenu() {
                 <Link
                   href="/issues"
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-[var(--input-bg)]"
+                  className={accountMenuOptionClass}
                 >
-                  <div className="rounded-xl bg-rose-500/15 p-2 text-rose-300">
+                  <div className="account-menu-icon rounded-xl bg-rose-500/15 p-2 text-rose-300">
                     <Bug className="h-4 w-4" />
                   </div>
                   <div>
@@ -220,9 +231,9 @@ export function UserAccountMenu() {
                 <Link
                   href="/announcements"
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-[var(--input-bg)]"
+                  className={accountMenuOptionClass}
                 >
-                  <div className="rounded-xl bg-emerald-500/15 p-2 text-emerald-300">
+                  <div className="account-menu-icon rounded-xl bg-emerald-500/15 p-2 text-emerald-300">
                     <Bell className="h-4 w-4" />
                   </div>
                   <div>
@@ -234,7 +245,8 @@ export function UserAccountMenu() {
 
               <div className="border-b border-[var(--card-border)] p-2">
                 <div className="px-3 py-2">
-                  <div className="text-xs font-medium tracking-[0.16em] text-theme-muted">行情数据源</div>
+                  <div className="account-menu-section-title">行情数据源</div>
+                  <div className="text-xs text-theme-muted">点击切换，保存后立即生效</div>
                 </div>
 
                 {quoteSources.map((source) => {
@@ -245,11 +257,12 @@ export function UserAccountMenu() {
                       type="button"
                       onClick={() => void handleQuoteSourceChange(source.id)}
                       disabled={isUpdatingQuoteSource}
-                      className="flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left transition-colors hover:bg-[var(--input-bg)] disabled:cursor-not-allowed disabled:opacity-60"
+                      data-active={active}
+                      className={accountMenuButtonClass}
                     >
                       <div className="flex items-center gap-3">
                         <div className={cn(
-                          'rounded-xl p-2',
+                          'account-menu-icon rounded-xl p-2',
                           active ? 'bg-cyan-500/15 text-cyan-300' : 'bg-[var(--input-bg)] text-theme-muted'
                         )}>
                           {active ? <Check className="h-4 w-4" /> : <Radio className="h-4 w-4" />}
@@ -259,28 +272,31 @@ export function UserAccountMenu() {
                           <div className="text-xs text-theme-muted">{source.description}</div>
                         </div>
                       </div>
-                      {active && <span className="text-xs text-cyan-300">当前</span>}
+                      {active && <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-300">当前使用</span>}
                     </button>
                   )
                 })}
               </div>
 
-              <button
-                type="button"
-                onClick={() => void handleLogout()}
-                disabled={isLoggingOut}
-                className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-[var(--input-bg)] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="rounded-xl bg-rose-500/15 p-2 text-rose-300">
-                    {isLoggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+              <div className="p-2">
+                <button
+                  type="button"
+                  onClick={() => void handleLogout()}
+                  disabled={isLoggingOut}
+                  data-tone="danger"
+                  className={accountMenuButtonClass}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="account-menu-icon rounded-xl bg-rose-500/15 p-2 text-rose-300">
+                      {isLoggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-theme-primary">退出登录</div>
+                      <div className="text-xs text-theme-muted">清除当前浏览器会话</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-sm font-medium text-theme-primary">退出登录</div>
-                    <div className="text-xs text-theme-muted">清除当前浏览器会话</div>
-                  </div>
-                </div>
-              </button>
+                </button>
+              </div>
             </div>
           </div>
         </>
