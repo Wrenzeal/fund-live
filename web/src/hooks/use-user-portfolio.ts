@@ -507,7 +507,7 @@ export function useUserPortfolio(userID: string | null, transactionFilters: Hold
       })
     : null
 
-  const { data: watchlistGroups = [], mutate: mutateWatchlistGroups } = useSWR<WatchlistGroup[]>(
+  const { data: watchlistGroups = [], isLoading: isWatchlistLoading, mutate: mutateWatchlistGroups } = useSWR<WatchlistGroup[]>(
     userID ? `${API_BASE_URL}/api/v1/user/watchlist/groups` : null,
     fetcher,
     {
@@ -549,6 +549,7 @@ export function useUserPortfolio(userID: string | null, transactionFilters: Hold
 
   return {
     watchlistGroups,
+    isWatchlistLoading,
     holdings,
     holdingAggregates,
     holdingTransactions,

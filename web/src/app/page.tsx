@@ -5,6 +5,8 @@ import { useSearchParams } from 'next/navigation'
 import { useFundAnalysis, useFundDashboard, useFundHistory, useFundHoldings, useTimeSeries } from '@/hooks/use-fund-data'
 import { useMarketStatus, getSessionLabel, formatTimeUntil } from '@/hooks/use-market-status'
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
+import { useCurrentUser } from '@/hooks/use-auth'
+import { useUserPortfolio, type WatchlistFundEntry } from '@/hooks/use-user-portfolio'
 import { FundSearch } from '@/components/fund-search'
 import { EstimateCard } from '@/components/estimate-card'
 import { FundAnalysisCard } from '@/components/fund-analysis-card'
@@ -23,11 +25,14 @@ import { SiteFooter } from '@/components/site-footer'
 import { ActionButton } from '@/components/ui/action-button'
 import { Surface } from '@/components/ui/surface'
 import { StatusBanner } from '@/components/ui/status-banner'
-import { BarChart3, TrendingUp, Clock, RefreshCw } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
+import { BarChart3, TrendingUp, Clock, RefreshCw, Layers3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // 默认基金 ID
 const DEFAULT_FUND_ID = '005827'
+const INITIAL_MINIMAL_WATCHLIST_COUNT = 4
+const MINIMAL_WATCHLIST_BATCH_SIZE = 4
 
 export default function Home() {
   return (
@@ -49,6 +54,9 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   const [currentFundId, setCurrentFundId] = useState<string>(initialFundId)
 
   const { themeType, setThemeType, viewMode, setViewMode } = useUIPreferences()
+  const { user, isLoading: isUserLoading } = useCurrentUser()
+  const shouldLoadMinimalWatchlist = viewMode === 'minimal' && (isUserLoading || Boolean(user))
+  const { watchlistGroups, isWatchlistLoading } = useUserPortfolio(shouldLoadMinimalWatchlist ? (user?.id ?? null) : null)
 
   // React 18 useTransition 用于非阻塞更新
   const [isPending, startTransition] = useTransition()
@@ -229,6 +237,23 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     : marketStatus.isTrading
       ? '交易中'
       : getSessionLabel(marketStatus.session)
+  const shouldShowMinimalWatchlist = shouldLoadMinimalWatchlist
+  const minimalWatchlistFunds = useMemo(() => {
+    const seen = new Set<string>()
+    const entries: WatchlistFundEntry[] = []
+
+    for (const group of watchlistGroups) {
+      for (const item of group.funds) {
+        if (!item.fund_id || seen.has(item.fund_id)) {
+          continue
+        }
+        seen.add(item.fund_id)
+        entries.push(item)
+      }
+    }
+
+    return entries
+  }, [watchlistGroups])
 
   return (
     <div className="min-h-[100dvh]">
@@ -340,17 +365,26 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
 
         {viewMode === 'minimal' ? (
           /* ===== Minimal Mode ===== */
-          <ScrollReveal className="flex min-h-[60vh] items-center justify-center" variant="scale-in">
-            <EstimateCard
-              estimate={activeEstimate}
-              fund={activeFund}
-              isLoading={isDashboardLoading}
+          shouldShowMinimalWatchlist ? (
+            <MinimalWatchlistGrid
+              key={minimalWatchlistFunds.map((item) => item.fund_id).join('|')}
+              funds={minimalWatchlistFunds}
+              isLoading={isUserLoading || isWatchlistLoading}
               isCallAuction={isCallAuction}
-              isValidating={isValidating}
-              lastUpdated={activeLastUpdated}
-              className="w-full max-w-2xl"
             />
-          </ScrollReveal>
+          ) : (
+            <ScrollReveal className="flex min-h-[60vh] items-center justify-center" variant="scale-in">
+              <EstimateCard
+                estimate={activeEstimate}
+                fund={activeFund}
+                isLoading={isDashboardLoading}
+                isCallAuction={isCallAuction}
+                isValidating={isValidating}
+                lastUpdated={activeLastUpdated}
+                className="w-full max-w-2xl"
+              />
+            </ScrollReveal>
+          )
         ) : (
           /* ===== Professional Mode ===== */
           <ScrollRevealStack className="space-y-6">
@@ -578,6 +612,149 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
 
       <SiteFooter className="mt-12" compact />
     </div>
+  )
+}
+
+function MinimalWatchlistGrid({
+  funds,
+  isLoading,
+  isCallAuction,
+}: {
+  funds: WatchlistFundEntry[]
+  isLoading: boolean
+  isCallAuction: boolean
+}) {
+  const [visibleCount, setVisibleCount] = useState(INITIAL_MINIMAL_WATCHLIST_COUNT)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+
+  const hasMore = visibleCount < funds.length
+  const visibleFunds = funds.slice(0, visibleCount)
+
+  useEffect(() => {
+    if (!hasMore) {
+      return
+    }
+
+    const element = sentinelRef.current
+    if (!element) {
+      return
+    }
+
+    if (typeof IntersectionObserver === 'undefined') {
+      const frame = window.requestAnimationFrame(() => {
+        setVisibleCount((count) => Math.min(count + MINIMAL_WATCHLIST_BATCH_SIZE, funds.length))
+      })
+      return () => window.cancelAnimationFrame(frame)
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting || entry.intersectionRatio > 0) {
+          setVisibleCount((count) => Math.min(count + MINIMAL_WATCHLIST_BATCH_SIZE, funds.length))
+        }
+      },
+      { rootMargin: '220px 0px', threshold: 0 }
+    )
+
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [funds.length, hasMore, visibleCount])
+
+  if (isLoading) {
+    return (
+      <ScrollRevealStack className="grid gap-6 md:grid-cols-2" itemClassName="h-full" stagger={70}>
+        {Array.from({ length: INITIAL_MINIMAL_WATCHLIST_COUNT }).map((_, index) => (
+          <MinimalWatchlistCardSkeleton key={index} />
+        ))}
+      </ScrollRevealStack>
+    )
+  }
+
+  if (funds.length === 0) {
+    return (
+      <ScrollReveal className="min-h-[60vh]" variant="scale-in">
+        <EmptyState
+          icon={<Layers3 className="h-10 w-10" />}
+          title="极简模式会展示你的自选基金"
+          description="当前账号还没有自选基金。添加自选后，这里会以两列卡片展示核心估值，并在下滑时继续加载更多基金。"
+          action={<ActionButton href="/watchlist" variant="primary">去添加自选</ActionButton>}
+        />
+      </ScrollReveal>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <ScrollReveal className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.22em] text-theme-muted">Minimal Watchlist</div>
+          <h1 className="mt-2 text-2xl font-black text-theme-primary sm:text-3xl">我的自选基金</h1>
+        </div>
+        <div className="text-sm text-theme-secondary">
+          已显示 {visibleFunds.length} / {funds.length} 只
+        </div>
+      </ScrollReveal>
+
+      <ScrollRevealStack className="grid gap-6 md:grid-cols-2" itemClassName="h-full" stagger={70}>
+        {visibleFunds.map((item) => (
+          <MinimalWatchlistEstimateCard
+            key={item.fund_id}
+            fundId={item.fund_id}
+            isCallAuction={isCallAuction}
+          />
+        ))}
+      </ScrollRevealStack>
+
+      <div ref={sentinelRef} className="flex min-h-12 items-center justify-center text-sm text-theme-muted">
+        {hasMore ? '继续下滑加载更多自选基金' : '已加载全部自选基金'}
+      </div>
+    </div>
+  )
+}
+
+function MinimalWatchlistEstimateCard({
+  fundId,
+  isCallAuction,
+}: {
+  fundId: string
+  isCallAuction: boolean
+}) {
+  const {
+    estimate,
+    fund,
+    isLoading,
+    isValidating,
+  } = useFundDashboard(isCallAuction ? null : fundId)
+  const lastUpdated = estimate?.calculated_at ? new Date(estimate.calculated_at) : null
+
+  return (
+    <EstimateCard
+      estimate={isCallAuction ? undefined : estimate}
+      fund={isCallAuction ? undefined : fund}
+      isLoading={!isCallAuction && isLoading}
+      isCallAuction={isCallAuction}
+      isValidating={isValidating}
+      lastUpdated={isCallAuction ? null : lastUpdated}
+      className="h-full min-h-[25rem]"
+    />
+  )
+}
+
+function MinimalWatchlistCardSkeleton() {
+  return (
+    <Surface padding="lg" radius="lg" className="h-full min-h-[25rem] overflow-hidden">
+      <div className="h-6 w-2/3 rounded-full bg-[var(--input-bg)]" />
+      <div className="mt-3 h-4 w-28 rounded-full bg-[var(--input-bg)]" />
+      <div className="mt-10 flex items-center gap-4">
+        <div className="h-14 w-14 rounded-full bg-[var(--input-bg)]" />
+        <div className="h-14 w-44 rounded-full bg-[var(--input-bg)]" />
+      </div>
+      <div className="mt-10 grid gap-4 sm:grid-cols-2">
+        <div className="h-24 rounded-2xl bg-[var(--input-bg)]" />
+        <div className="h-24 rounded-2xl bg-[var(--input-bg)]" />
+      </div>
+      <div className="mt-8 h-4 w-48 rounded-full bg-[var(--input-bg)]" />
+    </Surface>
   )
 }
 
