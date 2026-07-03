@@ -6,7 +6,7 @@ import { useFundAnalysis, useFundDashboard, useFundHistory, useFundHoldings, use
 import { useMarketStatus, getSessionLabel, formatTimeUntil } from '@/hooks/use-market-status'
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
 import { useCurrentUser } from '@/hooks/use-auth'
-import { useUserPortfolio, type WatchlistFundEntry } from '@/hooks/use-user-portfolio'
+import { useUserWatchlistGroups, type WatchlistFundEntry } from '@/hooks/use-user-portfolio'
 import { FundSearch } from '@/components/fund-search'
 import { EstimateCard } from '@/components/estimate-card'
 import { FundAnalysisCard } from '@/components/fund-analysis-card'
@@ -26,7 +26,7 @@ import { ActionButton } from '@/components/ui/action-button'
 import { Surface } from '@/components/ui/surface'
 import { StatusBanner } from '@/components/ui/status-banner'
 import { EmptyState } from '@/components/ui/empty-state'
-import { BarChart3, TrendingUp, Clock, RefreshCw, Layers3 } from 'lucide-react'
+import { BarChart3, TrendingUp, Clock, RefreshCw, Layers3, ArrowRight, MousePointer2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // 默认基金 ID
@@ -36,7 +36,7 @@ const MINIMAL_WATCHLIST_BATCH_SIZE = 4
 
 export default function Home() {
   return (
-    <Suspense fallback={<HomeContent initialFundId={DEFAULT_FUND_ID} />}>
+    <Suspense fallback={<HomeContent initialFundId={DEFAULT_FUND_ID} hasExplicitFundParam={false} />}>
       <HomeWithSearchParams />
     </Suspense>
   )
@@ -44,19 +44,32 @@ export default function Home() {
 
 function HomeWithSearchParams() {
   const searchParams = useSearchParams()
-  const requestedFundId = searchParams.get('fund')?.trim() || DEFAULT_FUND_ID
+  const explicitFundId = searchParams.get('fund')?.trim() || ''
+  const requestedFundId = explicitFundId || DEFAULT_FUND_ID
 
-  return <HomeContent key={requestedFundId} initialFundId={requestedFundId} />
+  return (
+    <HomeContent
+      key={requestedFundId}
+      initialFundId={requestedFundId}
+      hasExplicitFundParam={Boolean(explicitFundId)}
+    />
+  )
 }
 
-function HomeContent({ initialFundId }: { initialFundId: string }) {
+function HomeContent({
+  initialFundId,
+  hasExplicitFundParam,
+}: {
+  initialFundId: string
+  hasExplicitFundParam: boolean
+}) {
   // 当前选中的基金 ID
   const [currentFundId, setCurrentFundId] = useState<string>(initialFundId)
 
   const { themeType, setThemeType, viewMode, setViewMode } = useUIPreferences()
   const { user, isLoading: isUserLoading } = useCurrentUser()
-  const shouldLoadMinimalWatchlist = viewMode === 'minimal' && (isUserLoading || Boolean(user))
-  const { watchlistGroups, isWatchlistLoading } = useUserPortfolio(shouldLoadMinimalWatchlist ? (user?.id ?? null) : null)
+  const shouldLoadWatchlist = isUserLoading || Boolean(user)
+  const { watchlistGroups, isWatchlistLoading } = useUserWatchlistGroups(shouldLoadWatchlist ? (user?.id ?? null) : null)
 
   // React 18 useTransition 用于非阻塞更新
   const [isPending, startTransition] = useTransition()
@@ -64,6 +77,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   // 基金切换加载状态
   const [switchingFundId, setSwitchingFundId] = useState<string | null>(null)
   const [selectionError, setSelectionError] = useState<string | null>(null)
+  const [hasExplicitFundSelection, setHasExplicitFundSelection] = useState(hasExplicitFundParam)
   const lastStableFundIdRef = useRef<string>(DEFAULT_FUND_ID)
   const switchingFundIdRef = useRef<string | null>(null)
   // 市场状态 hook
@@ -109,6 +123,33 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     })
   }
 
+  const shouldShowMinimalWatchlist = viewMode === 'minimal' && shouldLoadWatchlist
+  const minimalWatchlistFunds = useMemo(() => {
+    const seen = new Set<string>()
+    const entries: WatchlistFundEntry[] = []
+
+    for (const group of watchlistGroups) {
+      for (const item of group.funds) {
+        if (!item.fund_id || seen.has(item.fund_id)) {
+          continue
+        }
+        seen.add(item.fund_id)
+        entries.push(item)
+      }
+    }
+
+    return entries
+  }, [watchlistGroups])
+  const firstWatchlistFundId = minimalWatchlistFunds[0]?.fund_id
+  const displayFundId = !hasExplicitFundSelection && user && firstWatchlistFundId
+    ? firstWatchlistFundId
+    : currentFundId
+  const currentWatchlistIndex = minimalWatchlistFunds.findIndex((item) => item.fund_id === displayFundId)
+  const canNavigateWatchlist = Boolean(user && minimalWatchlistFunds.length > 1)
+  const watchlistPositionLabel = currentWatchlistIndex >= 0
+    ? `第 ${currentWatchlistIndex + 1} / ${minimalWatchlistFunds.length} 只`
+    : `${minimalWatchlistFunds.length} 只自选`
+
   // SWR 数据获取 hooks - 首页统一用 dashboard 快照，避免卡片与图表分叉
   const {
     fund,
@@ -123,7 +164,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     isTrading,
     refreshInterval,
     isWarming: isDashboardWarming,
-  } = useFundDashboard(isCallAuction ? null : currentFundId, {
+  } = useFundDashboard(isCallAuction ? null : displayFundId, {
     onSuccess: handleDashboardSuccess,
     onError: handleDashboardError,
   })
@@ -131,7 +172,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     analysis,
     isLoading: isAnalysisLoading,
     mutate: refreshAnalysis,
-  } = useFundAnalysis(isCallAuction ? null : currentFundId)
+  } = useFundAnalysis(isCallAuction ? null : displayFundId)
   const {
     timeSeries,
     displayDate,
@@ -139,19 +180,21 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     officialClose,
     isLoading: isTimeSeriesLoading,
     mutate: refreshTimeSeries,
-  } = useTimeSeries(isCallAuction ? null : currentFundId)
+  } = useTimeSeries(isCallAuction ? null : displayFundId)
   const {
     holdings: resolvedHoldings,
     displayItems: holdingsDisplayItems,
     displayLevel: holdingsDisplayLevel,
     lookthroughAvailable,
-  } = useFundHoldings(currentFundId)
+  } = useFundHoldings(displayFundId)
 
-  const { points: historyPoints, isLoading: isHistoryLoading } = useFundHistory(isCallAuction ? null : currentFundId, 30)
+  const { points: historyPoints, isLoading: isHistoryLoading } = useFundHistory(isCallAuction ? null : displayFundId, 30)
 
   // 切换基金时使用 transition 避免阻塞
   const handleFundSelect = (fundId: string) => {
-    if (fundId === currentFundId && !selectionError) return
+    if (fundId === displayFundId && !selectionError) return
+
+    setHasExplicitFundSelection(true)
 
     setSelectionError(null)
     setSwitchingFundId(fundId)
@@ -160,6 +203,28 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     startTransition(() => {
       setCurrentFundId(fundId)
     })
+  }
+
+  const handleNextWatchlistFund = () => {
+    if (minimalWatchlistFunds.length === 0) return
+
+    const nextIndex = currentWatchlistIndex >= 0
+      ? (currentWatchlistIndex + 1) % minimalWatchlistFunds.length
+      : 0
+    const nextFundId = minimalWatchlistFunds[nextIndex]?.fund_id
+    if (nextFundId) {
+      handleFundSelect(nextFundId)
+    }
+  }
+
+  const handleOpenProfessionalFund = (fundId: string) => {
+    handleFundSelect(fundId)
+    setViewMode('professional')
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      })
+    }
   }
 
   const isFundSwitching = Boolean(
@@ -193,9 +258,9 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
   const lastUpdated = estimate?.calculated_at ? new Date(estimate.calculated_at) : null
 
   const warmupNotice = isDashboardWarming
-    ? `基金 ${currentFundId} 数据预热中，正在自动重试。`
+    ? `基金 ${displayFundId} 数据预热中，正在自动重试。`
     : cacheStatus === 'warming'
-      ? `基金 ${currentFundId} 的基础资料正在后台补全，页面会自动刷新。`
+      ? `基金 ${displayFundId} 的基础资料正在后台补全，页面会自动刷新。`
       : ''
   const activeEstimate = isCallAuction ? undefined : estimate
   const activeFund = isCallAuction ? undefined : fund
@@ -237,23 +302,6 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
     : marketStatus.isTrading
       ? '交易中'
       : getSessionLabel(marketStatus.session)
-  const shouldShowMinimalWatchlist = shouldLoadMinimalWatchlist
-  const minimalWatchlistFunds = useMemo(() => {
-    const seen = new Set<string>()
-    const entries: WatchlistFundEntry[] = []
-
-    for (const group of watchlistGroups) {
-      for (const item of group.funds) {
-        if (!item.fund_id || seen.has(item.fund_id)) {
-          continue
-        }
-        seen.add(item.fund_id)
-        entries.push(item)
-      }
-    }
-
-    return entries
-  }, [watchlistGroups])
 
   return (
     <div className="min-h-[100dvh]">
@@ -272,7 +320,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
 
             {/* Search */}
             <div className="hidden shrink-0 md:block">
-              <FundSearchWrapper onSelect={handleFundSelect} currentFundId={currentFundId} />
+              <FundSearchWrapper onSelect={handleFundSelect} currentFundId={displayFundId} />
             </div>
 
             <nav className="hidden items-center gap-2 xl:flex">
@@ -329,7 +377,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
 
           {/* Mobile search */}
           <div className="mt-4 flex justify-end md:hidden">
-            <FundSearchWrapper onSelect={handleFundSelect} currentFundId={currentFundId} />
+            <FundSearchWrapper onSelect={handleFundSelect} currentFundId={displayFundId} />
           </div>
         </div>
       </header>
@@ -371,6 +419,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
               funds={minimalWatchlistFunds}
               isLoading={isUserLoading || isWatchlistLoading}
               isCallAuction={isCallAuction}
+              onOpenProfessionalFund={handleOpenProfessionalFund}
             />
           ) : (
             <ScrollReveal className="flex min-h-[60vh] items-center justify-center" variant="scale-in">
@@ -388,6 +437,19 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
         ) : (
           /* ===== Professional Mode ===== */
           <ScrollRevealStack className="space-y-6">
+            {canNavigateWatchlist && (
+              <Surface padding="sm" radius="lg" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-theme-muted">Watchlist Sequence</div>
+                  <div className="mt-1 text-sm text-theme-secondary">按极简模式自选顺序浏览 · {watchlistPositionLabel}</div>
+                </div>
+                <ActionButton type="button" variant="primary" onClick={handleNextWatchlistFund}>
+                  下一只自选
+                  <ArrowRight className="h-4 w-4" />
+                </ActionButton>
+              </Surface>
+            )}
+
             {/* Top Section: Estimate Card + Stats */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <EstimateCard
@@ -603,7 +665,7 @@ function HomeContent({ initialFundId }: { initialFundId: string }) {
 
             <FundAnalysisCard
               analysis={activeAnalysis}
-              fundId={activeFund?.id || currentFundId}
+              fundId={activeFund?.id || displayFundId}
               isLoading={!isCallAuction && isAnalysisLoading}
             />
           </ScrollRevealStack>
@@ -619,10 +681,12 @@ function MinimalWatchlistGrid({
   funds,
   isLoading,
   isCallAuction,
+  onOpenProfessionalFund,
 }: {
   funds: WatchlistFundEntry[]
   isLoading: boolean
   isCallAuction: boolean
+  onOpenProfessionalFund: (fundId: string) => void
 }) {
   const [visibleCount, setVisibleCount] = useState(INITIAL_MINIMAL_WATCHLIST_COUNT)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
@@ -701,6 +765,7 @@ function MinimalWatchlistGrid({
             key={item.fund_id}
             fundId={item.fund_id}
             isCallAuction={isCallAuction}
+            onOpenProfessionalFund={onOpenProfessionalFund}
           />
         ))}
       </ScrollRevealStack>
@@ -715,9 +780,11 @@ function MinimalWatchlistGrid({
 function MinimalWatchlistEstimateCard({
   fundId,
   isCallAuction,
+  onOpenProfessionalFund,
 }: {
   fundId: string
   isCallAuction: boolean
+  onOpenProfessionalFund: (fundId: string) => void
 }) {
   const {
     estimate,
@@ -728,15 +795,31 @@ function MinimalWatchlistEstimateCard({
   const lastUpdated = estimate?.calculated_at ? new Date(estimate.calculated_at) : null
 
   return (
-    <EstimateCard
-      estimate={isCallAuction ? undefined : estimate}
-      fund={isCallAuction ? undefined : fund}
-      isLoading={!isCallAuction && isLoading}
-      isCallAuction={isCallAuction}
-      isValidating={isValidating}
-      lastUpdated={isCallAuction ? null : lastUpdated}
-      className="h-full min-h-[25rem]"
-    />
+    <button
+      type="button"
+      onClick={() => onOpenProfessionalFund(fundId)}
+      className={cn(
+        'group block h-full w-full rounded-3xl text-left transition-all duration-200',
+        'hover:-translate-y-1 hover:shadow-[0_24px_55px_rgba(34,211,238,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/45'
+      )}
+      aria-label={`打开 ${fund?.name || estimate?.fund_name || fundId} 的专业模式`}
+    >
+      <div className="relative h-full">
+        <EstimateCard
+          estimate={isCallAuction ? undefined : estimate}
+          fund={isCallAuction ? undefined : fund}
+          isLoading={!isCallAuction && isLoading}
+          isCallAuction={isCallAuction}
+          isValidating={isValidating}
+          lastUpdated={isCallAuction ? null : lastUpdated}
+          className="h-full min-h-[25rem]"
+        />
+        <div className="pointer-events-none absolute bottom-4 right-4 inline-flex items-center gap-1.5 rounded-full border border-cyan-400/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-300 opacity-0 shadow-[0_10px_24px_rgba(34,211,238,0.12)] transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
+          <MousePointer2 className="h-3.5 w-3.5" />
+          点击进入专业模式
+        </div>
+      </div>
+    </button>
   )
 }
 

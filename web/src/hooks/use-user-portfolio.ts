@@ -481,6 +481,24 @@ export function useHoldingEstimateMetrics(aggregates: HoldingAggregateEntry[]) {
   }
 }
 
+export function useUserWatchlistGroups(userID: string | null) {
+  const { data: watchlistGroups = [], isLoading: isWatchlistLoading, mutate: mutateWatchlistGroups } = useSWR<WatchlistGroup[]>(
+    userID ? `${API_BASE_URL}/api/v1/user/watchlist/groups` : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 5000,
+    },
+  )
+
+  return {
+    watchlistGroups,
+    isWatchlistLoading,
+    mutateWatchlistGroups,
+    totalWatchlistFunds: watchlistGroups.reduce((sum, group) => sum + group.funds.length, 0),
+  }
+}
+
 export function useUserPortfolio(userID: string | null, transactionFilters: HoldingTransactionFilters = {}) {
   const {
     fundID: transactionFundID,
@@ -507,14 +525,7 @@ export function useUserPortfolio(userID: string | null, transactionFilters: Hold
       })
     : null
 
-  const { data: watchlistGroups = [], isLoading: isWatchlistLoading, mutate: mutateWatchlistGroups } = useSWR<WatchlistGroup[]>(
-    userID ? `${API_BASE_URL}/api/v1/user/watchlist/groups` : null,
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 5000,
-    },
-  )
+  const { watchlistGroups, isWatchlistLoading, mutateWatchlistGroups } = useUserWatchlistGroups(userID)
 
   const { data: holdingsPayload, mutate: mutateHoldings } = useSWR<HoldingsResponse>(
     userID ? `${API_BASE_URL}/api/v1/user/holdings` : null,
