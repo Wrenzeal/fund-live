@@ -147,8 +147,8 @@ function HomeContent({
   const currentWatchlistIndex = minimalWatchlistFunds.findIndex((item) => item.fund_id === displayFundId)
   const canNavigateWatchlist = Boolean(user && minimalWatchlistFunds.length > 1)
   const watchlistPositionLabel = currentWatchlistIndex >= 0
-    ? `第 ${currentWatchlistIndex + 1} / ${minimalWatchlistFunds.length} 只`
-    : `${minimalWatchlistFunds.length} 只自选`
+    ? `自选 ${currentWatchlistIndex + 1}/${minimalWatchlistFunds.length}`
+    : `自选 ${minimalWatchlistFunds.length}`
 
   // SWR 数据获取 hooks - 首页统一用 dashboard 快照，避免卡片与图表分叉
   const {
@@ -438,16 +438,13 @@ function HomeContent({
           /* ===== Professional Mode ===== */
           <ScrollRevealStack className="space-y-6">
             {canNavigateWatchlist && (
-              <Surface padding="sm" radius="lg" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-theme-muted">Watchlist Sequence</div>
-                  <div className="mt-1 text-sm text-theme-secondary">按极简模式自选顺序浏览 · {watchlistPositionLabel}</div>
-                </div>
-                <ActionButton type="button" variant="primary" onClick={handleNextWatchlistFund}>
-                  下一只自选
+              <div className="flex items-center justify-between gap-3 px-1">
+                <div className="text-sm font-medium tabular-nums text-theme-secondary">{watchlistPositionLabel}</div>
+                <ActionButton type="button" variant="subtle" onClick={handleNextWatchlistFund}>
+                  下一只
                   <ArrowRight className="h-4 w-4" />
                 </ActionButton>
-              </Surface>
+              </div>
             )}
 
             {/* Top Section: Estimate Card + Stats */}
@@ -739,8 +736,8 @@ function MinimalWatchlistGrid({
       <ScrollReveal className="min-h-[60vh]" variant="scale-in">
         <EmptyState
           icon={<Layers3 className="h-10 w-10" />}
-          title="极简模式会展示你的自选基金"
-          description="当前账号还没有自选基金。添加自选后，这里会以两列卡片展示核心估值，并在下滑时继续加载更多基金。"
+          title="还没有自选基金"
+          description="添加后会在这里显示估值卡片。"
           action={<ActionButton href="/watchlist" variant="primary">去添加自选</ActionButton>}
         />
       </ScrollReveal>
@@ -751,11 +748,11 @@ function MinimalWatchlistGrid({
     <div className="space-y-6">
       <ScrollReveal className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.22em] text-theme-muted">Minimal Watchlist</div>
-          <h1 className="mt-2 text-2xl font-black text-theme-primary sm:text-3xl">我的自选基金</h1>
+          <div className="text-xs font-semibold tracking-[0.22em] text-theme-muted">自选</div>
+          <h1 className="mt-2 text-2xl font-black text-theme-primary sm:text-3xl">自选基金</h1>
         </div>
-        <div className="text-sm text-theme-secondary">
-          已显示 {visibleFunds.length} / {funds.length} 只
+        <div className="text-sm tabular-nums text-theme-secondary">
+          {visibleFunds.length}/{funds.length}
         </div>
       </ScrollReveal>
 
@@ -771,7 +768,7 @@ function MinimalWatchlistGrid({
       </ScrollRevealStack>
 
       <div ref={sentinelRef} className="flex min-h-12 items-center justify-center text-sm text-theme-muted">
-        {hasMore ? '继续下滑加载更多自选基金' : '已加载全部自选基金'}
+        {hasMore ? '加载更多' : '全部显示'}
       </div>
     </div>
   )
@@ -802,7 +799,7 @@ function MinimalWatchlistEstimateCard({
         'group block h-full w-full rounded-3xl text-left transition-all duration-200',
         'hover:-translate-y-1 hover:shadow-[0_24px_55px_rgba(34,211,238,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/45'
       )}
-      aria-label={`打开 ${fund?.name || estimate?.fund_name || fundId} 的专业模式`}
+      aria-label={`查看 ${fund?.name || estimate?.fund_name || fundId} 详情`}
     >
       <div className="relative h-full">
         <EstimateCard
@@ -816,7 +813,7 @@ function MinimalWatchlistEstimateCard({
         />
         <div className="pointer-events-none absolute bottom-4 right-4 inline-flex items-center gap-1.5 rounded-full border border-cyan-400/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-300 opacity-0 shadow-[0_10px_24px_rgba(34,211,238,0.12)] transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
           <MousePointer2 className="h-3.5 w-3.5" />
-          点击进入专业模式
+          查看详情
         </div>
       </div>
     </button>
