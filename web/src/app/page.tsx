@@ -7,7 +7,6 @@ import { useMarketStatus, getSessionLabel, formatTimeUntil } from '@/hooks/use-m
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { useUserWatchlistGroups, type WatchlistFundEntry } from '@/hooks/use-user-portfolio'
-import { FundSearch } from '@/components/fund-search'
 import { EstimateCard } from '@/components/estimate-card'
 import { FundAnalysisCard } from '@/components/fund-analysis-card'
 import { FundSectorCard } from '@/components/fund-sector-card'
@@ -15,13 +14,10 @@ import { IntradayChart } from '@/components/intraday-chart'
 import { FundHistoryTrend } from '@/components/fund-history-trend'
 import { HoldingsTable } from '@/components/holdings-table'
 import { TargetETFHoldingsCard } from '@/components/target-etf-holdings-card'
-import { ThemeSwitcher } from '@/components/theme-switcher'
-import { BrandMark } from '@/components/brand-mark'
-import { MarketStatusIndicator } from '@/components/market-status-indicator'
 import { FundLoadingIndicator } from '@/components/loading-indicator'
-import { UserAccountMenu } from '@/components/user-account-menu'
 import { ScrollReveal, ScrollRevealStack } from '@/components/scroll-reveal'
 import { SiteFooter } from '@/components/site-footer'
+import { AppTopBar } from '@/components/app-top-bar'
 import { ActionButton } from '@/components/ui/action-button'
 import { Surface } from '@/components/ui/surface'
 import { StatusBanner } from '@/components/ui/status-banner'
@@ -66,7 +62,7 @@ function HomeContent({
   // 当前选中的基金 ID
   const [currentFundId, setCurrentFundId] = useState<string>(initialFundId)
 
-  const { themeType, setThemeType, viewMode, setViewMode } = useUIPreferences()
+  const { viewMode, setViewMode } = useUIPreferences()
   const { user, isLoading: isUserLoading } = useCurrentUser()
   const shouldLoadWatchlist = isUserLoading || Boolean(user)
   const { watchlistGroups, isWatchlistLoading } = useUserWatchlistGroups(shouldLoadWatchlist ? (user?.id ?? null) : null)
@@ -312,75 +308,15 @@ function HomeContent({
         detailText={warmupDetailText}
       />
       {/* Header */}
-      <header className="sticky top-0 z-50 glass-strong border-b border-[var(--card-border)]">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between gap-4">
-            {/* Logo */}
-            <BrandMark subtitle="FundLive - 实时基金估值" />
-
-            {/* Search */}
-            <div className="hidden shrink-0 md:block">
-              <FundSearchWrapper onSelect={handleFundSelect} currentFundId={displayFundId} />
-            </div>
-
-            <nav className="hidden items-center gap-2 xl:flex">
-              {[
-                { href: '/issues', label: '反馈与想法' },
-                { href: '/announcements', label: '更新公告' },
-                { href: '/analysis/rankings', label: '量化排行榜' },
-              ].map((item) => (
-                <ActionButton key={item.href} href={item.href} variant="subtle" size="sm">
-                  {item.label}
-                </ActionButton>
-              ))}
-            </nav>
-
-            {/* Controls */}
-            <div className="flex items-center gap-4">
-              {/* Market status & refresh controls */}
-              <div className="hidden lg:flex items-center gap-4">
-                <MarketStatusIndicator showDetails status={marketStatus} />
-
-                {/* 仅交易时段显示刷新间隔 */}
-                {isTrading && (
-                  <div className="flex items-center gap-2 text-xs text-theme-muted">
-                    <Clock className="w-3 h-3" />
-                    <span>{refreshInterval / 1000}s 刷新</span>
-                  </div>
-                )}
-
-                {/* 手动刷新按钮 */}
-                <button
-                  onClick={handleRefresh}
-                  disabled={isValidating}
-                  className={cn(
-                    'p-2 rounded-lg transition-all glass',
-                    'hover:bg-[var(--input-bg)]',
-                    'disabled:opacity-50 disabled:cursor-not-allowed'
-                  )}
-                  title="手动刷新"
-                >
-                  <RefreshCw className={cn('w-4 h-4 text-theme-secondary', isValidating && 'animate-spin')} />
-                </button>
-              </div>
-
-              <UserAccountMenu />
-
-              <ThemeSwitcher
-                themeType={themeType}
-                setThemeType={setThemeType}
-                viewMode={viewMode}
-                setViewMode={setViewMode}
-              />
-            </div>
-          </div>
-
-          {/* Mobile search */}
-          <div className="mt-4 flex justify-end md:hidden">
-            <FundSearchWrapper onSelect={handleFundSelect} currentFundId={displayFundId} />
-          </div>
-        </div>
-      </header>
+      <AppTopBar
+        currentFundId={displayFundId}
+        onFundSelect={handleFundSelect}
+        marketStatus={marketStatus}
+        isTrading={isTrading}
+        refreshInterval={refreshInterval}
+        isRefreshing={isValidating}
+        onRefresh={handleRefresh}
+      />
 
       {/* Main Content */}
       <main id="main-content" className="container mx-auto px-4 py-8">
@@ -836,15 +772,4 @@ function MinimalWatchlistCardSkeleton() {
       <div className="mt-8 h-4 w-48 rounded-full bg-[var(--input-bg)]" />
     </Surface>
   )
-}
-
-// 搜索组件包装器
-function FundSearchWrapper({
-  onSelect,
-  currentFundId
-}: {
-  onSelect: (id: string) => void
-  currentFundId: string
-}) {
-  return <FundSearch onSelect={onSelect} currentFundId={currentFundId} />
 }
