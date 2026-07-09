@@ -144,7 +144,7 @@ export function UserAccountMenu() {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-3 w-72">
+          <div className="absolute right-0 top-full z-50 mt-3 w-[calc(100vw-1.5rem)] max-w-96 sm:w-96">
             <div className="glass switcher-dropdown-panel overflow-hidden rounded-2xl border border-[var(--card-border)] shadow-2xl">
               <div className="border-b border-[var(--card-border)] px-4 py-4">
                 <div className="mb-3 flex items-center gap-3">
@@ -162,7 +162,7 @@ export function UserAccountMenu() {
                     </div>
                   )}
 
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold text-theme-primary">{displayName}</div>
                     <div className="truncate text-xs text-theme-muted">{user.email}</div>
                   </div>
@@ -191,12 +191,12 @@ export function UserAccountMenu() {
                   onClick={() => setIsOpen(false)}
                   className={accountMenuOptionClass}
                 >
-                  <div className="account-menu-icon rounded-xl bg-cyan-500/15 p-2 text-cyan-300">
+                  <div className="account-menu-icon shrink-0 rounded-xl bg-cyan-500/15 p-2 text-cyan-300">
                     <Layers3 className="h-4 w-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-theme-primary">我的自选</div>
-                    <div className="text-xs text-theme-muted">按分组查看关注基金的走势与预估涨跌幅</div>
+                    <div className="truncate text-xs text-theme-muted">按分组查看关注基金的走势与预估涨跌幅</div>
                   </div>
                 </Link>
 
@@ -205,12 +205,12 @@ export function UserAccountMenu() {
                   onClick={() => setIsOpen(false)}
                   className={accountMenuOptionClass}
                 >
-                  <div className="account-menu-icon rounded-xl bg-amber-500/15 p-2 text-amber-300">
+                  <div className="account-menu-icon shrink-0 rounded-xl bg-amber-500/15 p-2 text-amber-300">
                     <Wallet className="h-4 w-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-theme-primary">持仓明细</div>
-                    <div className="text-xs text-theme-muted">查看持仓金额与实时预估涨跌额</div>
+                    <div className="truncate text-xs text-theme-muted">查看持仓金额与实时预估涨跌额</div>
                   </div>
                 </Link>
 
@@ -219,12 +219,12 @@ export function UserAccountMenu() {
                   onClick={() => setIsOpen(false)}
                   className={accountMenuOptionClass}
                 >
-                  <div className="account-menu-icon rounded-xl bg-rose-500/15 p-2 text-rose-300">
+                  <div className="account-menu-icon shrink-0 rounded-xl bg-rose-500/15 p-2 text-rose-300">
                     <Bug className="h-4 w-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-theme-primary">反馈与想法</div>
-                    <div className="text-xs text-theme-muted">把问题、功能诉求和改进建议发出来</div>
+                    <div className="truncate text-xs text-theme-muted">把问题、功能诉求和改进建议发出来</div>
                   </div>
                 </Link>
 
@@ -233,12 +233,12 @@ export function UserAccountMenu() {
                   onClick={() => setIsOpen(false)}
                   className={accountMenuOptionClass}
                 >
-                  <div className="account-menu-icon rounded-xl bg-emerald-500/15 p-2 text-emerald-300">
+                  <div className="account-menu-icon shrink-0 rounded-xl bg-emerald-500/15 p-2 text-emerald-300">
                     <Bell className="h-4 w-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-theme-primary">更新公告</div>
-                    <div className="text-xs text-theme-muted">查看站点公告和历史更新记录</div>
+                    <div className="truncate text-xs text-theme-muted">查看站点公告和历史更新记录</div>
                   </div>
                 </Link>
               </div>
@@ -260,19 +260,19 @@ export function UserAccountMenu() {
                       data-active={active}
                       className={accountMenuButtonClass}
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
                         <div className={cn(
-                          'account-menu-icon rounded-xl p-2',
+                          'account-menu-icon shrink-0 rounded-xl p-2',
                           active ? 'bg-cyan-500/15 text-cyan-300' : 'bg-[var(--input-bg)] text-theme-muted'
                         )}>
                           {active ? <Check className="h-4 w-4" /> : <Radio className="h-4 w-4" />}
                         </div>
-                        <div>
-                          <div className="text-sm font-medium text-theme-primary">{source.label}</div>
-                          <div className="text-xs text-theme-muted">{source.description}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-theme-primary">{source.label}</div>
+                          <div className="truncate text-xs text-theme-muted">{source.description}</div>
                         </div>
                       </div>
-                      {active && <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-300">当前使用</span>}
+                      {active && <span className="shrink-0 whitespace-nowrap rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-300">当前使用</span>}
                     </button>
                   )
                 })}
@@ -286,13 +286,13 @@ export function UserAccountMenu() {
                   data-tone="danger"
                   className={accountMenuButtonClass}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="account-menu-icon rounded-xl bg-rose-500/15 p-2 text-rose-300">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div className="account-menu-icon shrink-0 rounded-xl bg-rose-500/15 p-2 text-rose-300">
                       {isLoggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
                     </div>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium text-theme-primary">退出登录</div>
-                      <div className="text-xs text-theme-muted">清除当前浏览器会话</div>
+                      <div className="truncate text-xs text-theme-muted">清除当前浏览器会话</div>
                     </div>
                   </div>
                 </button>
