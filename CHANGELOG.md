@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **全站前端体验收敛**
+  - 主导航改为首页、自选、持仓、量化优先，公告和反馈降为次级入口；登录、搜索、主题切换和移动端导航保留键盘与触控路径。
+  - 用户可见状态统一为中文自然语言，移除终端式状态码、重复说明和模板化 Hero 文案；方法、口径和风险信息改为渐进披露。
+  - Classic、Dark、Cyber 三套主题继续兼容，Cyber 收敛为静态的专业深色主题；按钮扫光、普遍上浮和背景霓虹动效改为功能型微动效。
+  - 新增 Playwright 浏览器回归覆盖验证码登录、任务导航、主题持久化、基金搜索弹层和 390px 登录页无横向溢出。
+
 - **邮箱验证码登录与 DragonFly 基础设施**
   - 新增 `/api/v1/auth/email/start` 与 `/api/v1/auth/email/verify`，支持 6 位邮箱验证码、首次验证自动建号、已有同邮箱账户复用和现有 HttpOnly Cookie 会话。
   - 登录页改为验证码默认的两步式流程，保留密码与 Google 登录，并支持重发倒计时、更换邮箱、开发验证码和安全站内 `returnTo`。

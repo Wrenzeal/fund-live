@@ -17,27 +17,27 @@ interface ThemeSwitcherProps {
 const themes: { id: ThemeType; name: string; icon: React.ReactNode; description: string }[] = [
     {
         id: 'classic',
-        name: 'Classic',
+        name: '暖白',
         icon: <Sun className="w-4 h-4" />,
-        description: '暖白纸面，低饱和红绿'
+        description: '暖白纸面，低饱和涨跌色'
     },
     {
         id: 'dark',
-        name: 'Dark',
+        name: '深色',
         icon: <Moon className="w-4 h-4" />,
-        description: '深色模式，护眼首选'
+        description: '深色背景，适合长时间查看'
     },
     {
         id: 'cyber',
-        name: 'Cyber',
+        name: '深色高对比',
         icon: <Sparkles className="w-4 h-4" />,
-        description: '赛博朋克霓虹风格'
+        description: '高对比边界，减少背景干扰'
     },
 ]
 
 const viewModes: { id: ViewMode; name: string; description: string }[] = [
-    { id: 'minimal', name: '极简模式', description: '只显示核心数字' },
-    { id: 'professional', name: '专业模式', description: '完整分时图和持仓' },
+    { id: 'minimal', name: '简洁模式', description: '突出核心数字' },
+    { id: 'professional', name: '专业模式', description: '显示分时图和持仓' },
 ]
 
 export function ThemeSwitcher({
@@ -63,14 +63,12 @@ export function ThemeSwitcher({
                         className={cn(
                             'group relative flex items-center gap-2 overflow-hidden px-3 py-2 rounded-lg',
                             'glass switcher-toggle text-theme-secondary text-sm transition-all duration-200',
-                            'hover:-translate-y-0.5 hover:bg-[var(--input-bg)] hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)]',
-                            'active:scale-[0.97]'
+                            'hover:bg-[var(--input-bg)] hover:text-theme-primary'
                         )}
                     >
-                        <span className="action-button-shine" />
-                        <Eye className="relative z-10 w-4 h-4 transition-transform duration-300 group-hover:scale-110" />
-                        <span className="relative z-10 hidden sm:inline">{currentView?.name}</span>
-                        <ChevronDown className={cn('relative z-10 w-4 h-4 transition-transform', isViewOpen && 'rotate-180')} />
+                        <Eye className="w-4 h-4" />
+                        <span className="hidden sm:inline">{currentView?.name}</span>
+                        <ChevronDown className={cn('w-4 h-4 transition-transform', isViewOpen && 'rotate-180')} />
                     </button>
 
                     {isViewOpen && (
@@ -113,14 +111,12 @@ export function ThemeSwitcher({
                     className={cn(
                         'group relative flex items-center gap-2 overflow-hidden px-3 py-2 rounded-lg',
                         'glass switcher-toggle text-theme-secondary text-sm transition-all duration-200',
-                        'hover:-translate-y-0.5 hover:bg-[var(--input-bg)] hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)]',
-                        'active:scale-[0.97]'
+                        'hover:bg-[var(--input-bg)] hover:text-theme-primary'
                     )}
                 >
-                    <span className="action-button-shine" />
-                    <Palette className="relative z-10 w-4 h-4 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6" />
-                    <span className="relative z-10 hidden sm:inline">{currentTheme?.name}</span>
-                    <ChevronDown className={cn('relative z-10 w-4 h-4 transition-transform', isThemeOpen && 'rotate-180')} />
+                    <Palette className="w-4 h-4" />
+                    <span className="hidden sm:inline">{currentTheme?.name}</span>
+                    <ChevronDown className={cn('w-4 h-4 transition-transform', isThemeOpen && 'rotate-180')} />
                 </button>
 
                 {isThemeOpen && (
@@ -147,7 +143,7 @@ export function ThemeSwitcher({
                                                 'p-2 rounded-lg',
                                                 theme.id === 'classic' && 'border border-stone-300 bg-[#fff8ea] text-stone-800',
                                                 theme.id === 'dark' && 'bg-slate-800 text-white',
-                                                theme.id === 'cyber' && 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white'
+                                                theme.id === 'cyber' && 'bg-slate-700 text-slate-100'
                                             )}>
                                                 {theme.icon}
                                             </div>

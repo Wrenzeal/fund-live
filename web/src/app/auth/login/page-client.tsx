@@ -201,7 +201,7 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
     <AuthShell
       eyebrow="安全登录"
       title="登录账户"
-      description="使用邮箱验证码快速继续，也可以保留密码或 Google 登录方式。登录后即可同步自选基金、持仓记录和个性化设置。"
+      description="用邮箱验证码、密码或 Google 登录，继续查看已保存的基金和持仓。"
       footer={(
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-4">
@@ -241,13 +241,13 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
         </div>
 
         {isLoadingConfig && (
-          <div className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm text-theme-secondary">
-            正在检查验证码登录服务...
+          <div role="status" className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm text-theme-secondary">
+            正在准备验证码登录…
           </div>
         )}
 
         {(availabilityNotice || configError) && (
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          <div role="status" className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
             {availabilityNotice || (configError instanceof Error ? configError.message : '登录配置读取失败')}
           </div>
         )}
@@ -273,11 +273,11 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
                 />
               </div>
             </label>
-            <p className="text-xs leading-5 text-theme-muted">验证码将在 10 分钟后失效；首次验证会自动创建 FundLive 账户。</p>
+            <p className="text-sm leading-6 text-theme-muted">验证码 10 分钟内有效；首次验证会自动创建账户。</p>
             <button
               type="submit"
               disabled={isBusy || !emailCodeEnabled}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-5 py-3.5 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent-primary)] px-5 py-3.5 text-sm font-semibold text-white transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSendingCode ? <><Loader2 className="h-4 w-4 animate-spin" /> 正在发送验证码...</> : <><Mail className="h-4 w-4" /> 发送验证码</>}
             </button>
@@ -344,11 +344,11 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
                   />
                 </div>
               </label>
-              <p className="text-xs leading-5 text-theme-muted">验证码有效期约 {Math.max(1, Math.ceil(expiresInSeconds / 60))} 分钟，请勿转发给任何人。</p>
+              <p className="text-sm leading-6 text-theme-muted">验证码 {Math.max(1, Math.ceil(expiresInSeconds / 60))} 分钟内有效，请勿转发。</p>
               <button
                 type="submit"
                 disabled={isBusy || code.length !== 6}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-5 py-3.5 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent-primary)] px-5 py-3.5 text-sm font-semibold text-white transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isVerifyingCode ? <><Loader2 className="h-4 w-4 animate-spin" /> 正在验证...</> : <>验证并登录 <ArrowRight className="h-4 w-4" /></>}
               </button>
@@ -399,7 +399,7 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
             <button
               type="submit"
               disabled={isBusy}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-5 py-3.5 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent-primary)] px-5 py-3.5 text-sm font-semibold text-white transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isPasswordSubmitting ? <><Loader2 className="h-4 w-4 animate-spin" /> 登录中...</> : <>登录并继续 <ArrowRight className="h-4 w-4" /></>}
             </button>
@@ -412,9 +412,9 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
           </div>
         )}
 
-        <div className="flex items-center gap-3 text-xs uppercase tracking-[0.25em] text-theme-muted">
+        <div className="flex items-center gap-3 text-sm text-theme-muted">
           <span className="h-px flex-1 bg-[var(--card-border)]" />
-          或使用 Google
+          其他登录方式
           <span className="h-px flex-1 bg-[var(--card-border)]" />
         </div>
         <GoogleSignInButton onCredential={handleGoogleLogin} />

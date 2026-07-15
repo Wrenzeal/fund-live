@@ -84,7 +84,7 @@ function RankingsHero({
 
           <div className="text-2xl font-black tracking-tight text-theme-primary md:text-3xl">量化排行榜</div>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-theme-secondary">
-            用同一套 analysis 快照筛出三类观察池：结构偏积极、适合继续观察、风险暴露偏高。点击任一基金进入完整量化看板。
+            按近期分析快照列出三类观察池：结构偏积极、适合继续观察、风险暴露偏高。点击基金查看完整看板。
           </p>
         </div>
 
@@ -134,10 +134,10 @@ function RankingsOverview({ sections }: { sections: RankingSectionConfig[] }) {
                   {section.shortTitle}
                 </div>
                 <div className="mt-3 text-3xl font-black text-theme-primary">{section.items.length}</div>
-                <div className="mt-1 text-xs text-theme-muted">当前入榜基金</div>
+                <div className="mt-1 text-xs text-theme-muted">入榜数量</div>
               </div>
               <div className={cn('rounded-2xl border px-3 py-2 text-right', tone.soft)}>
-                <div className="text-[10px] tracking-[0.18em] text-theme-muted">TOP 1</div>
+                <div className="text-[10px] text-theme-muted">首位</div>
                 <div className="mt-1 max-w-28 truncate text-sm font-semibold text-theme-primary">
                   {top?.fund?.name || '暂无'}
                 </div>
@@ -166,7 +166,7 @@ function FeaturedRankingCard({
       <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <SectionHeading
           icon={config.icon}
-          title={`${config.title} · 当前首位`}
+          title={`${config.title} · 首位`}
           description="把最值得先点开的样本放大展示，剩余条目在下方分榜浏览。"
         />
 
@@ -177,7 +177,7 @@ function FeaturedRankingCard({
           >
             <div className="min-w-0">
               <div className="truncate text-xl font-black text-theme-primary">{item.fund?.name || item.fund?.id || '未知基金'}</div>
-              <div className="mt-1 text-xs text-theme-muted">{item.fund?.id || '--'} · {item.analysis?.analysis_basis || '分析口径待补'}</div>
+              <div className="mt-1 text-xs text-theme-muted">{item.fund?.id || '--'} · {item.analysis?.analysis_basis || '口径待补'}</div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <FundAnalysisBadge analysis={item.analysis} showScore />
               </div>
@@ -233,7 +233,7 @@ function RankingItemCard({
                 {item.fund?.name || item.fund?.id || '未知基金'}
               </div>
               <div className="mt-1 text-xs text-theme-muted">
-                {item.fund?.id || '--'} · {item.analysis?.analysis_basis || '分析口径待补'}
+                {item.fund?.id || '--'} · {item.analysis?.analysis_basis || '口径待补'}
               </div>
             </div>
           </div>
@@ -294,13 +294,13 @@ function MethodNote() {
     <section className="rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-5">
       <SectionHeading
         icon={<Eye className="h-4 w-4 text-cyan-200" />}
-        title="排行榜口径"
+        title="榜单说明"
         description="排行榜只做入口和筛选，不派生第二套建议逻辑。"
       />
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <p className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4 text-sm leading-6 text-theme-secondary">
           <Sparkles className="mb-2 h-4 w-4 text-cyan-200" />
-          榜单汇总近期分析快照；完整证据、事件和限制说明请查看详情页。
+          榜单汇总近期分析快照；证据、事件和限制请查看详情页。
         </p>
         <p className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4 text-sm leading-6 text-theme-secondary">
           <ShieldAlert className="mb-2 h-4 w-4 text-amber-200" />
@@ -308,7 +308,7 @@ function MethodNote() {
         </p>
         <p className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4 text-sm leading-6 text-theme-secondary">
           <ArrowRight className="mb-2 h-4 w-4 text-fuchsia-200" />
-          若榜单条目看起来异常，优先进入完整看板查看主证据、反方证据与数据缺口。
+          对榜单结果有疑问时，进入详情查看主要依据、风险和数据缺口。
         </p>
       </div>
     </section>
@@ -363,7 +363,7 @@ export default function AnalysisRankingsPage() {
 
           {isLoading && !rankings ? (
             <div className="rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-4 py-16">
-              <LoadingSpinner size="lg" text="量化排行榜加载中..." />
+              <LoadingSpinner size="lg" text="正在读取量化榜单…" />
             </div>
           ) : isError ? (
             <div className="rounded-3xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">

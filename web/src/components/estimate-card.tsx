@@ -133,13 +133,13 @@ export function EstimateCard({
                     <div className="rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/55 p-3 sm:p-4">
                         <div className="text-sm text-theme-muted">预估净值</div>
                         <div className="text-lg sm:text-2xl font-bold text-theme-primary mt-1">
-                            {isCallAuction ? '--' : isLoading && !estimate ? 'Loading…' : formatNavCurrency(estimate?.estimate_nav)}
+                            {isCallAuction ? '--' : isLoading && !estimate ? '正在读取' : formatNavCurrency(estimate?.estimate_nav)}
                         </div>
                     </div>
                     <div className="rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/55 p-3 sm:p-4">
                         <div className="text-sm text-theme-muted">昨日净值</div>
                         <div className="text-lg sm:text-2xl font-bold text-theme-primary mt-1">
-                            {isCallAuction ? '--' : isLoading && !estimate ? 'Loading…' : formatNavCurrency(estimate?.prev_nav)}
+                            {isCallAuction ? '--' : isLoading && !estimate ? '正在读取' : formatNavCurrency(estimate?.prev_nav)}
                         </div>
                     </div>
                 </div>
@@ -153,7 +153,7 @@ export function EstimateCard({
                             <span>·</span>
                         </>
                     )}
-                    <span>数据源: {isCallAuction ? '--' : estimate?.data_source || (isLoading ? '同步中' : '未返回')}</span>
+                            <span>来源：{isCallAuction ? '--' : estimate?.data_source || (isLoading ? '同步中' : '暂不可用')}</span>
                     {estimate?.total_hold_ratio && !isCallAuction && (
                         <>
                             <span>·</span>

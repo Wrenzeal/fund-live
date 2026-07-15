@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { ArrowUp, Layers3, Sparkles, Wallet } from "lucide-react";
+import { ArrowUp, Layers3, Wallet } from "lucide-react";
 import { AppTopBar } from "@/components/app-top-bar";
 import { SiteFooter } from "@/components/site-footer";
 import { useMobileTopSection } from "@/hooks/use-mobile-top-section";
@@ -16,8 +16,8 @@ interface AccountAreaShellProps {
 }
 
 const tabs = [
-  { href: "/watchlist", label: "我的自选", icon: Layers3 },
-  { href: "/holdings", label: "持仓明细", icon: Wallet },
+  { href: "/watchlist", label: "自选", icon: Layers3 },
+  { href: "/holdings", label: "持仓", icon: Wallet },
 ];
 
 const MOBILE_BREAKPOINT_QUERY = "(min-width: 768px)";
@@ -95,10 +95,7 @@ export function AccountAreaShell({
       >
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-4 py-2 text-xs tracking-[0.3em] text-cyan-300">
-              <Sparkles className="h-3.5 w-3.5" />
-              我的空间
-            </div>
+            <div className="text-sm font-semibold text-[var(--accent-primary)]">账户数据</div>
             <div>
               <h1 className="text-3xl font-black text-theme-primary sm:text-4xl">
                 {title}
@@ -118,26 +115,21 @@ export function AccountAreaShell({
                   key={tab.href}
                   href={tab.href}
                   className={cn(
-                    "group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl border px-4 py-2.5 text-sm transition-all duration-200",
-                    "hover:-translate-y-0.5 active:scale-[0.985]",
+                    "group relative inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm transition-colors",
                     active
                       ? "account-standard-tab account-standard-tab-active border-cyan-500/40 bg-cyan-500/15 text-cyan-300 shadow-[0_14px_28px_rgba(34,211,238,0.14)]"
                       : "account-standard-tab account-standard-tab-idle border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-400/35 hover:bg-cyan-400/10 hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)]",
                   )}
                 >
-                  <span className="account-tab-shine" />
                   <span
                     className={cn(
                       "relative z-10 flex items-center gap-2",
-                      active && "account-tab-active",
+                      active && "font-semibold",
                     )}
                   >
                     <Icon
                       className={cn(
-                        "h-4 w-4 transition-transform duration-300",
-                        active
-                          ? "scale-105"
-                          : "group-hover:-rotate-6 group-hover:scale-110",
+                        "h-4 w-4",
                       )}
                     />
                     {tab.label}

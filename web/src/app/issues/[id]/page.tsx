@@ -102,7 +102,7 @@ export default function IssueDetailPage() {
       >
         <Surface radius="xl" padding="lg" className="text-center">
           <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
-          <div className="mt-4 text-sm text-theme-secondary">正在加载想法详情...</div>
+          <div className="mt-4 text-sm text-theme-secondary">正在读取反馈详情…</div>
         </Surface>
       </SiteShell>
     )
@@ -248,7 +248,7 @@ export default function IssueDetailPage() {
             </div>
             <div>
               <div className="text-xl font-bold text-theme-primary">官方回复</div>
-              <div className="text-sm text-theme-muted">管理员会在这里公开补充确认结果、修改点与处理说明。</div>
+              <div className="text-sm text-theme-muted">管理员确认后会公开回复和处理结果。</div>
             </div>
           </div>
 

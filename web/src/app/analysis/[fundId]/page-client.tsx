@@ -12,6 +12,7 @@ import { TargetETFHoldingsCard } from '@/components/target-etf-holdings-card'
 import { AnalysisEventTraceMeta } from '@/components/analysis-event-trace-meta'
 import { FundHistoryTrend } from '@/components/fund-history-trend'
 import { FundAnalysisDecisionList } from '@/components/fund-analysis-decision-points'
+import { Disclosure } from '@/components/ui/disclosure'
 import { useFundAnalysis, useFundDashboard, useFundHistory, useFundHoldings, type Fund, type FundAnalysis, type FundAnalysisEventImpact, type FundAnalysisModuleScore, type FundClassificationOverride, type FundEstimate, type FundSectorSnapshot, type FundThemeSnapshot } from '@/hooks/use-fund-data'
 import { cn } from '@/lib/utils'
 import { buildFundAnalysisDecision, type FundAnalysisDecisionView } from '@/lib/fund-analysis-decision'
@@ -90,7 +91,7 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
               </Link>
               <div className="text-2xl font-black tracking-tight text-theme-primary md:text-3xl">量化看板</div>
               <div className="mt-2 max-w-3xl text-sm leading-6 text-theme-secondary">
-                {resolvedFund?.name ? `${resolvedFund.name}（${resolvedFund.id || fundId}）` : isLoading ? '基金信息加载中' : `基金 ${fundId}`} · 先看结论和证据，再展开事件、风险与底层数据。
+                {resolvedFund?.name ? `${resolvedFund.name}（${resolvedFund.id || fundId}）` : isLoading ? '基金信息加载中' : `基金 ${fundId}`} · 结论、依据、风险和原始数据分层展示。
               </div>
             </div>
 
@@ -535,27 +536,31 @@ function MethodCompactCard({
     <section className="glass rounded-3xl p-5 md:p-6">
       <SectionHeading
         icon={<FileText className="h-4 w-4 text-amber-200" />}
-        title="方法与限制"
-        description="只保留口径边界，避免重复上方风险与事件。"
+        title="方法与数据边界"
+        description="评分依据和限制放在展开区域。"
       />
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm leading-6 text-theme-secondary">
-          量化看板统一估值、持仓、分类与事件快照；解释层只增强可读性，不改评分或风险等级。
-        </div>
-        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-          {notes.length === 0 ? (
-            <EmptyInline text="当前没有额外可信度扣分或限制说明。" />
-          ) : (
-            <div className="space-y-2">
-              {notes.map((item, index) => (
-                <div key={`${item}-${index}`} className="flex gap-3 text-sm leading-6 text-theme-secondary">
-                  <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0 text-amber-200" />
-                  <span>{item}</span>
-                </div>
-              ))}
+      <div className="mt-4">
+        <Disclosure summary="查看评分依据与限制">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm leading-6 text-theme-secondary">
+              看板汇总估值、持仓、分类与事件快照；补充解读只改善阅读，不改变评分或风险等级。
             </div>
-          )}
-        </div>
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
+              {notes.length === 0 ? (
+                <EmptyInline text="暂无额外的置信度扣分或限制。" />
+              ) : (
+                <div className="space-y-2">
+                  {notes.map((item, index) => (
+                    <div key={`${item}-${index}`} className="flex gap-3 text-sm leading-6 text-theme-secondary">
+                      <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0 text-amber-200" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </Disclosure>
       </div>
     </section>
   )
@@ -567,25 +572,19 @@ function RecommendationMixPanel({ items, isLoading = false }: { items: Recommend
 
   return (
     <section ref={panelRef} className="glass relative flex h-full min-h-[22rem] flex-col overflow-hidden rounded-3xl p-5 md:p-6">
-      <div className="pointer-events-none absolute -left-20 top-1/2 h-56 w-56 -translate-y-1/2 rounded-full bg-fuchsia-500/10 blur-3xl" />
-      <div className="pointer-events-none absolute -right-16 top-8 h-48 w-48 rounded-full bg-cyan-500/10 blur-3xl" />
-
       <div className="relative mb-5 flex items-center justify-between gap-4">
         <SectionHeading
           icon={<PieChart className="h-4 w-4 text-cyan-200" />}
-          title="建议分布"
-          description="比例只表示结构偏向，不是交易指令。"
+          title="结构倾向"
+          description="比例表示规则判断的结构偏向，不是交易指令。"
         />
-        <span className="hidden rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-100 sm:inline-flex">
-          滚动绘制
-        </span>
       </div>
 
       {total <= 0 ? (
         <div className="relative flex flex-1 items-center">
           <EmptyPanel
             code={isLoading ? 'ANALYSIS_PIPELINE_ACTIVE' : 'PENDING_QUANT_SIGNAL'}
-            text={isLoading ? '正在生成建议分布' : '建议分布未返回'}
+            text={isLoading ? '正在整理结构倾向' : '暂时没有结构倾向'}
             scanning={isLoading}
           />
         </div>
@@ -598,9 +597,7 @@ function RecommendationMixPanel({ items, isLoading = false }: { items: Recommend
               <div className="relative flex h-56 w-56 items-center justify-center rounded-full border border-dashed border-[var(--card-border)] bg-[var(--card-bg)]/30 text-center">
                 <div className="absolute inset-6 rounded-full border border-[var(--card-border)]/70" />
                 <div className="px-8 text-xs leading-6 text-theme-muted">
-                  到达图表位置后
-                  <br />
-                  开始绘制建议分布
+                  结构图将在这里显示
                 </div>
               </div>
             )}
@@ -695,7 +692,7 @@ function AnimatedRecommendationDonut({ items }: { items: RecommendationItem[] })
       <div className="absolute inset-5 rounded-full border border-white/10 bg-[var(--card-bg)]/20 shadow-[inset_0_0_50px_rgba(255,255,255,0.04)]" />
       <div className="absolute inset-3 rounded-full border border-cyan-300/10 animate-[spin_18s_linear_infinite]" />
 
-      <svg viewBox="0 0 224 224" className="relative h-full w-full -rotate-90 drop-shadow-[0_18px_36px_rgba(34,211,238,0.14)]" role="img" aria-label="量化建议分布环形图">
+      <svg viewBox="0 0 224 224" className="relative h-full w-full -rotate-90" role="img" aria-label="规则结构倾向环形图">
         <defs>
           {items.map((item) => (
             <linearGradient key={item.code} id={`${gradientId}-${item.code}`} x1="30%" y1="0%" x2="80%" y2="100%">
@@ -760,12 +757,12 @@ function ModuleRadarPanel({ modules, isLoading = false }: { modules: FundAnalysi
       <SectionHeading
         icon={<Zap className="h-4 w-4 text-fuchsia-200" />}
         title="六维模块"
-        description="用雷达图压缩展示模块强弱，避免重复展开每条规则。"
+        description="六个评分模块的相对强弱。"
       />
       {normalized.length === 0 ? (
         <RadarBasePlaceholder
           code={isLoading ? 'MODULE_VECTOR_SYNC' : 'MODULE_VECTOR_EMPTY'}
-          text={isLoading ? '正在计算六维模块' : '模块分数未返回'}
+          text={isLoading ? '正在整理六个评分模块' : '暂时没有模块评分'}
           scanning={isLoading}
         />
       ) : (
@@ -831,7 +828,7 @@ function EvidenceFocusGrid({
   return (
     <section className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_20rem]">
       <DecisionEvidenceColumn
-        title="为什么是这个结果"
+        title="主要依据"
         icon={<Target className="h-4 w-4 text-cyan-200" />}
         points={view?.mainReasons || []}
         isLoading={isLoading}
@@ -846,17 +843,11 @@ function EvidenceFocusGrid({
       <div className="glass flex h-full min-h-[18rem] flex-col rounded-3xl p-5 md:p-6">
         <SectionHeading
           icon={<Sparkles className="h-4 w-4 text-fuchsia-200" />}
-          title="解释说明"
-          description="补充结论归因，不改评分。"
+          title="补充解读"
+          description="补充依据，不改变评分。"
         />
         {ai ? (
           <div className="mt-4 flex flex-1 flex-col justify-center space-y-3">
-            <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4">
-              <div className="text-xs text-theme-muted">状态 / 缓存</div>
-              <div className="mt-2 text-sm font-semibold text-theme-primary">
-                {ai.status || '--'} · {ai.cache_status || '--'}
-              </div>
-            </div>
             <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/10 p-4 text-sm leading-6 text-theme-secondary">
               {ai.summary}
             </div>
@@ -868,7 +859,7 @@ function EvidenceFocusGrid({
           <div className="flex flex-1 items-center">
             <EmptyPanel
               code={isLoading ? 'AI_EXPLANATION_PENDING' : 'AI_EXPLANATION_EMPTY'}
-              text={isLoading ? '正在同步解释层' : '解释层未返回'}
+              text={isLoading ? '正在准备补充解读' : '暂无补充解读'}
               scanning={isLoading}
             />
           </div>
@@ -976,7 +967,7 @@ function RealtimeEventRadar({ events, isLoading = false }: { events: FundAnalysi
           <SectionHeading
             icon={<Zap className="h-4 w-4 text-cyan-200" />}
             title="实时事件雷达"
-            description="只展示已映射到持仓、主线或宏观暴露的当前事件。"
+            description="只展示与基金暴露相关的事件。"
           />
           {lead ? (
             <div className="relative mt-5">
@@ -1014,7 +1005,7 @@ function RealtimeEventRadar({ events, isLoading = false }: { events: FundAnalysi
           ) : events.length === 0 ? (
             <EmptyPanel code="EVENT_CARD_EMPTY" text="事件卡片未返回" />
           ) : events.map((event) => (
-            <div key={event.code} className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4 transition-transform duration-300 hover:-translate-y-0.5">
+            <div key={event.code} className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4 transition-colors hover:border-[var(--accent-primary)]">
               <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]">
                 <span className="rounded-full border border-[var(--input-border)] bg-[var(--input-bg)] px-2.5 py-1 text-theme-secondary">
                   {eventScopeLabel(event.target_scope)}
@@ -1056,8 +1047,8 @@ function EventSignalBoard({ events, isLoading = false }: { events: FundAnalysisE
     },
     {
       key: 'basis',
-      title: '口径与限制',
-      description: '披露新鲜度、方法口径和其他辅助信号。',
+      title: '方法边界',
+      description: '披露新鲜度、方法和其他辅助信号。',
       events: events.filter((event) => !['macro', 'holding', 'exposure', 'index'].includes(event.target_scope || '')),
     },
   ].filter((group) => group.events.length > 0)
@@ -1067,14 +1058,14 @@ function EventSignalBoard({ events, isLoading = false }: { events: FundAnalysisE
       <SectionHeading
         icon={<CalendarClock className="h-4 w-4 text-cyan-200" />}
         title="事件信号链"
-        description="按实时宏观、持仓、主线和口径限制分组，避免热点与规则说明混在一起。"
+        description="按宏观、持仓、主线和方法边界分组。"
       />
 
       <div className={cn('mt-5 flex-1', groups.length === 0 && 'flex items-center')}>
         {groups.length === 0 ? (
           <EmptyPanel
             code={isLoading ? 'SIGNAL_CHAIN_SYNC' : 'SIGNAL_CHAIN_IDLE'}
-            text={isLoading ? '正在生成事件信号链' : '暂无事件信号'}
+            text={isLoading ? '正在整理事件链' : '暂无事件信号'}
             scanning={isLoading}
           />
         ) : (
@@ -1112,7 +1103,7 @@ function EventGroupCard({
 
       <div className="space-y-3">
         {events.slice(0, 4).map((event, index) => (
-          <div key={`${event.code}-${index}`} className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4 transition-transform duration-300 hover:-translate-y-0.5">
+          <div key={`${event.code}-${index}`} className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4 transition-colors hover:border-[var(--accent-primary)]">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-[var(--input-border)] bg-[var(--input-bg)] px-2.5 py-1 text-[11px] text-theme-secondary">
                 {eventHorizonLabel(event.horizon)}
@@ -1187,7 +1178,7 @@ function RiskBreakdownCard({
         <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <div className="text-[11px] font-semibold tracking-[0.22em] text-amber-100/80">RISK LEVEL</div>
+              <div className="text-[11px] font-semibold tracking-[0.22em] text-amber-100/80">风险等级</div>
               <div className="mt-2 text-3xl font-black text-theme-primary">{view?.riskLabel || riskLevelLabel(analysis?.risk_level)}</div>
             </div>
             <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-4 py-3 text-sm text-theme-secondary">
@@ -1203,7 +1194,7 @@ function RiskBreakdownCard({
           </div>
           <FundAnalysisDecisionList
             points={view?.riskReasons || []}
-            emptyText={isLoading ? '风险原因正在生成。' : '当前没有明显反方证据。'}
+            emptyText={isLoading ? '风险依据正在整理。' : '暂未发现明显反方证据。'}
             compact
           />
         </div>
@@ -1212,7 +1203,7 @@ function RiskBreakdownCard({
           {riskModules.length === 0 ? (
             <EmptyPanel
               code={isLoading ? 'RISK_MODULE_SYNC' : 'RISK_MODULE_EMPTY'}
-              text={isLoading ? '正在拆解风险模块' : '风险模块未返回'}
+              text={isLoading ? '正在整理风险模块' : '暂时没有风险模块'}
               scanning={isLoading}
             />
           ) : riskModules.map((module) => (
@@ -1326,12 +1317,8 @@ function EmptyPanel({
   scanning?: boolean
 }) {
   return (
-    <div className="relative flex min-h-[6rem] w-full overflow-hidden rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--card-bg)]/25 px-4 py-5 text-center text-sm text-theme-muted">
-      {scanning && <div className="pointer-events-none absolute inset-y-0 left-[-40%] w-1/2 animate-[pulse_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-cyan-300/10 to-transparent" />}
-      <div className="relative z-10 m-auto">
-        <div className="font-mono text-[11px] tracking-[0.22em] text-cyan-100/55">[ {code} ]</div>
-        <div className="mt-2 text-theme-muted">{text}</div>
-      </div>
+    <div role="status" data-diagnostic-code={code} data-loading={scanning || undefined} className="flex min-h-[6rem] w-full items-center justify-center rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--card-bg)]/25 px-4 py-5 text-center text-sm text-theme-muted">
+      <div>{text}</div>
     </div>
   )
 }
@@ -1376,8 +1363,8 @@ function RadarBasePlaceholder({
             )
           })}
         </svg>
-        <div className={cn('absolute inset-3 rounded-full border border-cyan-200/10', scanning && 'animate-[spin_6s_linear_infinite] border-t-cyan-200/45')} />
-        <div className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-200/55 shadow-[0_0_24px_rgba(34,211,238,0.45)]" />
+        <div className={cn('absolute inset-3 rounded-full border border-cyan-200/10', scanning && 'border-t-cyan-200/45')} />
+        <div className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-200/55" />
       </div>
       <EmptyPanel code={code} text={text} scanning={scanning} />
     </div>
@@ -1392,7 +1379,7 @@ function EvidenceSkeletonList({ amber = false }: { amber?: boolean }) {
           <div className="h-3 w-24 rounded-full bg-slate-400/15" />
           <div className="mt-4 h-2.5 w-full rounded-full bg-slate-400/10" />
           <div className="mt-2 h-2.5 w-4/5 rounded-full bg-slate-400/10" />
-          <div className="mt-4 font-mono text-[10px] tracking-[0.2em] text-theme-muted opacity-70">[ EVIDENCE_STREAM_PENDING ]</div>
+          <div className="mt-4 text-xs text-theme-muted">正在整理依据…</div>
         </div>
       ))}
     </div>

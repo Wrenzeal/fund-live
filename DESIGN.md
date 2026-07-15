@@ -2,7 +2,7 @@
 
 ## Source of truth
 - Status: Active
-- Last refreshed: 2026-06-04
+- Last refreshed: 2026-07-15
 - Primary product surfaces: Fund home `/`, analysis detail `/analysis/[fundId]`, analysis rankings `/analysis/rankings`, holdings `/holdings`, watchlist `/watchlist`, issues, and announcements.
 - Evidence reviewed:
   - `web/src/app/analysis/[fundId]/page-client.tsx`
@@ -53,7 +53,7 @@
   - Slow or partial data states where confidence and limitations matter.
 
 ## Information architecture
-- Primary navigation: Home, Analysis Rankings, Holdings, Watchlist, Issues, Announcements.
+- Primary navigation: Home, Watchlist, Holdings, Analysis Rankings; Issues and Announcements are secondary destinations.
 - Core routes/screens:
   - `/`: fund search, valuation, intraday chart, holdings, analysis summary.
   - `/analysis/[fundId]`: full analysis board.
@@ -87,7 +87,7 @@
 - Typography: Strong section titles, compact metadata labels, readable Chinese body copy at 12–14px+ depending on density.
 - Spacing/layout rhythm: Max width around `max-w-7xl`; use 5–6 unit vertical section rhythm; avoid too many four-column grids on content-heavy panels.
 - Shape/radius/elevation: Rounded cards (`rounded-2xl` / `rounded-3xl`) with glass surfaces; avoid stacking heavy shadows on every nested card.
-- Motion: Native CSS transitions and IntersectionObserver scroll reveal; major long pages should use shared `ScrollReveal` / `ScrollRevealStack`; respect `motion-reduce` utilities.
+- Motion: Keep only functional CSS transitions for menus, loading, submission, and state changes; decorative sweeps, universal hover lifts, and infinite background animations are not part of the default language. Respect `motion-reduce` utilities.
 - Imagery/iconography: Lucide icons for section identity; icons should clarify semantics, not decorate every line. Browser favicon should use the blue line-only activity mark on transparent background, with SVG preferred and ICO as fallback. Browser tab title should read `FundLive - 你的基金估值系统`; if it is too long, use a lightweight document-title ticker that respects reduced motion, avoids low-frame jumps with sub-second character steps, and pauses briefly when the full title is visible. The visible home wordmark stays “涨了多少”, and its subtitle should read `FundLive - 实时基金估值`.
 
 ## Components
@@ -145,11 +145,14 @@
 - Offline/slow network: Avoid blocking the whole page when only analysis is still loading.
 
 ## Content voice
-- Tone: Clear, conservative, explanatory.
+- Tone: Clear, conservative, direct; explain only when the user needs a decision or a boundary.
 - Terminology: Use “结构偏积极 / 适合观察 / 风险偏高” rather than direct “加仓 / 减仓” instructions.
 - Microcopy rules:
   - Distinguish rule-based observations from trade advice.
   - State data limitations once in the method/limitations section.
+  - Prefer Chinese UI copy; keep only brand names and established technical terms in English.
+  - Use natural-language loading/error states with a next action; keep diagnostic codes out of the user-facing surface.
+  - Use progressive disclosure for method, source, and risk details instead of repeating explanations beside every metric.
   - Avoid repeated “当前看板负责串起来” style scaffolding.
 
 ## Implementation constraints

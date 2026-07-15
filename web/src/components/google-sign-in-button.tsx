@@ -77,7 +77,7 @@ export function GoogleSignInButton({ onCredential }: GoogleSignInButtonProps) {
   if (isLoadingConfig) {
     return (
       <div className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-4 text-sm text-theme-secondary">
-        正在读取 Google 登录配置...
+        正在准备 Google 登录…
       </div>
     )
   }

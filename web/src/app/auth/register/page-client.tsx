@@ -48,7 +48,7 @@ export function RegisterPageClient({ returnTo }: { returnTo: string }) {
     <AuthShell
       eyebrow="创建账户"
       title="注册账户"
-      description="创建账户后即可保存自选基金、持仓记录和个人设置。"
+      description="创建账户后保存自选、持仓和个人设置，换设备也能继续查看。"
       footer={(
         <div className="flex items-center justify-between gap-4">
           <span>已经有账号？</span>
@@ -104,7 +104,7 @@ export function RegisterPageClient({ returnTo }: { returnTo: string }) {
               required
             />
           </div>
-          <span className="text-xs text-theme-muted">用于保护持仓与自选数据，建议不要复用其他网站密码。</span>
+          <span className="text-sm leading-6 text-theme-muted">至少 10 位，包含字母和数字，不能有空格。请不要复用其他网站密码。</span>
         </label>
 
         {error && (
@@ -116,7 +116,7 @@ export function RegisterPageClient({ returnTo }: { returnTo: string }) {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-5 py-3.5 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent-primary)] px-5 py-3.5 text-sm font-semibold text-white transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting ? (
             <>

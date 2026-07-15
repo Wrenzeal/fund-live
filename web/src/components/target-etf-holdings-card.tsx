@@ -53,8 +53,8 @@ export function TargetETFHoldingsCard({ targetName, holdings }: TargetETFHolding
         </table>
       </div>
 
-      <div className="mt-4 border-t border-[var(--card-border)] pt-4 text-xs text-theme-muted">
-        💡 这里展示的是目标 ETF 的持仓明细，用于帮助理解联接基金的跟踪对象与底层暴露，不代表联接基金主展示涨跌幅口径。
+      <div className="mt-4 border-t border-[var(--card-border)] pt-4 text-sm leading-6 text-theme-muted">
+        目标 ETF 持仓用于说明联接基金的跟踪对象和底层暴露，不代表联接基金的实时涨跌幅。
       </div>
     </div>
   )

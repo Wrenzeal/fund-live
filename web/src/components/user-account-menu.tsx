@@ -50,20 +50,18 @@ export function UserAccountMenu() {
           href={authRouteWithReturnTo('/auth/login', pathname)}
           className={cn(
             'group relative overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-theme-secondary transition-all duration-200',
-            'hover:-translate-y-0.5 hover:border-cyan-400/35 hover:bg-cyan-400/10 hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)] active:scale-[0.97]'
+            'hover:border-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/10 hover:text-theme-primary'
           )}
         >
-          <span className="action-button-shine" />
           <span className="relative z-10">登录</span>
         </Link>
         <Link
           href={authRouteWithReturnTo('/auth/register', pathname)}
           className={cn(
-            'group relative overflow-hidden rounded-xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-3 py-2 text-sm font-medium text-white transition-all duration-200',
-            'hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(14,165,233,0.28)] active:scale-[0.97]'
+            'group relative overflow-hidden rounded-xl bg-[var(--accent-primary)] px-3 py-2 text-sm font-medium text-white transition-[filter]',
+            'hover:brightness-105'
           )}
         >
-          <span className="action-button-shine" />
           <span className="relative z-10">注册</span>
         </Link>
       </div>

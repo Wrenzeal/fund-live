@@ -116,11 +116,10 @@ export function FundHistoryTrend({
     return (
       <div className={cn('relative overflow-hidden rounded-3xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/35', compact ? 'h-20' : 'min-h-[16rem] p-5', className)}>
         <div className="pointer-events-none absolute inset-0 opacity-60 [background-image:linear-gradient(rgba(148,163,184,0.10)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.10)_1px,transparent_1px)] [background-size:18px_18px]" />
-        {isLoading && <div className="pointer-events-none absolute inset-y-0 left-0 w-1/2 animate-[history-scan_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-cyan-400/10 to-transparent" />}
-        <div className="relative flex h-full min-h-[inherit] items-center justify-center px-4 text-center text-xs text-theme-muted">
+        <div role="status" className="relative flex h-full min-h-[inherit] items-center justify-center px-4 text-center text-sm text-theme-muted">
           <div>
-            <div className="font-mono tracking-[0.18em]">{isLoading ? '[ HISTORY_SYNC_PENDING ]' : '[ DAILY_NAV_NOT_READY ]'}</div>
-            {!compact && <div className="mt-2 text-sm">{isLoading ? '正在读取历史净值' : '等待夜间官方净值同步'}</div>}
+            <div>{isLoading ? '历史净值正在同步' : `暂时没有近 ${days} 日官方净值`}</div>
+            {!compact && <div className="mt-2">{isLoading ? '同步完成后会显示走势。' : '官方净值公布后会自动补上。'}</div>}
           </div>
         </div>
       </div>
@@ -134,7 +133,7 @@ export function FundHistoryTrend({
           <div>
             <div className="text-sm font-semibold text-theme-primary">{title || `近 ${days} 日官方净值走势`}</div>
             <div className="mt-1 text-xs leading-5 text-theme-muted">
-              {description || '每日收盘后写入官方单位净值，只展示收盘值，不与盘中估值混算。'}
+              {description || '只展示每日官方收盘净值，不与盘中估值混算。'}
             </div>
           </div>
           <div className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-right">

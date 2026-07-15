@@ -604,7 +604,7 @@ export default function HoldingsPage() {
     return (
       <AccountAreaShell
         title="持仓明细"
-        description="记录持仓本金，并在官方净值同步后查看真实市值与今日盈亏。"
+        description="记录本金、确认份额和盈亏。"
       >
         <div className="glass h-64 animate-pulse rounded-[32px] border border-[var(--card-border)]" />
       </AccountAreaShell>
@@ -615,12 +615,12 @@ export default function HoldingsPage() {
     return (
       <AccountAreaShell
         title="持仓明细"
-        description="记录持仓本金，并在官方净值同步后查看真实市值与今日盈亏。"
+        description="登录后记录本金、确认份额和盈亏。"
       >
         <EmptyState
           icon={<Wallet className="h-10 w-10" />}
-          title="登录后可查看持仓明细"
-          description="登录后可同步查看和管理你的基金持仓记录。"
+          title="登录后查看持仓"
+          description="登录后即可保存和管理基金持仓。"
           action={
             <div className="flex justify-center gap-3">
               <ActionButton href="/auth/login?returnTo=%2Fholdings" variant="subtle">
@@ -638,8 +638,8 @@ export default function HoldingsPage() {
 
   return (
     <AccountAreaShell
-      title="我的持仓账本"
-      description="快速记录仓位，查看净值确认、真实盈亏、风险提醒和组合分析。"
+      title="我的持仓"
+      description="记录仓位，查看净值确认、盈亏和风险提醒。"
     >
       <ScrollRevealStack className="space-y-8">
         {feedback && <HoldingFeedbackBanner feedback={feedback} />}
@@ -707,7 +707,7 @@ export default function HoldingsPage() {
         {holdings.length === 0 && activeWorkspaceTab === "record" && (
           <EmptyState
             icon={<Wallet className="h-10 w-10" />}
-            title="记录第一笔后，这里会变成你的持仓驾驶舱"
+            title="还没有持仓记录"
             features={[
               { title: "自动补齐", description: "净值、份额、市值" },
               { title: "看见风险", description: "量化建议、事件标签" },

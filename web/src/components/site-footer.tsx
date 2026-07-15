@@ -26,6 +26,9 @@ export function SiteFooter({ className, compact = false }: SiteFooterProps) {
               <Link className="transition-colors hover:text-theme-primary focus-visible:text-theme-primary" href="/announcements">
                 更新公告
               </Link>
+              <Link className="transition-colors hover:text-theme-primary focus-visible:text-theme-primary" href="/issues">
+                反馈与想法
+              </Link>
               <Link className="transition-colors hover:text-theme-primary focus-visible:text-theme-primary" href="/auth/login">
                 账户登录
               </Link>

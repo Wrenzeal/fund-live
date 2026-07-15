@@ -141,7 +141,7 @@ export default function HoldingTransactionDetailPage() {
       <AccountAreaShell title="流水详情" description="查看单条持仓流水、快照变化和回滚预览。">
         <div className="rounded-[36px] border border-[var(--card-border)] p-10 text-center glass">
           <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
-          <div className="mt-4 text-sm text-theme-secondary">正在读取流水详情...</div>
+          <div className="mt-4 text-sm text-theme-secondary">正在读取流水详情…</div>
         </div>
       </AccountAreaShell>
     )
@@ -207,7 +207,7 @@ export default function HoldingTransactionDetailPage() {
               </div>
               <h1 className="mt-4 truncate text-3xl font-black text-theme-primary">{transaction.fund?.name || transaction.fund_id}</h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-theme-secondary">
-                {transaction.note || '这条流水没有备注。你可以在这里核对明细和回滚影响。'}
+                {transaction.note || '暂无备注。下方列出流水明细和回滚影响。'}
               </p>
             </div>
             <div className="rounded-[26px] border border-cyan-300/18 bg-cyan-400/10 px-5 py-4 text-right">
@@ -247,7 +247,7 @@ export default function HoldingTransactionDetailPage() {
               回滚预览
             </div>
             <h2 className="mt-3 text-xl font-black text-theme-primary">{rollbackPreview?.title || '只读预览'}</h2>
-            <p className="mt-2 text-sm leading-6 text-theme-secondary">{rollbackPreview?.summary || '当前暂无回滚预览。'}</p>
+            <p className="mt-2 text-sm leading-6 text-theme-secondary">{rollbackPreview?.summary || '暂无回滚预览。'}</p>
             {rollbackPreview?.suggested_action && <p className="mt-2 text-xs leading-5 text-cyan-100">{rollbackPreview.suggested_action}</p>}
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {(rollbackPreview?.affected_fields ?? []).map((field) => <RollbackFieldCard key={`${field.field}-${field.label}`} field={field} />)}

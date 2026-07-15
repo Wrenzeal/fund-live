@@ -68,8 +68,8 @@ export default function AnnouncementsPage() {
   return (
     <SiteShell
       title="更新公告"
-      description="这里记录站点已经发布的功能更新和运营公告。登录用户如有未读内容，会在进入站点后收到弹窗提醒。"
-      eyebrowLabel="UPDATE BOARD"
+      description="查看站点功能更新和运营公告。登录后会收到未读提醒。"
+      eyebrowLabel="站点更新"
       EyebrowIcon={Bell}
     >
       <div className="space-y-8">
@@ -106,7 +106,7 @@ export default function AnnouncementsPage() {
                     onChange={(event) => setContent(event.target.value)}
                     rows={8}
                     className="w-full resize-y bg-transparent text-sm leading-6 text-theme-primary outline-none placeholder:text-theme-muted"
-                    placeholder="这里写完整公告内容。"
+                    placeholder="输入公告正文"
                   />
                 </label>
 
@@ -140,17 +140,17 @@ export default function AnnouncementsPage() {
             </Surface>
 
             <Surface as="section" radius="xl" padding="md">
-              <div className="text-xs tracking-[0.22em] text-theme-muted">发布说明</div>
+              <div className="text-sm text-theme-muted">发布方式</div>
               <div className="mt-2 text-2xl font-bold text-theme-primary">公告发布</div>
               <div className="mt-5 space-y-4 text-sm leading-7 text-theme-secondary">
                 <div className="rounded-[22px] border border-[var(--card-border)] bg-[var(--input-bg)]/60 p-4">
-                  手动公告适合发布维护通知、服务说明和运营信息。
+                  手动发布维护通知、服务说明和运营信息。
                 </div>
                 <div className="rounded-[22px] border border-[var(--card-border)] bg-[var(--input-bg)]/60 p-4">
-                  也可以从 `CHANGELOG` 导入已整理好的版本更新。
+                  也可以从 `CHANGELOG` 导入版本更新。
                 </div>
                 <div className="rounded-[22px] border border-[var(--card-border)] bg-[var(--input-bg)]/60 p-4">
-                  登录用户会在存在未读公告时收到弹窗提醒，并可手动标记已读。
+                  登录用户会收到未读公告提醒，也可以手动标记已读。
                 </div>
               </div>
             </Surface>
@@ -161,7 +161,7 @@ export default function AnnouncementsPage() {
           {isLoading ? (
             <Surface radius="xl" padding="lg" className="text-center">
               <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
-              <div className="mt-4 text-sm text-theme-secondary">正在加载公告列表...</div>
+              <div className="mt-4 text-sm text-theme-secondary">正在读取公告…</div>
             </Surface>
           ) : error ? (
             <StatusBanner tone="danger">

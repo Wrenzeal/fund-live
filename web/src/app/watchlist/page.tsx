@@ -72,8 +72,6 @@ export default function WatchlistPage() {
   const [animatingEditGroupId, setAnimatingEditGroupId] = useState<
     string | null
   >(null);
-  const [animatingViewMode, setAnimatingViewMode] =
-    useState<GroupViewMode | null>(null);
   const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
   const groupMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const [fundQuery, setFundQuery] = useState("");
@@ -101,7 +99,6 @@ export default function WatchlistPage() {
   const navAnimationTimerRef = useRef<number | null>(null);
   const collapseAnimationTimerRef = useRef<number | null>(null);
   const editAnimationTimerRef = useRef<number | null>(null);
-  const viewModeAnimationTimerRef = useRef<number | null>(null);
   const { results, isLoading: isFundSearchLoading } = useFundSearch(fundQuery);
   const visibleFundResults = useMemo(() => results.slice(0, 5), [results]);
   const shouldShowFundSearchMenu =
@@ -248,9 +245,6 @@ export default function WatchlistPage() {
       if (editAnimationTimerRef.current !== null) {
         window.clearTimeout(editAnimationTimerRef.current);
       }
-      if (viewModeAnimationTimerRef.current !== null) {
-        window.clearTimeout(viewModeAnimationTimerRef.current);
-      }
     };
   }, []);
 
@@ -298,19 +292,7 @@ export default function WatchlistPage() {
     }, 560);
   };
 
-  const triggerViewModeAnimation = (mode: GroupViewMode) => {
-    if (viewModeAnimationTimerRef.current !== null) {
-      window.clearTimeout(viewModeAnimationTimerRef.current);
-    }
-    setAnimatingViewMode(mode);
-    viewModeAnimationTimerRef.current = window.setTimeout(() => {
-      setAnimatingViewMode((current) => (current === mode ? null : current));
-      viewModeAnimationTimerRef.current = null;
-    }, 560);
-  };
-
   const handleChangeGroupViewMode = (mode: GroupViewMode) => {
-    triggerViewModeAnimation(mode);
     setGroupViewMode(mode);
   };
 
@@ -608,7 +590,7 @@ export default function WatchlistPage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-sm text-theme-secondary">分组说明</span>
+                <span className="text-sm text-theme-secondary">分组说明（可选）</span>
                 <input
                   value={groupDescription}
                   onChange={(event) => setGroupDescription(event.target.value)}
@@ -726,7 +708,7 @@ export default function WatchlistPage() {
                     <div>
                       <div className="text-sm font-medium">暂不选择分组</div>
                       <div className="mt-1 text-xs text-theme-muted">
-                        保留当前搜索结果，不立即加入任何分组
+                        搜索结果暂不加入分组
                       </div>
                     </div>
                     {!selectedGroup && (
@@ -758,7 +740,7 @@ export default function WatchlistPage() {
                             {group.name}
                           </div>
                           <div className="mt-1 text-xs text-theme-muted">
-                            {group.description || "未填写分组说明"} ·{" "}
+                            {group.description || "暂无分组说明"} ·{" "}
                             {group.funds.length} 只基金
                           </div>
                         </div>
@@ -805,7 +787,7 @@ export default function WatchlistPage() {
                   {isFundSearchLoading ? (
                     <div className="flex items-center gap-2 rounded-[18px] px-4 py-3 text-sm text-theme-secondary">
                       <LoaderCircle className="h-4 w-4 animate-spin text-cyan-300" />
-                      正在搜索基金...
+                      正在搜索基金…
                     </div>
                   ) : visibleFundResults.length > 0 ? (
                     visibleFundResults.map((fund) => (
@@ -866,63 +848,38 @@ export default function WatchlistPage() {
             <EmptyState
               icon={<Layers3 className="h-10 w-10" />}
               title="还没有自选分组"
-              description="你可以先创建分组，再把基金加入对应的观察篮子；创建后的分组和基金会自动保存。"
+              description="创建一个分组，再把常看的基金加入其中。修改会自动保存。"
             />
           ) : (
             <>
               <Surface as="section" radius="xl" padding="md">
-                <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
+                <div className="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-end">
                   <div className="space-y-3">
-                    <div className="text-sm text-theme-muted">快速定位分组</div>
+                    <div className="text-sm font-medium text-theme-muted">筛选分组</div>
                     <div className="relative">
                       <FileSearch className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-muted" />
                       <input
                         value={groupSearchQuery}
-                        onChange={(event) =>
-                          setGroupSearchQuery(event.target.value)
-                        }
-                        placeholder="搜索分组名称或说明"
+                        onChange={(event) => setGroupSearchQuery(event.target.value)}
+                        placeholder="搜索分组名称"
                         className="auth-input w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] py-3 pl-11 pr-4 text-theme-primary outline-none placeholder:text-theme-muted"
                       />
                     </div>
-                    <div className="text-xs text-theme-secondary">
-                      当前命中 {filteredGroups.length} /{" "}
-                      {watchlistGroups.length} 个分组
+                    <div className="text-sm text-theme-secondary">
+                      {filteredGroups.length} / {watchlistGroups.length} 个分组
                     </div>
-                    <div className="text-xs text-theme-muted">
-                      {reorderEnabled
-                        ? "当前可直接拖拽下方分组卡片调整顺序。"
-                        : normalizedGroupSearch
-                          ? "如需拖拽排序，请先清空搜索关键词。"
-                          : groupViewMode === "focused"
-                            ? "如需拖拽排序，请切回“全部分组”模式。"
-                            : "至少需要两个分组后才可拖拽排序。"}
-                    </div>
+                    {!reorderEnabled && watchlistGroups.length > 1 && (
+                      <div className="text-sm text-theme-muted">清空筛选并切回全部分组后可拖拽排序。</div>
+                    )}
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="text-sm text-theme-muted">浏览模式</div>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-theme-muted">显示范围</div>
+                    <div className="flex rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] p-1">
                       {(
                         [
-                          {
-                            id: "all",
-                            label: "全部分组",
-                            icon: Layers3,
-                            eyebrow: "浏览全部",
-                            description: "完整浏览全部分组",
-                            helper: `当前高亮：${focusedGroup?.name ?? "未选中"}`,
-                          },
-                          {
-                            id: "focused",
-                            label: "当前分组",
-                            icon: Check,
-                            eyebrow: "聚焦查看",
-                            description: "只看当前浏览分组",
-                            helper: focusedGroup
-                              ? `当前聚焦：${focusedGroup.name}`
-                              : "先选择一个分组",
-                          },
+                          { id: "all", label: "全部分组", icon: Layers3 },
+                          { id: "focused", label: "当前分组", icon: Check },
                         ] as const
                       ).map((option) => {
                         const Icon = option.icon;
@@ -932,87 +889,32 @@ export default function WatchlistPage() {
                             key={option.id}
                             type="button"
                             onClick={() => handleChangeGroupViewMode(option.id)}
+                            aria-pressed={active}
                             className={cn(
-                              "group relative overflow-hidden rounded-[26px] border px-4 py-4 text-left transition-all duration-200",
-                              "hover:-translate-y-0.5 active:scale-[0.985]",
+                              "flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors",
                               active
-                                ? "border-cyan-400/45 bg-gradient-to-br from-cyan-500/16 via-sky-500/10 to-transparent text-theme-primary shadow-[0_16px_34px_rgba(34,211,238,0.16)]"
-                                : "border-[var(--input-border)] bg-[var(--input-bg)]/70 text-theme-secondary hover:border-cyan-400/35 hover:bg-cyan-500/8 hover:text-theme-primary hover:shadow-[0_12px_26px_rgba(34,211,238,0.10)]",
-                              animatingViewMode === option.id &&
-                                "action-button-pop",
+                                ? "bg-[var(--accent-primary)]/12 font-semibold text-theme-primary"
+                                : "text-theme-secondary hover:text-theme-primary",
                             )}
                           >
-                            <span className="action-button-shine" />
-                            <div className="relative z-10 flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="text-[11px] tracking-[0.24em] text-theme-muted">
-                                  {option.eyebrow}
-                                </div>
-                                <div className="mt-2 flex items-center gap-2">
-                                  <Icon
-                                    className={cn(
-                                      "h-4 w-4 transition-transform duration-300",
-                                      active
-                                        ? "scale-110 text-cyan-200"
-                                        : "group-hover:scale-110 group-hover:text-cyan-200",
-                                    )}
-                                  />
-                                  <span className="text-sm font-semibold text-theme-primary">
-                                    {option.label}
-                                  </span>
-                                </div>
-                              </div>
-                              <span
-                                className={cn(
-                                  "rounded-full border px-2 py-1 text-[10px] tracking-[0.18em] transition-all duration-300",
-                                  active
-                                    ? "border-cyan-400/35 bg-cyan-400/12 text-cyan-200"
-                                    : "border-[var(--input-border)] bg-[var(--card-bg)]/50 text-theme-muted",
-                                )}
-                              >
-                                {active ? "当前" : "切换"}
-                              </span>
-                            </div>
-                            <div className="relative z-10 mt-4 space-y-1">
-                              <div className="text-sm font-medium text-theme-primary">
-                                {option.description}
-                              </div>
-                              <div className="text-xs leading-5 text-theme-secondary">
-                                {option.helper}
-                              </div>
-                            </div>
+                            <Icon className="h-4 w-4" />
+                            {option.label}
                           </button>
                         );
                       })}
-                    </div>
-                    <div className="text-xs text-theme-secondary">
-                      {groupViewMode === "focused"
-                        ? `当前只展示分组「${focusedGroup?.name ?? "未选中"}」，适合分组很多时快速聚焦`
-                        : `当前展示全部分组，正在高亮「${focusedGroup?.name ?? "未选中"}」并支持快速跳转`}
                     </div>
                   </div>
                 </div>
 
                 {focusedGroup && (
-                  <div className="mt-5 rounded-[24px] border border-cyan-500/25 bg-cyan-500/10 px-4 py-4 shadow-[0_16px_30px_rgba(34,211,238,0.10)]">
-                    <div className="text-[11px] tracking-[0.24em] text-cyan-300">
-                      当前浏览分组
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--accent-primary)]/25 bg-[var(--accent-primary)]/8 px-4 py-3">
+                    <div className="flex items-center gap-2 text-sm text-theme-secondary">
+                      <span>正在浏览</span>
+                      <strong className="text-theme-primary">{focusedGroup.name}</strong>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-cyan-400/35 bg-cyan-400/10 px-2.5 py-1 text-[11px] tracking-[0.18em] text-cyan-200">
-                        {groupViewMode === "focused"
-                          ? "当前仅展示"
-                          : "当前高亮"}
-                      </span>
-                      <span className="text-lg font-bold text-theme-primary sm:text-xl">
-                        {focusedGroup.name}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-sm leading-6 text-theme-secondary">
-                      {groupViewMode === "focused"
-                        ? `下方当前只显示「${focusedGroup.name}」一个分组。切回“全部分组”后，可继续浏览其它分组。`
-                        : `下方完整列表里会重点展示「${focusedGroup.name}」，点击分组导航可快速切换当前浏览分组。`}
-                    </div>
+                    <span className="text-sm text-theme-muted">
+                      {groupViewMode === "focused" ? "仅显示此分组" : "已在全部分组中定位"}
+                    </span>
                   </div>
                 )}
 
@@ -1145,7 +1047,7 @@ export default function WatchlistPage() {
                               </span>
                             </div>
                             <p className="mt-2 max-w-2xl text-sm leading-6 text-theme-secondary">
-                              {group.description || "未填写分组说明"}
+                              {group.description || "暂无分组说明"}
                             </p>
                             <div className="mt-3 text-xs text-theme-muted">
                               共 {group.funds.length} 只基金
@@ -1239,7 +1141,7 @@ export default function WatchlistPage() {
                         </div>
                       ) : group.funds.length === 0 ? (
                         <div className="rounded-2xl border border-dashed border-[var(--card-border)] px-5 py-10 text-center text-sm text-theme-secondary">
-                          当前分组还没有基金，从上面的搜索结果里把基金加入这里。
+                          这个分组还没有基金，可从上方搜索结果加入。
                         </div>
                       ) : (
                         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -1288,7 +1190,7 @@ export default function WatchlistPage() {
                       修改分组信息
                     </div>
                     <div className="mt-2 text-sm leading-6 text-theme-secondary">
-                      可同时调整分组名称、说明和颜色标识，保存后会立即同步到分组列表和导航区域。
+                      修改分组名称、说明和颜色标识，保存后立即生效。
                     </div>
                   </div>
                   <button
@@ -1318,7 +1220,7 @@ export default function WatchlistPage() {
 
                   <label className="block">
                     <div className="mb-2 text-sm text-theme-secondary">
-                      分组说明
+                      分组说明（可选）
                     </div>
                     <textarea
                       value={editingGroupDescription}
@@ -1326,7 +1228,7 @@ export default function WatchlistPage() {
                         setEditingGroupDescription(event.target.value)
                       }
                       rows={4}
-                      placeholder="补充一句说明，方便区分这个分组的用途和关注重点"
+                      placeholder="例如：长期观察、行业主题"
                       className="auth-input w-full resize-y rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm leading-6 text-theme-primary outline-none placeholder:text-theme-muted"
                     />
                   </label>

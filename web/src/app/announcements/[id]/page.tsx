@@ -41,12 +41,12 @@ export default function AnnouncementDetailPage() {
       <SiteShell
         title="公告详情"
         description="查看站点已经发布的公告和历史更新记录。"
-        eyebrowLabel="UPDATE DETAIL"
+        eyebrowLabel="公告详情"
         EyebrowIcon={Bell}
       >
         <Surface radius="xl" padding="lg" className="text-center">
           <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
-          <div className="mt-4 text-sm text-theme-secondary">正在加载公告详情...</div>
+          <div className="mt-4 text-sm text-theme-secondary">正在读取公告详情…</div>
         </Surface>
       </SiteShell>
     )
@@ -57,7 +57,7 @@ export default function AnnouncementDetailPage() {
       <SiteShell
         title="公告详情"
         description="查看站点已经发布的公告和历史更新记录。"
-        eyebrowLabel="UPDATE DETAIL"
+        eyebrowLabel="公告详情"
         EyebrowIcon={Bell}
       >
         <StatusBanner tone="danger">
@@ -71,7 +71,7 @@ export default function AnnouncementDetailPage() {
     <SiteShell
       title="公告详情"
       description="查看站点已经发布的公告和历史更新记录。"
-      eyebrowLabel="UPDATE DETAIL"
+      eyebrowLabel="公告详情"
       EyebrowIcon={Bell}
     >
       <ScrollRevealStack className="space-y-6">

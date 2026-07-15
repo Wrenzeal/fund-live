@@ -14,11 +14,11 @@ export default function NotFound() {
           <StaticInfoHero
             eyebrow="404 / 页面未找到"
             title="这个页面暂时不存在"
-            description="链接可能已经移动，或对应基金、报告、公告还没有生成。你可以返回首页搜索基金，或查看最近的更新公告。"
+            description="链接可能已移动，或内容尚未发布。返回首页搜索基金，或查看最近更新。"
             className="border-0 bg-transparent p-0 shadow-none backdrop-blur-0"
           />
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/" className="rounded-2xl bg-cyan-500 px-5 py-3 text-sm font-semibold text-slate-950 transition-transform hover:-translate-y-0.5 active:scale-[0.98]">
+            <Link href="/" className="rounded-2xl bg-[var(--accent-primary)] px-5 py-3 text-sm font-semibold text-white transition-[filter] hover:brightness-105">
               搜索基金
             </Link>
             <Link href="/announcements" className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-5 py-3 text-sm font-medium text-theme-primary transition-colors hover:border-cyan-400/35 hover:bg-cyan-500/10">

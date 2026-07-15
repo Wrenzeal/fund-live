@@ -217,7 +217,7 @@ export default function IssuesPage() {
   return (
     <SiteShell
       title="反馈与想法"
-      description="查看大家提交的问题、功能诉求和改进建议；登录后也可以留下你的反馈。"
+      description="浏览已提交的问题和功能建议，登录后可提交反馈。"
       eyebrowLabel="反馈入口"
       EyebrowIcon={WandSparkles}
     >
@@ -286,7 +286,7 @@ export default function IssuesPage() {
             {isLoading ? (
               <Surface radius="xl" padding="lg" className="text-center">
                 <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
-                <div className="mt-4 text-sm text-theme-secondary">正在加载反馈列表...</div>
+                <div className="mt-4 text-sm text-theme-secondary">正在读取反馈…</div>
               </Surface>
             ) : error ? (
               <StatusBanner tone="danger">
@@ -296,7 +296,7 @@ export default function IssuesPage() {
               <EmptyState
                 icon={<AlertTriangle className="h-8 w-8" />}
                 title="暂时没有匹配的反馈"
-                description="你可以调整筛选条件，或者登录后提交一个新的反馈。"
+                description="调整筛选条件，或登录后提交新的反馈。"
               />
             ) : (
               issues.map((issue) => {
@@ -346,13 +346,13 @@ export default function IssuesPage() {
               <div className="text-xs tracking-[0.22em] text-theme-muted">反馈投递</div>
               <div className="mt-2 text-2xl font-bold text-theme-primary">提交一条新的反馈</div>
               <p className="mt-3 text-sm leading-6 text-theme-secondary">
-                登录后可以提交你碰到的问题、想要的功能，或者觉得值得优化的地方。管理员会统一接收并处理。
+                登录后提交问题、功能建议或改进意见。
               </p>
 
               {!user ? (
                 <StatusBanner tone="warning" className="mt-6">
                   <div>
-                    <div>你可以先公开浏览所有反馈。若要提交新的反馈，请先登录账号。</div>
+                    <div>可以先浏览反馈；提交新内容前请先登录。</div>
                     <div className="mt-4 flex flex-wrap gap-3">
                       <ActionButton href="/auth/login?returnTo=%2Fissues" variant="primary">
                         去登录

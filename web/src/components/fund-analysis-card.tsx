@@ -136,7 +136,7 @@ export function FundAnalysisCard({ analysis, fundId, isLoading = false }: FundAn
         <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(18rem,0.74fr)_minmax(0,1.26fr)]">
           {decision.topSignal && (
             <div className="flex h-full flex-col rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/32 p-4">
-              <div className="text-[11px] tracking-[0.18em] text-theme-muted">TOP SIGNAL</div>
+              <div className="text-[11px] tracking-[0.18em] text-theme-muted">最重要信号</div>
               <div className="mt-2 text-sm font-semibold text-theme-primary">{decision.topSignal.title}</div>
               <div className="mt-1 text-xs leading-5 text-theme-secondary">
                 {decision.topSignal.summary}
@@ -162,9 +162,9 @@ export function FundAnalysisCard({ analysis, fundId, isLoading = false }: FundAn
         <div className="grid gap-4 lg:grid-cols-2">
           <NarrativePanel
             icon={<Target className="h-4 w-4 text-cyan-200" />}
-            title="为什么是这个结论"
+            title="主要依据"
             points={decision.mainReasons}
-            emptyText="当前主证据不足，建议按弱观察处理。"
+            emptyText="主要依据不足，按低置信度观察。"
             className="h-full"
           />
           <NarrativePanel
@@ -300,7 +300,7 @@ function SummaryEventRadar({ events }: { events: NonNullable<FundAnalysis['event
   if (events.length === 0) {
     return (
       <div className="flex h-full min-h-[5.5rem] items-center rounded-2xl border border-dashed border-[var(--card-border)] px-4 py-3 text-xs text-theme-muted">
-        事件雷达暂无可展示的实时信号；当前结论主要来自行情、持仓和规则口径。
+        暂无匹配的实时事件；结论主要来自行情、持仓和规则观察。
       </div>
     )
   }

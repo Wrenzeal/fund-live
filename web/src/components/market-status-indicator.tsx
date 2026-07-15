@@ -41,13 +41,13 @@ function MarketStatusIndicatorBody({
         }
     }
 
-    // 在客户端挂载前显示加载占位符，避免 Hydration 错误
+    // 在客户端挂载前显示占位符，避免 Hydration 错误
     if (!mounted) {
         return (
             <div className={cn('flex items-center gap-3', className)}>
                 <div className="flex items-center gap-2">
                     <span className="inline-block w-2.5 h-2.5 rounded-full bg-[var(--text-muted)] animate-pulse" />
-                    <span className="text-sm font-medium text-theme-muted">加载中...</span>
+                    <span className="text-sm font-medium text-theme-muted">正在读取市场状态</span>
                 </div>
             </div>
         )

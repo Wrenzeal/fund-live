@@ -7,17 +7,17 @@ type ActionButtonVariant = 'primary' | 'secondary' | 'ghost' | 'subtle'
 type ActionButtonSize = 'sm' | 'md'
 
 const baseClass =
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-2xl font-medium transition-all duration-200 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60'
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-2xl font-medium transition-colors duration-160 active:opacity-80 disabled:pointer-events-none disabled:opacity-60'
 
 const variantClass: Record<ActionButtonVariant, string> = {
   primary:
-    'bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 text-white shadow-[0_16px_30px_rgba(14,165,233,0.22)] hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(14,165,233,0.30)]',
+    'bg-[var(--accent-primary)] text-white shadow-[0_10px_24px_color-mix(in_srgb,var(--accent-primary)_24%,transparent)] hover:brightness-105',
   secondary:
-    'border border-[var(--input-border)] bg-[var(--input-bg)] text-theme-primary hover:-translate-y-0.5 hover:border-cyan-400/35 hover:bg-cyan-500/10',
+    'border border-[var(--input-border)] bg-[var(--input-bg)] text-theme-primary hover:border-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/10',
   ghost:
     'border border-transparent text-theme-secondary hover:bg-[var(--input-bg)] hover:text-theme-primary',
   subtle:
-    'border border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-400/35 hover:text-theme-primary',
+    'border border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-[var(--accent-primary)] hover:text-theme-primary',
 }
 
 const sizeClass: Record<ActionButtonSize, string> = {

@@ -40,7 +40,7 @@ interface LoadingOverlayProps {
     children: React.ReactNode
 }
 
-export function LoadingOverlay({ isLoading, text = '加载中...', children }: LoadingOverlayProps) {
+export function LoadingOverlay({ isLoading, text = '正在加载…', children }: LoadingOverlayProps) {
     return (
         <div className="relative">
             {children}
@@ -104,14 +104,14 @@ export function FundLoadingIndicator({ isVisible, fundName, detailText }: FundLo
             style={{ backgroundColor: 'color-mix(in srgb, var(--background) 90%, transparent)' }}
         >
             <div className="mx-4 w-full max-w-3xl rounded-[36px] border border-[var(--card-border)] p-6 glass-strong">
-                <div className="mb-6 flex items-start justify-between gap-4">
-                    <div>
-                        <div className="text-sm font-medium tracking-[0.18em] text-theme-muted">正在读取基金数据</div>
+            <div className="mb-6 flex items-start justify-between gap-4">
+                <div>
+                        <div className="text-sm font-medium text-theme-muted">正在准备基金数据</div>
                         <h3 className="mt-3 text-2xl font-semibold text-theme-primary">
-                            {fundName ? `正在加载 ${fundName}` : '正在加载基金数据'}
+                            {fundName ? `正在读取 ${fundName}` : '正在读取基金数据'}
                         </h3>
                         <p className="mt-2 text-sm leading-6 text-theme-secondary">
-                            {detailText || '正在获取实时估值、持仓结构和分时数据。'}
+                            {detailText || '估值、持仓和分时数据会依次出现。'}
                         </p>
                     </div>
                     <LoadingSpinner size="md" />

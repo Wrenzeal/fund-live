@@ -137,13 +137,13 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
                 onClick={openSearch}
                 className={cn(
                     'fund-search-trigger group inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border',
-                    'transition-all duration-300 ease-out hover:-translate-y-0.5 active:scale-[0.97]',
+                    'transition-colors duration-160',
                     overlayVisible && 'ring-2 ring-[var(--input-focus)]/35'
                 )}
                 aria-label="搜索基金代码或名称"
                 title="搜索基金"
             >
-                <Search className="h-5 w-5 transition-transform duration-300 group-hover:scale-110" />
+                <Search className="h-5 w-5" />
             </button>
 
             {isMounted && typeof document !== 'undefined' && createPortal(
@@ -174,7 +174,7 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
                                         搜索基金
                                     </h2>
                                     <p className="mt-1 text-xs text-theme-muted">
-                                        输入代码、名称或公司，快速切换当前观察对象。
+                                        输入代码、名称或公司查看基金。
                                     </p>
                                 </div>
                                 <button
@@ -235,7 +235,7 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
                                 <div className="rounded-3xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/45 px-4 py-8 text-center">
                                     <div className="text-sm font-semibold text-theme-primary">没有找到匹配基金</div>
                                     <p className="mt-2 text-xs leading-5 text-theme-muted">
-                                        可以换成 6 位基金代码、基金简称或基金公司再试。
+                                        尝试输入 6 位基金代码、基金简称或基金公司。
                                     </p>
                                 </div>
                             )}

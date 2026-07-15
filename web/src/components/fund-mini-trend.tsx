@@ -105,9 +105,8 @@ export function FundMiniTrend({
   if (data.length === 0) {
     return (
       <div className={cn('relative flex h-24 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/25 px-4 text-center text-xs text-theme-muted', className)}>
-        {isLoading && <div className="pointer-events-none absolute inset-y-0 left-0 w-1/2 animate-[history-scan_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-cyan-400/10 to-transparent" />}
         <div className="relative">
-          <div className="font-mono tracking-[0.16em]">{isLoading ? '[ INTRADAY_SYNC_PENDING ]' : '[ INTRADAY_NOT_READY ]'}</div>
+          <div>{isLoading ? '分时数据正在同步' : '暂时没有分时数据'}</div>
           <div className="mt-1">分时数据暂未生成</div>
         </div>
       </div>

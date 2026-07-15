@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { formatPercent, formatCurrency, formatRatio, cn } from '@/lib/utils'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import type { FundEstimate, FundHoldingsDisplayItem } from '@/hooks/use-fund-data'
+import { Disclosure } from '@/components/ui/disclosure'
 
 interface HoldingsTableProps {
     estimate?: FundEstimate
@@ -77,7 +78,7 @@ export function HoldingsTable({
                 </h3>
                 <HoldingsSystemState
                     code={isLoading ? 'HOLDINGS_LINKING' : 'DATA_LINK_OFFLINE'}
-                    text={isLoading ? '正在同步持仓层' : '持仓层未返回'}
+                    text={isLoading ? '正在整理持仓数据' : '暂无持仓数据'}
                     scanning={isLoading}
                 />
             </div>
@@ -149,21 +150,16 @@ export function HoldingsTable({
             </div>
             <div className="mt-2 text-[11px] text-theme-muted sm:hidden">横向滑动查看更多列</div>
 
-            {/* Legend */}
-            <div className="mt-4 pt-4 border-t border-[var(--card-border)] text-xs text-theme-muted">
+            <div className="mt-4">
+              <Disclosure summary="查看持仓口径">
                 {displayLevel === 'target_layer' ? (
-                    <p>
-                        说明：当前默认展示基金的下一层追踪目标；底层股票仅用于估值计算，不在详情页默认展开
-                    </p>
+                    <p>默认展示基金的下一层追踪目标；底层股票只用于估值计算。</p>
                 ) : isCallAuction ? (
-                    <p>
-                        说明：集合竞价阶段保留持仓名称、代码与占比等固定信息；涨跌幅、贡献等盘中字段会在 09:30 开盘后恢复更新
-                    </p>
+                    <p>集合竞价阶段只展示名称、代码和占比；涨跌幅、贡献等字段在开盘后更新。</p>
                 ) : (
-                    <p>
-                        说明：<strong>贡献</strong> = 个股涨跌幅 × 持仓占比 / 100，表示该股对基金整体涨跌的影响
-                    </p>
+                    <p><strong>贡献</strong> = 个股涨跌幅 × 持仓占比 / 100，表示该股对基金整体涨跌的影响。</p>
                 )}
+              </Disclosure>
             </div>
         </div>
     )
@@ -276,21 +272,18 @@ function parseOptionalNumber(value?: string) {
 }
 
 function HoldingsSystemState({
-    code,
-    text,
-    scanning = false,
+  code,
+  text,
+  scanning = false,
 }: {
     code: string
     text: string
     scanning?: boolean
 }) {
     return (
-        <div className="relative overflow-hidden rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--card-bg)]/25 px-4 py-8 text-center">
-            {scanning && (
-                <div className="pointer-events-none absolute inset-y-0 left-[-40%] w-1/2 animate-[pulse_1.8s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-cyan-300/10 to-transparent" />
-            )}
-            <div className="relative z-10 font-mono text-[11px] tracking-[0.22em] text-cyan-100/55">[ {code} ]</div>
-            <div className="relative z-10 mt-2 text-sm text-theme-muted">{text}</div>
+        <div role="status" data-diagnostic-code={code} data-loading={scanning || undefined} className="rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--card-bg)]/25 px-4 py-8 text-center text-sm text-theme-muted">
+            <div>{text}</div>
+            <div className="mt-2">{scanning ? '数据到达后会自动更新。' : '可以稍后重试。'}</div>
         </div>
     )
 }

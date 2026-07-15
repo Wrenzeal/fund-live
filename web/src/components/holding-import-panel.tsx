@@ -262,7 +262,7 @@ export function HoldingImportPanel({
           <div className="mt-4 space-y-2">
             {previewRows.length === 0 ? (
               <div className="rounded-[22px] border border-dashed border-[var(--card-border)] px-4 py-8 text-center text-sm text-theme-muted">
-                粘贴平台导出的基金代码、金额和日期后，会在这里预览并提示错误行。
+                粘贴基金代码、金额和日期，确认预览后再导入。
               </div>
             ) : (
               previewRows.map((row) => (

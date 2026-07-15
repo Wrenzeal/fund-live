@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import type { Ref } from 'react'
 import { Clock, RefreshCw } from 'lucide-react'
 import { BrandMark } from '@/components/brand-mark'
@@ -26,9 +26,10 @@ interface AppTopBarProps {
 }
 
 const navItems = [
-  { href: '/issues', label: '反馈与想法' },
-  { href: '/announcements', label: '更新公告' },
-  { href: '/analysis/rankings', label: '量化排行榜' },
+  { href: '/', label: '首页' },
+  { href: '/watchlist', label: '自选' },
+  { href: '/holdings', label: '持仓' },
+  { href: '/analysis/rankings', label: '量化' },
 ]
 
 export function AppTopBar({
@@ -43,6 +44,7 @@ export function AppTopBar({
   topBarRef,
 }: AppTopBarProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const { themeType, setThemeType, viewMode, setViewMode } = useUIPreferences()
   const showTradingInterval = Boolean(isTrading && refreshInterval)
 
@@ -65,9 +67,22 @@ export function AppTopBar({
             <FundSearch onSelect={handleFundSelect} currentFundId={currentFundId} />
           </div>
 
-          <nav className="hidden items-center gap-2 xl:flex">
+          <nav className="hidden items-center gap-1 xl:flex" aria-label="主要页面">
             {navItems.map((item) => (
-              <ActionButton key={item.href} href={item.href} variant="subtle" size="sm">
+              <ActionButton
+                key={item.href}
+                href={item.href}
+                variant="subtle"
+                size="sm"
+                aria-current={
+                  item.href === '/' ? pathname === '/' || undefined : pathname.startsWith(item.href) ? 'page' : undefined
+                }
+                className={cn(
+                  pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
+                    ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/10 text-theme-primary'
+                    : undefined,
+                )}
+              >
                 {item.label}
               </ActionButton>
             ))}
@@ -114,6 +129,27 @@ export function AppTopBar({
         <div className="mt-4 flex justify-end md:hidden">
           <FundSearch onSelect={handleFundSelect} currentFundId={currentFundId} />
         </div>
+        <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 md:hidden" aria-label="主要页面">
+          {navItems.map((item) => (
+            <ActionButton
+              key={item.href}
+              href={item.href}
+              variant="subtle"
+              size="sm"
+              aria-current={
+                item.href === '/' ? pathname === '/' || undefined : pathname.startsWith(item.href) ? 'page' : undefined
+              }
+              className={cn(
+                'shrink-0',
+                pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
+                  ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/10 text-theme-primary'
+                  : undefined,
+              )}
+            >
+              {item.label}
+            </ActionButton>
+          ))}
+        </nav>
       </div>
     </header>
   )

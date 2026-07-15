@@ -254,9 +254,9 @@ function HomeContent({
   const lastUpdated = estimate?.calculated_at ? new Date(estimate.calculated_at) : null
 
   const warmupNotice = isDashboardWarming
-    ? `基金 ${displayFundId} 数据预热中，正在自动重试。`
+    ? `正在更新基金 ${displayFundId} 的数据，稍后自动重试。`
     : cacheStatus === 'warming'
-      ? `基金 ${displayFundId} 的基础资料正在后台补全，页面会自动刷新。`
+      ? `基金 ${displayFundId} 的资料正在同步，页面会自动更新。`
       : ''
   const activeEstimate = isCallAuction ? undefined : estimate
   const activeFund = isCallAuction ? undefined : fund
@@ -264,7 +264,7 @@ function HomeContent({
   const activeLastUpdated = isCallAuction ? null : lastUpdated
   const activeAnalysis = isCallAuction ? undefined : analysis
   const warmupDetailText = isDashboardWarming
-    ? '数据预热中，约 5 秒后自动重试'
+    ? '约 5 秒后自动重试'
     : isCallAuction
       ? '集合竞价中，等待 09:30 开盘后更新基金数据'
       : warmupNotice
@@ -294,7 +294,7 @@ function HomeContent({
     [holdingsDisplayItems, holdingsDisplayLevel]
   )
   const marketStatusLabel = !marketStatus.mounted
-    ? '加载中...'
+    ? '正在读取…'
     : marketStatus.isTrading
       ? '交易中'
       : getSessionLabel(marketStatus.session)
@@ -541,7 +541,7 @@ function HomeContent({
                     )}
                     {holdingsDisplayLevel === 'target_layer' && (
                       <p className="pt-2 text-xs text-theme-muted">
-                        默认只展示下一层追踪目标；底层股票仅用于估值计算，不在这里继续下钻。
+                        默认展示下一层追踪目标；底层股票只用于估值计算。
                       </p>
                     )}
                   </div>
