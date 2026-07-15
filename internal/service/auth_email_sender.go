@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	_ "embed"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"html"
@@ -22,6 +24,11 @@ import (
 )
 
 const defaultSMTPTimeout = 15 * time.Second
+
+const fundLiveEmailMarkCID = "fundlive-mark"
+
+//go:embed email-assets/fundlive-mark.png
+var fundLiveEmailMarkPNG []byte
 
 // EmailSender delivers one-time authentication codes.
 type EmailSender interface {
@@ -216,8 +223,8 @@ func buildVerificationEmail(from, fromName, to, code string, ttl time.Duration) 
 	}
 	plainBody, htmlBody := verificationEmailBodies(code, minutes)
 
-	var body bytes.Buffer
-	alternative := multipart.NewWriter(&body)
+	var alternativeBody bytes.Buffer
+	alternative := multipart.NewWriter(&alternativeBody)
 	if err := writeEmailPart(alternative, "text/plain; charset=UTF-8", plainBody); err != nil {
 		return nil, err
 	}
@@ -228,13 +235,31 @@ func buildVerificationEmail(from, fromName, to, code string, ttl time.Duration) 
 		return nil, fmt.Errorf("close email multipart body: %w", err)
 	}
 
+	var relatedBody bytes.Buffer
+	related := multipart.NewWriter(&relatedBody)
+	alternativeHeader := make(textproto.MIMEHeader)
+	alternativeHeader.Set("Content-Type", fmt.Sprintf("multipart/alternative; boundary=%q", alternative.Boundary()))
+	alternativePart, err := related.CreatePart(alternativeHeader)
+	if err != nil {
+		return nil, fmt.Errorf("create email alternative part: %w", err)
+	}
+	if _, err := alternativePart.Write(alternativeBody.Bytes()); err != nil {
+		return nil, fmt.Errorf("write email alternative part: %w", err)
+	}
+	if err := writeInlineEmailImage(related, fundLiveEmailMarkCID, "fundlive-mark.png", fundLiveEmailMarkPNG); err != nil {
+		return nil, err
+	}
+	if err := related.Close(); err != nil {
+		return nil, fmt.Errorf("close email related body: %w", err)
+	}
+
 	var message bytes.Buffer
 	fmt.Fprintf(&message, "From: %s\r\n", fromAddress.String())
 	fmt.Fprintf(&message, "To: %s\r\n", toAddress.String())
 	fmt.Fprintf(&message, "Subject: %s\r\n", subject)
 	fmt.Fprint(&message, "MIME-Version: 1.0\r\n")
-	fmt.Fprintf(&message, "Content-Type: multipart/alternative; boundary=%q\r\n\r\n", alternative.Boundary())
-	message.Write(body.Bytes())
+	fmt.Fprintf(&message, "Content-Type: multipart/related; boundary=%q; type=%q\r\n\r\n", related.Boundary(), "multipart/alternative")
+	message.Write(relatedBody.Bytes())
 	return message.Bytes(), nil
 }
 
@@ -257,16 +282,42 @@ func writeEmailPart(writer *multipart.Writer, contentType, content string) error
 	return nil
 }
 
+func writeInlineEmailImage(writer *multipart.Writer, contentID, filename string, data []byte) error {
+	if len(data) == 0 {
+		return errors.New("embedded email image is empty")
+	}
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Type", fmt.Sprintf("image/png; name=%q", filename))
+	header.Set("Content-Transfer-Encoding", "base64")
+	header.Set("Content-ID", fmt.Sprintf("<%s>", contentID))
+	header.Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", filename))
+	part, err := writer.CreatePart(header)
+	if err != nil {
+		return fmt.Errorf("create inline email image: %w", err)
+	}
+	for offset := 0; offset < len(data); offset += 57 {
+		end := min(offset+57, len(data))
+		line := base64.StdEncoding.EncodeToString(data[offset:end])
+		if _, err := io.WriteString(part, line+"\r\n"); err != nil {
+			return fmt.Errorf("write inline email image: %w", err)
+		}
+	}
+	return nil
+}
+
 func verificationEmailBodies(code string, minutes int) (string, string) {
 	safeCode := html.EscapeString(code)
-	plain := fmt.Sprintf(`FundLive 登录验证码
+	plain := fmt.Sprintf(`涨了多少 · FundLive
+
+登录验证码
 
 验证码：%s
 
 验证码将在 %d 分钟后失效，请勿转发给任何人。
+此验证码仅用于本次登录，FundLive 工作人员不会向你索要验证码。
 如果不是你本人发起登录，可以安全地忽略这封邮件。
 
-FundLive · 你的基金估值系统
+FundLive · 实时基金估值
 https://fund.wrenzeal.top
 `, code, minutes)
 
@@ -277,40 +328,58 @@ https://fund.wrenzeal.top
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light">
   <title>FundLive 登录验证码</title>
+  <style>
+    @media only screen and (max-width: 600px) {
+      .page-pad { padding: 24px 12px !important; }
+      .content-pad { padding-left: 24px !important; padding-right: 24px !important; }
+      .verification-code { font-size: 34px !important; letter-spacing: 0.16em !important; }
+    }
+  </style>
 </head>
-<body style="margin:0;padding:0;background:#eaf5f8;color:#102a38;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',Arial,sans-serif;">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">使用此验证码登录 FundLive，继续查看你的自选和持仓。</div>
-  <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" border="0" style="width:100%%;background:#eaf5f8;">
-    <tr><td align="center" style="padding:40px 16px;">
+<body style="margin:0;padding:0;background:#edf8fb;color:#102a38;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',Arial,sans-serif;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">你的 FundLive 登录验证码是 %s，%d 分钟内有效。</div>
+  <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" border="0" style="width:100%%;background:#edf8fb;">
+    <tr><td class="page-pad" align="center" style="padding:40px 16px;">
       <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" border="0" style="width:100%%;max-width:560px;">
-        <tr><td style="padding:0 8px 18px;font-size:22px;font-weight:800;letter-spacing:-0.02em;color:#0f6476;">FundLive</td></tr>
-        <tr><td style="overflow:hidden;border:1px solid #c8e2e8;border-radius:28px;background:#ffffff;box-shadow:0 18px 50px rgba(15,100,118,0.12);">
+        <tr><td style="padding:0 8px 20px;">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+            <tr>
+              <td width="60" valign="middle"><img src="cid:%s" width="48" height="48" alt="FundLive" style="display:block;width:48px;height:48px;border:0;border-radius:14px;"></td>
+              <td valign="middle">
+                <div style="font-size:20px;line-height:1.2;font-weight:800;letter-spacing:-0.02em;color:#0f5f72;">涨了多少</div>
+                <div style="margin-top:4px;font-size:12px;line-height:1.3;font-weight:600;letter-spacing:0.04em;color:#498391;">FundLive · 实时基金估值</div>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+        <tr><td style="overflow:hidden;border:1px solid #c6e2e8;border-radius:26px;background:#ffffff;box-shadow:0 18px 50px rgba(15,100,118,0.11);">
           <table role="presentation" width="100%%" cellspacing="0" cellpadding="0" border="0">
-            <tr><td style="height:7px;background:#14b8a6;font-size:0;line-height:0;">&nbsp;</td></tr>
-            <tr><td style="padding:42px 44px 18px;">
-              <div style="font-size:11px;font-weight:700;letter-spacing:0.16em;color:#0e7490;text-transform:uppercase;">Secure access</div>
-              <h1 style="margin:15px 0 0;font-size:30px;line-height:1.3;font-weight:750;letter-spacing:-0.03em;color:#102a38;">登录你的基金观察账户</h1>
-              <p style="margin:17px 0 0;font-size:15px;line-height:1.8;color:#52707d;">输入下面的验证码，继续查看你的自选基金、持仓记录和个性化设置。</p>
+            <tr><td style="height:6px;background:#0ea5a8;font-size:0;line-height:0;">&nbsp;</td></tr>
+            <tr><td class="content-pad" style="padding:38px 44px 18px;">
+              <div style="font-size:11px;font-weight:800;letter-spacing:0.15em;color:#0e7490;text-transform:uppercase;">Secure sign-in</div>
+              <h1 style="margin:14px 0 0;font-size:29px;line-height:1.32;font-weight:780;letter-spacing:-0.03em;color:#102a38;">验证码已准备好</h1>
+              <p style="margin:15px 0 0;font-size:15px;line-height:1.8;color:#52707d;">输入下方 6 位验证码，继续查看你的自选基金、持仓记录和个性化设置。</p>
             </td></tr>
-            <tr><td style="padding:8px 44px 30px;">
-              <div style="border:1px solid #9ed6dd;border-radius:20px;background:#e6f7f7;padding:25px 20px;text-align:center;">
-                <div style="font-size:11px;font-weight:700;letter-spacing:0.14em;color:#0e7490;text-transform:uppercase;">Verification code</div>
-                <div style="margin-top:10px;font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;font-size:38px;line-height:1.2;font-weight:750;letter-spacing:0.22em;color:#0f6476;">%s</div>
+            <tr><td class="content-pad" style="padding:8px 44px 28px;">
+              <div style="border:1px solid #9ed8df;border-radius:20px;background:#e8f8f8;padding:24px 18px;text-align:center;">
+                <div style="font-size:11px;font-weight:800;letter-spacing:0.14em;color:#0e7490;text-transform:uppercase;">Verification code</div>
+                <div class="verification-code" style="margin-top:10px;font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;font-size:38px;line-height:1.2;font-weight:780;letter-spacing:0.22em;color:#0f6476;">%s</div>
+                <div style="margin-top:11px;font-size:12px;line-height:1.5;color:#5f8790;">%d 分钟内有效</div>
               </div>
             </td></tr>
-            <tr><td style="padding:0 44px 42px;">
-              <div style="border-top:1px solid #dcebef;padding-top:23px;font-size:13px;line-height:1.75;color:#66808b;">
-                验证码将在 <strong style="color:#0f6476;">%d 分钟</strong>后失效，请勿转发给任何人。<br>
-                如果不是你本人发起登录，可以安全地忽略这封邮件。
+            <tr><td class="content-pad" style="padding:0 44px 40px;">
+              <div style="border-top:1px solid #dcebef;padding-top:22px;font-size:13px;line-height:1.8;color:#66808b;">
+                <strong style="color:#0f6476;">请保护好你的验证码</strong><br>
+                FundLive 工作人员不会向你索要验证码。如果不是你本人发起登录，可以安全地忽略这封邮件。
               </div>
             </td></tr>
           </table>
         </td></tr>
-        <tr><td align="center" style="padding:22px 16px 0;font-size:12px;line-height:1.7;color:#78909a;">FundLive · 你的基金估值系统<br>fund.wrenzeal.top</td></tr>
+        <tr><td align="center" style="padding:22px 16px 0;font-size:12px;line-height:1.7;color:#78909a;">FundLive · 实时基金估值<br><a href="https://fund.wrenzeal.top" style="color:#4e8490;text-decoration:none;">fund.wrenzeal.top</a></td></tr>
       </table>
     </td></tr>
   </table>
 </body>
-</html>`, safeCode, minutes)
+</html>`, safeCode, minutes, fundLiveEmailMarkCID, safeCode, minutes)
 	return plain, htmlBody
 }

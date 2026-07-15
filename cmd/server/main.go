@@ -237,7 +237,7 @@ func main() {
 			"status":           "ok",
 			"timestamp":        time.Now().Unix(),
 			"service":          "FundLive API",
-			"version":          "2026.7.14-email-code-login",
+			"version":          "2026.7.15-email-branding",
 			"storage_mode":     storageMode,
 			"email_code_login": emailCodeHealthStatus(c.Request.Context(), authConfig.EmailCodeEnabled, authService),
 		})

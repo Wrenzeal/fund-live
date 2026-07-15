@@ -1,8 +1,15 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
+	"image/png"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/mail"
 	"strings"
 	"sync"
 	"testing"
@@ -264,11 +271,91 @@ func TestVerificationEmailContainsFundLiveBrandAndCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildVerificationEmail() error = %v", err)
 	}
-	text := string(message)
-	for _, expected := range []string{"FundLive", "123456", "10", "fund.wrenzeal.top", "multipart/alternative"} {
-		if !strings.Contains(text, expected) {
-			t.Fatalf("verification email missing %q", expected)
+
+	parsed, err := mail.ReadMessage(bytes.NewReader(message))
+	if err != nil {
+		t.Fatalf("mail.ReadMessage() error = %v", err)
+	}
+	mediaType, relatedParams, err := mime.ParseMediaType(parsed.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("parse related content type: %v", err)
+	}
+	if mediaType != "multipart/related" || relatedParams["type"] != "multipart/alternative" {
+		t.Fatalf("top-level content type = %q params=%v", mediaType, relatedParams)
+	}
+
+	related := multipart.NewReader(parsed.Body, relatedParams["boundary"])
+	alternativePart, err := related.NextPart()
+	if err != nil {
+		t.Fatalf("read alternative part: %v", err)
+	}
+	alternativeType, alternativeParams, err := mime.ParseMediaType(alternativePart.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("parse alternative content type: %v", err)
+	}
+	if alternativeType != "multipart/alternative" {
+		t.Fatalf("first related part content type = %q", alternativeType)
+	}
+
+	alternative := multipart.NewReader(alternativePart, alternativeParams["boundary"])
+	bodies := make(map[string]string)
+	for {
+		part, err := alternative.NextPart()
+		if errors.Is(err, io.EOF) {
+			break
 		}
+		if err != nil {
+			t.Fatalf("read alternative body: %v", err)
+		}
+		partType, _, err := mime.ParseMediaType(part.Header.Get("Content-Type"))
+		if err != nil {
+			t.Fatalf("parse alternative body content type: %v", err)
+		}
+		body, err := io.ReadAll(part)
+		if err != nil {
+			t.Fatalf("read %s body: %v", partType, err)
+		}
+		bodies[partType] = string(body)
+	}
+	for _, partType := range []string{"text/plain", "text/html"} {
+		body := bodies[partType]
+		for _, expected := range []string{"涨了多少", "FundLive", "123456", "10 分钟", "不会向你索要验证码", "fund.wrenzeal.top"} {
+			if !strings.Contains(body, expected) {
+				t.Fatalf("%s body missing %q", partType, expected)
+			}
+		}
+	}
+	if !strings.Contains(bodies["text/html"], `src="cid:`+fundLiveEmailMarkCID+`"`) {
+		t.Fatalf("HTML body does not reference embedded mark CID")
+	}
+
+	imagePart, err := related.NextPart()
+	if err != nil {
+		t.Fatalf("read inline image part: %v", err)
+	}
+	imageType, _, err := mime.ParseMediaType(imagePart.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("parse inline image content type: %v", err)
+	}
+	if imageType != "image/png" || imagePart.Header.Get("Content-ID") != "<"+fundLiveEmailMarkCID+">" {
+		t.Fatalf("inline image headers: type=%q cid=%q", imageType, imagePart.Header.Get("Content-ID"))
+	}
+	decodedPNG, err := io.ReadAll(base64.NewDecoder(base64.StdEncoding, imagePart))
+	if err != nil {
+		t.Fatalf("decode inline image: %v", err)
+	}
+	if !bytes.Equal(decodedPNG, fundLiveEmailMarkPNG) || !bytes.HasPrefix(decodedPNG, []byte("\x89PNG\r\n\x1a\n")) {
+		t.Fatal("inline image is not the embedded FundLive PNG")
+	}
+	imageConfig, err := png.DecodeConfig(bytes.NewReader(decodedPNG))
+	if err != nil {
+		t.Fatalf("decode inline PNG config: %v", err)
+	}
+	if imageConfig.Width != 96 || imageConfig.Height != 96 {
+		t.Fatalf("inline PNG size = %dx%d, want 96x96", imageConfig.Width, imageConfig.Height)
+	}
+	if _, err := related.NextPart(); !errors.Is(err, io.EOF) {
+		t.Fatalf("unexpected extra related part: %v", err)
 	}
 }
 
