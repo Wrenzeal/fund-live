@@ -152,7 +152,7 @@ export default function HoldingTransactionDetailPage() {
       <AccountAreaShell title="流水详情" description="登录后查看你的持仓流水详情。">
         <div className="rounded-[32px] border border-[var(--card-border)] p-8 text-center glass">
           <div className="text-xl font-bold text-theme-primary">登录后可查看流水详情</div>
-          <Link href="/auth/login" className="mt-5 inline-flex rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-3 text-sm font-semibold text-white">
+          <Link href={`/auth/login?returnTo=${encodeURIComponent(`/holdings/transactions/${transactionID}`)}`} className="mt-5 inline-flex rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-3 text-sm font-semibold text-white">
             去登录
           </Link>
         </div>

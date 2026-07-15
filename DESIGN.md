@@ -112,6 +112,10 @@
 - Token/component ownership: Keep route-local helper components until reuse across pages is proven; do not introduce a new component library layer.
 
 ## Auth and security UX
+- Login defaults to a two-step email-code flow when `/api/v1/auth/config` reports it available; password remains an explicit tab and Google remains a separate provider action.
+- The code stage must show the destination email, resend countdown, change-email action, six-digit numeric input, one-time-code autocomplete, and a clear development-only code banner when returned by the API.
+- When DragonFly or SMTP is unavailable, switch to password login with a concise temporary notice; do not render a dead primary action.
+- Authentication redirects may preserve only validated same-origin relative paths. Reject protocol URLs, protocol-relative paths, backslashes, and control characters.
 - Register password copy must match backend policy: at least 10 characters, include letters and numbers, and contain no whitespace.
 - Login failures should not disclose whether an email format, account existence, or password check failed; use generic invalid credentials in UI.
 - Rate-limited authentication should surface as a temporary wait/retry state, not as a permanent account error.

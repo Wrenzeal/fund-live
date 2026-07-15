@@ -354,10 +354,10 @@ export default function IssuesPage() {
                   <div>
                     <div>你可以先公开浏览所有反馈。若要提交新的反馈，请先登录账号。</div>
                     <div className="mt-4 flex flex-wrap gap-3">
-                      <ActionButton href="/auth/login" variant="primary">
+                      <ActionButton href="/auth/login?returnTo=%2Fissues" variant="primary">
                         去登录
                       </ActionButton>
-                      <ActionButton href="/auth/register" variant="secondary">
+                      <ActionButton href="/auth/register?returnTo=%2Fissues" variant="secondary">
                         注册账号
                       </ActionButton>
                     </div>

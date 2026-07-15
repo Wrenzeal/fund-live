@@ -1,75 +1,20 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { API_BASE_URL } from '@/lib/api-base-url'
+import { useEffect, useRef } from 'react'
+import { useAuthConfig } from '@/hooks/use-auth'
 
 interface GoogleSignInButtonProps {
   onCredential: (credential: string) => void | Promise<void>
 }
 
-interface AuthConfigResponse {
-  google_client_id: string
-  google_login_enabled: boolean
-}
-
-interface ApiEnvelope<T> {
-  success: boolean
-  data?: T
-  error?: {
-    code: string
-    message: string
-  }
-}
-
 const GOOGLE_SCRIPT_ID = 'google-identity-services'
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''
 
-async function fetchGoogleClientId() {
-  const response = await fetch(`${API_BASE_URL}/api/v1/auth/config`, {
-    credentials: 'include',
-    cache: 'no-store',
-  })
-  const json = await response.json() as ApiEnvelope<AuthConfigResponse>
-  if (!response.ok || !json.success) {
-    throw new Error(json.error?.message || 'Google 登录配置读取失败')
-  }
-  return json.data?.google_client_id?.trim() || ''
-}
-
 export function GoogleSignInButton({ onCredential }: GoogleSignInButtonProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const [googleClientId, setGoogleClientId] = useState(GOOGLE_CLIENT_ID)
-  const [isLoadingConfig, setIsLoadingConfig] = useState(!GOOGLE_CLIENT_ID)
-  const [configError, setConfigError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (GOOGLE_CLIENT_ID) {
-      return
-    }
-
-    let cancelled = false
-
-    void fetchGoogleClientId()
-      .then((clientId) => {
-        if (!cancelled) {
-          setGoogleClientId(clientId)
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setConfigError(error instanceof Error ? error.message : 'Google 登录配置读取失败')
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsLoadingConfig(false)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const { config, error: configError, isLoading } = useAuthConfig()
+  const googleClientId = GOOGLE_CLIENT_ID || config?.google_client_id?.trim() || ''
+  const isLoadingConfig = !GOOGLE_CLIENT_ID && isLoading
 
   useEffect(() => {
     if (!googleClientId || !containerRef.current) {
@@ -140,7 +85,7 @@ export function GoogleSignInButton({ onCredential }: GoogleSignInButtonProps) {
   if (!googleClientId) {
     return (
       <div className="rounded-2xl border border-dashed border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-4 text-sm text-theme-secondary">
-        {configError || 'Google 登录暂不可用，请先使用邮箱登录。'}
+        {configError instanceof Error ? configError.message : 'Google 登录暂不可用，请先使用邮箱登录。'}
       </div>
     )
   }

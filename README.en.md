@@ -31,7 +31,7 @@ FundLive estimates intraday fund movement from public holdings, target ETFs, rea
 - **Watchlist and portfolio**: Supports grouped watchlists, holding records, official NAV view, and intraday estimate view.
 - **Quant dashboard**: Provides scores, recommendation distribution, supporting/opposing evidence, risks, events, and confidence breakdowns.
 - **Sector and theme exposure**: Aggregates holdings by sector/theme and supports admin classification overrides.
-- **Authentication**: Supports email/password login, Google Sign-In, HttpOnly cookie sessions, and rate limiting.
+- **Authentication**: Supports email-code, email/password, Google Sign-In, HttpOnly cookie sessions, and rate limiting.
 
 ## Stack
 
@@ -39,6 +39,7 @@ FundLive estimates intraday fund movement from public holdings, target ETFs, rea
 | --- | --- |
 | Backend | Go 1.26.3, Gin, GORM |
 | Database | PostgreSQL, with in-memory repositories for development paths |
+| Cache | DragonFly (Redis protocol, email codes, cooldowns, and shared rate limits) |
 | Frontend | Next.js 16 App Router, React 19, TypeScript |
 | UI | Tailwind CSS 4, Radix Slot, lucide-react, Recharts |
 | State/Data | SWR, Zustand |
@@ -70,6 +71,8 @@ cp fundlive.example.yaml fundlive.yaml
 ```
 
 Edit PostgreSQL and auth settings as needed. Environment variables override YAML values.
+
+Email-code login requires DragonFly. Start the local service with `docker compose up -d cache`; development and Resend production settings are documented in [`docs/email-code-login.md`](docs/email-code-login.md).
 
 Google Sign-In requires the same Web Client ID on both backend and frontend:
 
@@ -133,7 +136,7 @@ go run ./cmd/crawler --history-only --tracked-only --history-days 30 --save-db
 - The A-share trading calendar includes major 2024-2026 holidays; dates outside that range fall back to weekday rules.
 - Commodity/futures funds require `fund_valuation_profiles` before specialized pricing models can be used.
 - Google Sign-In requires a valid OAuth Client ID and authorized JavaScript origins in Google Cloud Console.
-- Auth rate limiting is currently process-local; multi-instance deployment should use shared rate limiting or WAF rules.
+- Password, registration, and Google failure limits remain process-local; email-code cooldowns and email/IP limits use DragonFly.
 
 ## More Documents
 
@@ -141,6 +144,7 @@ go run ./cmd/crawler --history-only --tracked-only --history-days 30 --save-db
 - [`DESIGN.md`](DESIGN.md): product and design decisions
 - [`todo_list.md`](todo_list.md): current scope and upcoming work
 - [`docs/overseas-data-source-selection.md`](docs/overseas-data-source-selection.md): overseas quote data-source evaluation
+- [`docs/email-code-login.md`](docs/email-code-login.md): email-code, DragonFly, and Resend deployment
 
 ---
 

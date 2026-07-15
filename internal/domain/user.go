@@ -10,9 +10,10 @@ import (
 type AuthProvider string
 
 const (
-	AuthProviderPassword AuthProvider = "password"
-	AuthProviderGoogle   AuthProvider = "google"
-	AuthProviderHybrid   AuthProvider = "hybrid"
+	AuthProviderPassword  AuthProvider = "password"
+	AuthProviderGoogle    AuthProvider = "google"
+	AuthProviderHybrid    AuthProvider = "hybrid"
+	AuthProviderEmailCode AuthProvider = "email_code"
 )
 
 // User represents a system user in the domain layer.

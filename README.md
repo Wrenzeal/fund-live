@@ -31,7 +31,7 @@ FundLive（涨了多少）通过基金公开持仓、目标 ETF、实时行情�
 - **自选与持仓**：支持自选分组、持仓记录、官方口径与盘中预估口径切换。
 - **量化看板**：输出综合评分、建议分布、主/反证据、风险提示、事件链和数据可信度拆解。
 - **分类与主题暴露**：按行业/主题聚合持仓，可叠加管理员人工分类修正。
-- **账号与认证**：支持邮箱密码登录、Google 登录、HttpOnly Cookie 会话和认证失败限流。
+- **账号与认证**：支持邮箱验证码、邮箱密码、Google 登录、HttpOnly Cookie 会话和认证限流。
 
 ## 技术栈
 
@@ -39,6 +39,7 @@ FundLive（涨了多少）通过基金公开持仓、目标 ETF、实时行情�
 | --- | --- |
 | 后端 | Go 1.26.3, Gin, GORM |
 | 数据库 | PostgreSQL（开发也保留内存仓储能力） |
+| 缓存 | DragonFly（Redis 协议，验证码、冷却与共享限流） |
 | 前端 | Next.js 16 App Router, React 19, TypeScript |
 | UI | Tailwind CSS 4, Radix Slot, lucide-react, Recharts |
 | 状态/请求 | SWR, Zustand |
@@ -70,6 +71,14 @@ cp fundlive.example.yaml fundlive.yaml
 ```
 
 按需修改 PostgreSQL 和认证配置。环境变量会覆盖 YAML 中的同名配置。
+
+本地验证码登录需要 DragonFly：
+
+```bash
+docker compose up -d cache
+```
+
+开发环境设置 `AUTH_EMAIL_CODE_ENABLED=true`、`AUTH_EMAIL_DRIVER=dev`、`AUTH_EMAIL_CODE_SECRET` 和 `REDIS_URL=redis://127.0.0.1:16380/0` 后，发送接口会返回仅开发可见的 `dev_code`。生产 Resend 配置见 [`docs/email-code-login.md`](docs/email-code-login.md)。
 
 Google 登录需要后端和前端使用同一个 Web Client ID：
 
@@ -123,6 +132,7 @@ go run ./cmd/crawler --history-only --tracked-only --history-days 30 --save-db
 ## 部署提示
 
 - 生产环境建议使用 HTTPS，并设置 `auth.cookie_secure=true`。
+- 邮箱验证码生产环境必须使用 SMTP 驱动，并将 DragonFly、验证码密钥和 Resend 凭据放入 `/etc/fund-live/fundlive.env`。
 - 当前生产链路通常为：Nginx -> Next.js 前端 -> Go API。
 - 若前端通过 Next.js API 代理访问后端，PM2 / 运行环境需要设置 `BACKEND_URL`。
 - 部署脚本位于 `scripts/deploy-backend.sh` 与 `scripts/deploy-frontend.sh`。
@@ -133,7 +143,7 @@ go run ./cmd/crawler --history-only --tracked-only --history-days 30 --save-db
 - A 股交易日历已内置 2024-2026 年主要休市日，超出范围时回退到工作日规则。
 - 商品/期货基金需要配置 `fund_valuation_profiles` 才能使用对应估值模型。
 - Google 登录依赖合法 OAuth Client ID，且部署域名必须加入 Google Cloud Console 的授权 JavaScript 来源。
-- 当前认证限流为单实例进程内实现；多实例部署应接入共享限流或 WAF。
+- 密码、注册和 Google 失败限流仍为进程内实现；邮箱验证码发送冷却与邮箱/IP 限流已由 DragonFly 共享。
 
 ## 更多文档
 
@@ -141,6 +151,7 @@ go run ./cmd/crawler --history-only --tracked-only --history-days 30 --save-db
 - [`DESIGN.md`](DESIGN.md)：产品和设计决策
 - [`todo_list.md`](todo_list.md)：当前任务边界与后续计划
 - [`docs/overseas-data-source-selection.md`](docs/overseas-data-source-selection.md)：海外行情数据源评估
+- [`docs/email-code-login.md`](docs/email-code-login.md)：邮箱验证码、DragonFly 与 Resend 部署说明
 
 ## 许可证
 

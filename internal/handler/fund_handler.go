@@ -138,8 +138,9 @@ type APIResponse struct {
 
 // APIError represents an API error.
 type APIError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code              string `json:"code"`
+	Message           string `json:"message"`
+	RetryAfterSeconds int64  `json:"retry_after_seconds,omitempty"`
 }
 
 // APIMeta contains metadata about the response.

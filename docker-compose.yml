@@ -1,10 +1,10 @@
-# Docker Compose for a sample local FundLive database.
+# Docker Compose for local FundLive PostgreSQL and DragonFly services.
 # Runtime should follow fundlive.yaml; this file is only a local example.
 #
 # Usage:
 #   docker-compose up -d     # Start database in background
 #   docker-compose down      # Stop database
-#   docker-compose logs db   # View database logs
+#   docker-compose logs db cache   # View service logs
 
 services:
   db:
@@ -25,3 +25,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  cache:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.39.0
+    container_name: fundlive_cache
+    restart: unless-stopped
+    command: [ "--logtostderr" ]
+    ports:
+      - "127.0.0.1:16380:6379"
+    volumes:
+      - fundlive_dragonfly_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-h", "127.0.0.1", "-p", "6379", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  fundlive_dragonfly_data:

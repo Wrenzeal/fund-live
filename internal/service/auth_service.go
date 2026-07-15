@@ -19,16 +19,20 @@ import (
 )
 
 var (
-	ErrInvalidEmail           = errors.New("invalid email")
-	ErrWeakPassword           = errors.New("password must be at least 10 characters, include letters and numbers, and contain no spaces")
-	ErrAuthRateLimited        = errors.New("too many authentication attempts; please try again later")
-	ErrEmailAlreadyRegistered = errors.New("email already registered")
-	ErrInvalidCredentials     = errors.New("invalid credentials")
-	ErrInvalidSession         = errors.New("invalid session")
-	ErrSessionExpired         = errors.New("session expired")
-	ErrGoogleLoginDisabled    = errors.New("google login is not configured")
-	ErrInvalidGoogleToken     = errors.New("invalid google id token")
-	ErrGoogleEmailNotVerified = errors.New("google account email is not verified")
+	ErrInvalidEmail              = errors.New("invalid email")
+	ErrWeakPassword              = errors.New("password must be at least 10 characters, include letters and numbers, and contain no spaces")
+	ErrAuthRateLimited           = errors.New("too many authentication attempts; please try again later")
+	ErrEmailAlreadyRegistered    = errors.New("email already registered")
+	ErrInvalidCredentials        = errors.New("invalid credentials")
+	ErrInvalidSession            = errors.New("invalid session")
+	ErrSessionExpired            = errors.New("session expired")
+	ErrGoogleLoginDisabled       = errors.New("google login is not configured")
+	ErrInvalidGoogleToken        = errors.New("invalid google id token")
+	ErrGoogleEmailNotVerified    = errors.New("google account email is not verified")
+	ErrEmailCodeLoginUnavailable = errors.New("email code login is temporarily unavailable")
+	ErrVerificationCodeCooldown  = errors.New("verification code was sent recently")
+	ErrInvalidVerificationCode   = errors.New("verification code is invalid or expired")
+	ErrEmailDeliveryFailed       = errors.New("verification email delivery failed")
 )
 
 // AuthConfig controls session and password authentication behavior.
@@ -44,6 +48,14 @@ type AuthConfig struct {
 	MaxPasswordFailures    int
 	MaxRegisterFailures    int
 	MaxGoogleLoginFailures int
+	EmailCodeEnabled       bool
+	EmailCodeSecret        string
+	EmailCodeTTL           time.Duration
+	EmailResendCooldown    time.Duration
+	MaxEmailSendsPerHour   int
+	MaxIPEmailSendsPerHour int
+	MaxEmailCodeFailures   int
+	ExposeEmailDevCode     bool
 }
 
 // DefaultAuthConfig returns the default authentication configuration.
@@ -59,6 +71,11 @@ func DefaultAuthConfig() AuthConfig {
 		MaxPasswordFailures:    5,
 		MaxRegisterFailures:    8,
 		MaxGoogleLoginFailures: 10,
+		EmailCodeTTL:           10 * time.Minute,
+		EmailResendCooldown:    time.Minute,
+		MaxEmailSendsPerHour:   5,
+		MaxIPEmailSendsPerHour: 20,
+		MaxEmailCodeFailures:   5,
 	}
 }
 
@@ -70,6 +87,8 @@ type AuthService struct {
 	config         AuthConfig
 	now            func() time.Time
 	rateLimiter    *authAttemptLimiter
+	emailCodeStore AuthCodeStore
+	emailSender    EmailSender
 }
 
 // NewAuthService creates a new AuthService.
@@ -102,6 +121,21 @@ func NewAuthService(
 	}
 	if config.MaxGoogleLoginFailures <= 0 {
 		config.MaxGoogleLoginFailures = defaults.MaxGoogleLoginFailures
+	}
+	if config.EmailCodeTTL <= 0 {
+		config.EmailCodeTTL = defaults.EmailCodeTTL
+	}
+	if config.EmailResendCooldown <= 0 {
+		config.EmailResendCooldown = defaults.EmailResendCooldown
+	}
+	if config.MaxEmailSendsPerHour <= 0 {
+		config.MaxEmailSendsPerHour = defaults.MaxEmailSendsPerHour
+	}
+	if config.MaxIPEmailSendsPerHour <= 0 {
+		config.MaxIPEmailSendsPerHour = defaults.MaxIPEmailSendsPerHour
+	}
+	if config.MaxEmailCodeFailures <= 0 {
+		config.MaxEmailCodeFailures = defaults.MaxEmailCodeFailures
 	}
 	config.DefaultQuoteSource = domain.ResolveQuoteSource(config.DefaultQuoteSource, defaults.DefaultQuoteSource)
 

@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **邮箱验证码登录与 DragonFly 基础设施**
+  - 新增 `/api/v1/auth/email/start` 与 `/api/v1/auth/email/verify`，支持 6 位邮箱验证码、首次验证自动建号、已有同邮箱账户复用和现有 HttpOnly Cookie 会话。
+  - 登录页改为验证码默认的两步式流程，保留密码与 Google 登录，并支持重发倒计时、更换邮箱、开发验证码和安全站内 `returnTo`。
+  - 正式引入 DragonFly 保存 HMAC 验证码、冷却锁和邮箱/IP 固定窗口限流；依赖不可用时仅验证码入口降级。
+  - 新增 Resend SMTP 纯文本 + FundLive 品牌 HTML 邮件、生产密钥隔离、Docker Compose cache 服务和 systemd EnvironmentFile 部署支持。
+
 - **基金历史净值走势（第一阶段）**
   - 后端复用 `fund_history` 保存每日官方收盘净值，夜间官方净值同步从“仅持仓基金”扩展为持仓、收藏和自选分组基金，并一次补齐近 30 日记录。
   - 新增 `/api/v1/fund/:id/history?days=30` 与 `/api/v1/fund/history/batch?fund_ids=...&days=15`，支持单只与批量读取 1-180 日官方净值序列。

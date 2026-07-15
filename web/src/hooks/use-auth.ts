@@ -13,7 +13,7 @@ export interface AuthUser {
   avatar_url: string
   is_admin: boolean
   preferred_quote_source: QuoteSource
-  provider: 'password' | 'google' | 'hybrid'
+  provider: 'password' | 'google' | 'hybrid' | 'email_code'
   email_verified: boolean
   last_login_at?: string
   created_at: string
@@ -31,6 +31,32 @@ interface ApiEnvelope<T> {
   error?: {
     code: string
     message: string
+    retry_after_seconds?: number
+  }
+}
+
+export interface PublicAuthConfig {
+  google_client_id: string
+  google_login_enabled: boolean
+  email_code_login_enabled: boolean
+}
+
+export interface EmailCodeStartResult {
+  email: string
+  dev_code?: string
+  expires_in_seconds: number
+  resend_after_seconds: number
+}
+
+export class AuthApiError extends Error {
+  code: string
+  retryAfterSeconds?: number
+
+  constructor(message: string, code = 'AUTH_REQUEST_FAILED', retryAfterSeconds?: number) {
+    super(message)
+    this.name = 'AuthApiError'
+    this.code = code
+    this.retryAfterSeconds = retryAfterSeconds
   }
 }
 
@@ -72,10 +98,32 @@ async function postAuth<T>(path: string, payload?: object, method: 'POST' | 'PUT
 
   const json = await res.json() as ApiEnvelope<T>
   if (!res.ok || !json.success || !json.data) {
-    throw new Error(json.error?.message || 'Authentication request failed')
+    throw new AuthApiError(
+      json.error?.message || 'Authentication request failed',
+      json.error?.code,
+      json.error?.retry_after_seconds
+    )
   }
 
   return json.data
+}
+
+export function useAuthConfig() {
+  const { data, error, isLoading, mutate } = useSWR<PublicAuthConfig | null>(
+    `${API_BASE_URL}/api/v1/auth/config`,
+    fetchAuth,
+    {
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
+    }
+  )
+
+  return {
+    config: data,
+    isLoading,
+    error,
+    mutate,
+  }
 }
 
 export function useCurrentUser() {
@@ -111,6 +159,14 @@ export function loginWithGoogle(idToken: string) {
   return postAuth<AuthSessionData>('/api/v1/auth/google', {
     id_token: idToken,
   })
+}
+
+export function startEmailCodeLogin(email: string) {
+  return postAuth<EmailCodeStartResult>('/api/v1/auth/email/start', { email })
+}
+
+export function loginWithEmailCode(email: string, code: string) {
+  return postAuth<AuthSessionData>('/api/v1/auth/email/verify', { email, code })
 }
 
 export async function logout() {

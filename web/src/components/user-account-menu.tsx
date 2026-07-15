@@ -1,10 +1,12 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { Bell, Bug, Check, ChevronDown, Layers3, Loader2, LogOut, Radio, ShieldCheck, ShieldUser, Wallet } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { logout, updateQuoteSourcePreference, useCurrentUser, type QuoteSource } from '@/hooks/use-auth'
+import { authRouteWithReturnTo } from '@/lib/auth-return-to'
 
 function getInitials(name: string) {
   const normalized = name.trim()
@@ -27,6 +29,7 @@ const accountMenuButtonClass =
   'account-menu-option group flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left disabled:cursor-not-allowed disabled:opacity-60'
 
 export function UserAccountMenu() {
+  const pathname = usePathname()
   const { user, isLoading, mutate } = useCurrentUser()
   const [isOpen, setIsOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -44,7 +47,7 @@ export function UserAccountMenu() {
     return (
       <div className="flex items-center gap-2">
         <Link
-          href="/auth/login"
+          href={authRouteWithReturnTo('/auth/login', pathname)}
           className={cn(
             'group relative overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-theme-secondary transition-all duration-200',
             'hover:-translate-y-0.5 hover:border-cyan-400/35 hover:bg-cyan-400/10 hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)] active:scale-[0.97]'
@@ -54,7 +57,7 @@ export function UserAccountMenu() {
           <span className="relative z-10">登录</span>
         </Link>
         <Link
-          href="/auth/register"
+          href={authRouteWithReturnTo('/auth/register', pathname)}
           className={cn(
             'group relative overflow-hidden rounded-xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-3 py-2 text-sm font-medium text-white transition-all duration-200',
             'hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(14,165,233,0.28)] active:scale-[0.97]'

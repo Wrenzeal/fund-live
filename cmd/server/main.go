@@ -14,6 +14,7 @@ import (
 
 	"github.com/RomaticDOG/fund/internal/adapter"
 	"github.com/RomaticDOG/fund/internal/appconfig"
+	authcache "github.com/RomaticDOG/fund/internal/cache"
 	"github.com/RomaticDOG/fund/internal/database"
 	"github.com/RomaticDOG/fund/internal/domain"
 	"github.com/RomaticDOG/fund/internal/handler"
@@ -125,6 +126,37 @@ func main() {
 	authConfig := loadAuthConfig(fileCfg)
 	authConfig.DefaultQuoteSource = defaultQuoteSource
 	authService := service.NewAuthService(userRepo, sessionRepo, authConfig)
+	var authCodeStore *authcache.DragonflyAuthCodeStore
+	if authConfig.EmailCodeEnabled {
+		redisURL, keyPrefix := loadDragonflyConfig(fileCfg)
+		store, storeErr := authcache.NewDragonflyAuthCodeStore(redisURL, keyPrefix)
+		sender, senderErr := service.NewEmailSender(
+			loadAuthEmailDriver(fileCfg),
+			loadSMTPEmailConfig(fileCfg),
+			loadAppEnvironment(),
+		)
+		switch {
+		case len(strings.TrimSpace(authConfig.EmailCodeSecret)) < 32:
+			log.Printf("⚠️ Email code login disabled: AUTH_EMAIL_CODE_SECRET must contain at least 32 characters")
+		case storeErr != nil:
+			log.Printf("⚠️ Email code login disabled: %v", storeErr)
+		case senderErr != nil:
+			log.Printf("⚠️ Email code login disabled: %v", senderErr)
+		default:
+			authCodeStore = store
+			authService.SetEmailCodeDependencies(store, sender)
+			availabilityCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+			if err := store.Ping(availabilityCtx); err != nil {
+				log.Printf("⚠️ DragonFly unavailable; email code login will degrade until it recovers: %v", err)
+			} else {
+				log.Printf("✅ Email code login enabled with DragonFly key prefix %q", keyPrefix)
+			}
+			cancel()
+		}
+		if authCodeStore == nil && store != nil {
+			_ = store.Close()
+		}
+	}
 	userPreferenceService := service.NewUserPreferenceService(fundRepo, favoriteRepo, watchlistRepo, fundHoldingRepo, overrideRepo)
 	issueService := service.NewIssueService(issueRepo)
 	announcementService := service.NewAnnouncementService(announcementRepo)
@@ -202,11 +234,12 @@ func main() {
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
-			"status":       "ok",
-			"timestamp":    time.Now().Unix(),
-			"service":      "FundLive API",
-			"version":      "2026.6.4-auth-security-hardening",
-			"storage_mode": storageMode,
+			"status":           "ok",
+			"timestamp":        time.Now().Unix(),
+			"service":          "FundLive API",
+			"version":          "2026.7.14-email-code-login",
+			"storage_mode":     storageMode,
+			"email_code_login": emailCodeHealthStatus(c.Request.Context(), authConfig.EmailCodeEnabled, authService),
 		})
 	})
 
@@ -219,6 +252,8 @@ func main() {
 			auth.POST("/register", authHandler.Register)
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/google", authHandler.GoogleLogin)
+			auth.POST("/email/start", authHandler.StartEmailCode)
+			auth.POST("/email/verify", authHandler.VerifyEmailCode)
 
 			authProtected := auth.Group("")
 			authProtected.Use(middleware.RequireAuth(authService, authConfig.CookieName))
@@ -349,6 +384,8 @@ func main() {
 		log.Printf("   POST /api/v1/auth/register - Register with email/password")
 		log.Printf("   POST /api/v1/auth/login - Login with email/password")
 		log.Printf("   POST /api/v1/auth/google - Login with Google ID token")
+		log.Printf("   POST /api/v1/auth/email/start - Send email login code")
+		log.Printf("   POST /api/v1/auth/email/verify - Verify email login code")
 		log.Printf("   GET /api/v1/auth/me - Get current user")
 		log.Printf("   POST /api/v1/auth/logout - Logout current session")
 		log.Printf("   GET /api/v1/user/watchlist/groups - List grouped watchlists")
@@ -423,6 +460,11 @@ func main() {
 	if err := database.Close(); err != nil {
 		log.Printf("Error closing database: %v", err)
 	}
+	if authCodeStore != nil {
+		if err := authCodeStore.Close(); err != nil {
+			log.Printf("Error closing DragonFly client: %v", err)
+		}
+	}
 
 	log.Println("👋 Server exited gracefully")
 }
@@ -452,6 +494,25 @@ func loadAuthConfig(fileCfg *appconfig.Config) service.AuthConfig {
 		}
 		if fileCfg.Auth.MaxGoogleLoginFailures > 0 {
 			cfg.MaxGoogleLoginFailures = fileCfg.Auth.MaxGoogleLoginFailures
+		}
+		cfg.EmailCodeEnabled = fileCfg.Auth.EmailCodeEnabled
+		if fileCfg.Auth.EmailCodeSecret != "" {
+			cfg.EmailCodeSecret = fileCfg.Auth.EmailCodeSecret
+		}
+		if fileCfg.Auth.EmailCodeTTLMinutes > 0 {
+			cfg.EmailCodeTTL = time.Duration(fileCfg.Auth.EmailCodeTTLMinutes) * time.Minute
+		}
+		if fileCfg.Auth.EmailResendCooldownSecs > 0 {
+			cfg.EmailResendCooldown = time.Duration(fileCfg.Auth.EmailResendCooldownSecs) * time.Second
+		}
+		if fileCfg.Auth.MaxEmailSendsPerHour > 0 {
+			cfg.MaxEmailSendsPerHour = fileCfg.Auth.MaxEmailSendsPerHour
+		}
+		if fileCfg.Auth.MaxIPEmailSendsPerHour > 0 {
+			cfg.MaxIPEmailSendsPerHour = fileCfg.Auth.MaxIPEmailSendsPerHour
+		}
+		if fileCfg.Auth.MaxEmailCodeFailures > 0 {
+			cfg.MaxEmailCodeFailures = fileCfg.Auth.MaxEmailCodeFailures
 		}
 	}
 
@@ -491,8 +552,158 @@ func loadAuthConfig(fileCfg *appconfig.Config) service.AuthConfig {
 			cfg.MaxGoogleLoginFailures = attempts
 		}
 	}
+	if env := os.Getenv("AUTH_EMAIL_CODE_ENABLED"); env != "" {
+		if enabled, err := strconv.ParseBool(env); err == nil {
+			cfg.EmailCodeEnabled = enabled
+		}
+	}
+	if env := os.Getenv("AUTH_EMAIL_CODE_SECRET"); env != "" {
+		cfg.EmailCodeSecret = env
+	}
+	if env := os.Getenv("EMAIL_CODE_TTL"); env != "" {
+		if ttl, err := time.ParseDuration(env); err == nil && ttl > 0 {
+			cfg.EmailCodeTTL = ttl
+		}
+	}
+	if env := os.Getenv("AUTH_RESEND_COOLDOWN"); env != "" {
+		if cooldown, err := time.ParseDuration(env); err == nil && cooldown > 0 {
+			cfg.EmailResendCooldown = cooldown
+		}
+	}
+	if env := os.Getenv("AUTH_EMAIL_LIMIT_PER_HOUR"); env != "" {
+		if limit, err := strconv.Atoi(env); err == nil && limit > 0 {
+			cfg.MaxEmailSendsPerHour = limit
+		}
+	}
+	if env := os.Getenv("AUTH_IP_LIMIT_PER_HOUR"); env != "" {
+		if limit, err := strconv.Atoi(env); err == nil && limit > 0 {
+			cfg.MaxIPEmailSendsPerHour = limit
+		}
+	}
+	if env := os.Getenv("AUTH_CODE_MAX_FAILURES"); env != "" {
+		if limit, err := strconv.Atoi(env); err == nil && limit > 0 {
+			cfg.MaxEmailCodeFailures = limit
+		}
+	}
+	cfg.ExposeEmailDevCode = cfg.EmailCodeEnabled && loadAppEnvironment() != "production" && loadAuthEmailDriver(fileCfg) == "dev"
 
 	return cfg
+}
+
+func loadAppEnvironment() string {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
+	if value == "" {
+		return "development"
+	}
+	return value
+}
+
+func loadDragonflyConfig(fileCfg *appconfig.Config) (string, string) {
+	redisURL := "redis://127.0.0.1:16380/0"
+	keyPrefix := "fundlive"
+	if fileCfg != nil {
+		if fileCfg.Cache.RedisURL != "" {
+			redisURL = fileCfg.Cache.RedisURL
+		}
+		if fileCfg.Cache.KeyPrefix != "" {
+			keyPrefix = fileCfg.Cache.KeyPrefix
+		}
+	}
+	if env := strings.TrimSpace(os.Getenv("REDIS_URL")); env != "" {
+		redisURL = env
+	}
+	if env := strings.TrimSpace(os.Getenv("FUNDLIVE_REDIS_KEY_PREFIX")); env != "" {
+		keyPrefix = env
+	}
+	return redisURL, keyPrefix
+}
+
+func loadAuthEmailDriver(fileCfg *appconfig.Config) string {
+	driver := "dev"
+	if loadAppEnvironment() == "production" {
+		driver = "smtp"
+	}
+	if fileCfg != nil && strings.TrimSpace(fileCfg.Auth.EmailDriver) != "" {
+		driver = strings.ToLower(strings.TrimSpace(fileCfg.Auth.EmailDriver))
+	}
+	if env := strings.TrimSpace(os.Getenv("AUTH_EMAIL_DRIVER")); env != "" {
+		driver = strings.ToLower(env)
+	}
+	return driver
+}
+
+func loadSMTPEmailConfig(fileCfg *appconfig.Config) service.SMTPEmailConfig {
+	config := service.SMTPEmailConfig{
+		Port:     587,
+		From:     "fundlive@mail.wrenzeal.top",
+		FromName: "FundLive",
+		Security: "starttls",
+		Timeout:  15 * time.Second,
+	}
+	if fileCfg != nil {
+		config.Host = fileCfg.Auth.SMTPHost
+		config.Port = firstPositive(fileCfg.Auth.SMTPPort, config.Port)
+		config.Username = fileCfg.Auth.SMTPUsername
+		config.Password = fileCfg.Auth.SMTPPassword
+		config.From = firstNonEmpty(fileCfg.Auth.SMTPFrom, config.From)
+		config.FromName = firstNonEmpty(fileCfg.Auth.SMTPFromName, config.FromName)
+		config.Security = firstNonEmpty(fileCfg.Auth.SMTPSecurity, config.Security)
+		if fileCfg.Auth.SMTPTimeoutSeconds > 0 {
+			config.Timeout = time.Duration(fileCfg.Auth.SMTPTimeoutSeconds) * time.Second
+		}
+	}
+	config.Host = envOrDefault("SMTP_HOST", config.Host)
+	if env := os.Getenv("SMTP_PORT"); env != "" {
+		if port, err := strconv.Atoi(env); err == nil && port > 0 {
+			config.Port = port
+		}
+	}
+	config.Username = envOrDefault("SMTP_USERNAME", config.Username)
+	config.Password = envOrDefault("SMTP_PASSWORD", config.Password)
+	config.From = envOrDefault("SMTP_FROM", config.From)
+	config.FromName = envOrDefault("SMTP_FROM_NAME", config.FromName)
+	config.Security = envOrDefault("SMTP_SECURITY", config.Security)
+	if env := os.Getenv("SMTP_TIMEOUT"); env != "" {
+		if timeout, err := time.ParseDuration(env); err == nil && timeout > 0 {
+			config.Timeout = timeout
+		}
+	}
+	return config
+}
+
+func emailCodeHealthStatus(ctx context.Context, configured bool, authService *service.AuthService) string {
+	if !configured {
+		return "disabled"
+	}
+	if authService.EmailCodeLoginAvailable(ctx) {
+		return "ok"
+	}
+	return "degraded"
+}
+
+func envOrDefault(name, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstPositive(values ...int) int {
+	for _, value := range values {
+		if value > 0 {
+			return value
+		}
+	}
+	return 0
 }
 
 func loadDefaultQuoteSource(fileCfg *appconfig.Config) domain.QuoteSource {

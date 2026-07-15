@@ -623,10 +623,10 @@ export default function HoldingsPage() {
           description="登录后可同步查看和管理你的基金持仓记录。"
           action={
             <div className="flex justify-center gap-3">
-              <ActionButton href="/auth/login" variant="subtle">
+              <ActionButton href="/auth/login?returnTo=%2Fholdings" variant="subtle">
                 去登录
               </ActionButton>
-              <ActionButton href="/auth/register" variant="primary">
+              <ActionButton href="/auth/register?returnTo=%2Fholdings" variant="primary">
                 去注册
               </ActionButton>
             </div>

@@ -14,6 +14,7 @@ type Config struct {
 	Server   ServerConfig   `yaml:"server" json:"server"`
 	Storage  StorageConfig  `yaml:"storage" json:"storage"`
 	Database DatabaseConfig `yaml:"database" json:"database"`
+	Cache    CacheConfig    `yaml:"cache" json:"cache"`
 	Quote    QuoteConfig    `yaml:"quote" json:"quote"`
 	Auth     AuthConfig     `yaml:"auth" json:"auth"`
 }
@@ -25,6 +26,11 @@ type ServerConfig struct {
 
 type StorageConfig struct {
 	Mode string `yaml:"mode" json:"mode"`
+}
+
+type CacheConfig struct {
+	RedisURL  string `yaml:"redis_url" json:"-"`
+	KeyPrefix string `yaml:"key_prefix" json:"key_prefix"`
 }
 
 type QuoteConfig struct {
@@ -53,6 +59,22 @@ type AuthConfig struct {
 	MaxPasswordFailures      int    `yaml:"max_password_failures" json:"max_password_failures"`
 	MaxRegisterFailures      int    `yaml:"max_register_failures" json:"max_register_failures"`
 	MaxGoogleLoginFailures   int    `yaml:"max_google_login_failures" json:"max_google_login_failures"`
+	EmailCodeEnabled         bool   `yaml:"email_code_enabled" json:"email_code_enabled"`
+	EmailDriver              string `yaml:"email_driver" json:"email_driver"`
+	EmailCodeSecret          string `yaml:"email_code_secret" json:"-"`
+	EmailCodeTTLMinutes      int    `yaml:"email_code_ttl_minutes" json:"email_code_ttl_minutes"`
+	EmailResendCooldownSecs  int    `yaml:"email_resend_cooldown_seconds" json:"email_resend_cooldown_seconds"`
+	MaxEmailSendsPerHour     int    `yaml:"max_email_sends_per_hour" json:"max_email_sends_per_hour"`
+	MaxIPEmailSendsPerHour   int    `yaml:"max_ip_email_sends_per_hour" json:"max_ip_email_sends_per_hour"`
+	MaxEmailCodeFailures     int    `yaml:"max_email_code_failures" json:"max_email_code_failures"`
+	SMTPHost                 string `yaml:"smtp_host" json:"smtp_host"`
+	SMTPPort                 int    `yaml:"smtp_port" json:"smtp_port"`
+	SMTPUsername             string `yaml:"smtp_username" json:"smtp_username"`
+	SMTPPassword             string `yaml:"smtp_password" json:"-"`
+	SMTPFrom                 string `yaml:"smtp_from" json:"smtp_from"`
+	SMTPFromName             string `yaml:"smtp_from_name" json:"smtp_from_name"`
+	SMTPSecurity             string `yaml:"smtp_security" json:"smtp_security"`
+	SMTPTimeoutSeconds       int    `yaml:"smtp_timeout_seconds" json:"smtp_timeout_seconds"`
 }
 
 var (

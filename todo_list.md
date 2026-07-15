@@ -29,7 +29,7 @@
 8. [x] 运行验证：后端 `go test ./...`，前端 `cd web && npm run lint && npm run build`。
 9. [x] 完成后勾选本清单，保留删除记录供后续 push/发布说明使用。
 
-更新时间：2026-06-18
+更新时间：2026-07-14
 
 说明：
 - 本文件只保留当前尚未完成、后续仍需继续判断的事项。
@@ -37,15 +37,13 @@
 - 已完成的历史工作请以 `git` 提交记录和 `CHANGELOG.md` 为准。
 
 ## 全局约定与当前判断
-- **缓存依赖判断：** 当前不引入 Redis。
-  - 现阶段优先使用已有 PostgreSQL 快照表、数据库持久化缓存、以及进程内短 TTL 缓存。
-  - 只有在出现多后端实例、跨进程共享缓存、分布式锁、任务队列、统一限流或高频热点接口明显压垮数据库时，才重新评估 Redis。
-- **新增依赖约束：** 未明确进入生产化改造前，不新增 Redis / MQ / LLM SDK 等基础依赖；先把边界、数据表、失败降级和验收样本定义清楚。
+- **缓存依赖判断：** 2026-07-14 起允许正式使用 DragonFly（Redis 协议）。首个用途限定为邮箱验证码、重发冷却和邮箱/IP 共享限流；其它模块是否迁移到 DragonFly 继续按多实例共享、数据库压力与一致性需求逐项判断。
+- **新增依赖约束：** DragonFly / go-redis 已获准用于认证基础设施；MQ、LLM SDK 等其它基础依赖仍需先明确边界、失败降级和验收样本。
 - **全量基金目录同步与不存在基金治理：** 2026-06-01 已重新执行 `go run ./cmd/crawler --list all --save-db --catalog-only`。本次 Eastmoney 返回 26,927 条目录；先标记本地 `catalog_missing=111`，扫描确认无用户自选、观察分组、持仓、交易流水或 `fund_valuation_profiles` 引用后，已备份到 `.omx/backups/manual/catalog-missing-funds-cleanup-20260601-094512.json` 并清理。当前本地 `funds` 表 26,927 条，`stock_holdings` 为 4,533 条；目录状态为 `active=26,737`、`unavailable=190`、`catalog_missing=0`。该模式只更新基金目录元数据、`catalog_status`、`catalog_synced_at` 与 `updated_at`，不覆盖已抓取的基金经理、公司、净值、规模和持仓；默认搜索只返回 `active`，名称含“(后端)”的不可用份额不会污染搜索结果；全量详情/持仓抓取仍属于长任务，后续应分批执行。
 - **生产访问恢复：** 2026-06-02 已处理 `http://fund.wrenzeal.top/` 无法进入的问题。根因是公网 443 未监听，浏览器/访问环境自动升级 HTTPS 后连接被拒；同时发现前端 PM2 未带 `BACKEND_URL` 会让 Next.js 代理回退 `127.0.0.1:8080`，导致 `/health` 误报 500。当前线上已启用 Let's Encrypt HTTPS，Nginx 将 `/api/` 与 `/health` 直连后端 `127.0.0.1:13896`；生产后端配置已放到 `/etc/fund-live/fundlive.yaml` 并通过 systemd `FUNDLIVE_CONFIG` 读取；部署脚本和 workflow 默认端口已收口。后续如果更换后端端口，必须同步 Nginx、`BACKEND_URL`、backend healthcheck 与 self-hosted workflow。
 - **前端依赖安全基线：** 2026-06-02 已将 `web` 依赖审计修复到 `npm audit = 0 vulnerabilities`。当前 `next` / `eslint-config-next` 为 `16.2.7`，并通过 `overrides.postcss=8.5.15` 覆盖 Next 仍固定声明的 `postcss@8.4.31`；不要按 npm audit 的旧建议降级到 Next 9，因为该项目依赖 Next 16 App Router。
 - **后端 Go 版本基线：** 2026-06-02 已将 `go.mod` 升级到 `go 1.26.3`，并按 Go 1.26 release notes 扫描受影响点；当前无需修改后端业务代码。CI 会继续通过 `go-version-file: go.mod` 读取版本，生产部署机需要安装 Go 1.26.3 或兼容 1.26 系列工具链。
-- **登录安全基线：** 2026-06-04 已完成后端登录/注册/Google 登录安全加固。当前认证入口具备进程内失败限流（默认 15 分钟窗口：密码 5 次、注册 8 次、Google 10 次）、10 位字母+数字且无空白的注册密码策略、16KB JSON body 限制、登录错误信息收敛、Google 邮箱 claim 格式校验，以及生产 `auth.cookie_secure=true`。该限流仅适合当前单后端实例；若后续扩到多实例或出现明显暴力攻击流量，需要评估共享限流存储、Nginx/WAF rate limit 或 Redis。
+- **登录安全基线：** 2026-06-04 已完成密码/注册/Google 登录安全加固；2026-07-14 新增 DragonFly 邮箱验证码登录。密码、注册、Google 继续使用进程内失败限流；验证码使用 10 分钟 TTL、60 秒冷却、邮箱每小时 5 次、IP 每小时 20 次和连续错误 5 次作废的共享限制。生产必须使用 Secure Cookie、SMTP 驱动和独立验证码密钥。
 
 ---
 
@@ -82,11 +80,11 @@
     - [x] 设计带来源引用的解释输出结构：必须能追溯到已有 `event_impacts`、持仓、行业/主题快照或公告来源，不允许生成无法归因的投资结论
     - [x] 先写核心样本验收清单：`159813 / 012970 / 023408 / 005827 / 000362 / 000370` 的 AI 文案不得改变规则建议，只能增强可读性；当前由 `ai_explanation.rule_recommendation`、`boundary_notice`、引用校验和审计命令输出承担验收入口
   - P2c｜事件 / 分析 / 解释缓存收口
-    - 当前进展：P2c 第一轮已完成；当前仍不引入 Redis，先复用 `fund_analysis_snapshots` + 进程短 TTL + 历史持仓 PostgreSQL 快照。
+    - 当前进展：P2c 第一轮已完成；DragonFly 已用于认证，但量化模块当前仍复用 `fund_analysis_snapshots` + 进程短 TTL + 历史持仓 PostgreSQL 快照，不因基础设施存在而无条件迁移。
     - [x] 先复用现有 `fund_analysis_snapshots`，补充解释层缓存字段或新建轻量解释快照表，避免每次详情页都重新触发多源解释
       - 已补：`ai_explanation.cache_key/cache_status/expires_at/invalidation_basis`；`/fund/:id/analysis` 改为 fresh snapshot-first；batch/rankings 过滤过期快照；dashboard 支持 `include_analysis=false`，前端详情/首页避免 dashboard 重复构建分析。
-    - [x] 对公告 / 新闻热点 / 宏观 / 政策 / 指数 / 历史持仓事件继续优先做 PostgreSQL 持久化快照或短 TTL 进程缓存；当前不引入 Redis
-      - 当前状态：持仓公告与基金公告已有进程短 TTL；历史持仓已有 PostgreSQL 快照；宏观/政策/指数事件为本地轻量种子/规则生成，暂不需要 Redis。
+    - [x] 对公告 / 新闻热点 / 宏观 / 政策 / 指数 / 历史持仓事件继续优先做 PostgreSQL 持久化快照或短 TTL 进程缓存
+      - 当前状态：DragonFly 已引入认证链路；量化持仓公告与基金公告仍用进程短 TTL，历史持仓使用 PostgreSQL 快照，宏观/政策/指数事件暂不需要迁移。
     - [x] 明确缓存失效策略：按交易日、公告发布时间、热点事件时间、基金持仓报告期和分析版本失效，而不是靠手工清理
       - 已补：分析快照要求当前 `analysis_version`、同一上海自然日、未过 `expires_at` 且解释层 cache key 匹配；解释层 cache key 包含基金、分析版本、分析类型、交易日、持仓披露期、规则结论与证据签名。
 - 当前执行顺序建议：

@@ -11,6 +11,10 @@ server:
 storage:
   mode: postgres
 
+cache:
+  redis_url: redis://127.0.0.1:16380/0
+  key_prefix: fundlive
+
 quote:
   default_source: sina
   # QDII / overseas holdings use a fixed source independent from user quote preference.
@@ -37,3 +41,18 @@ auth:
   max_password_failures: 5
   max_register_failures: 8
   max_google_login_failures: 10
+  # Set AUTH_EMAIL_CODE_ENABLED=true and keep secrets in a systemd/env file.
+  email_code_enabled: false
+  email_driver: dev
+  email_code_ttl_minutes: 10
+  email_resend_cooldown_seconds: 60
+  max_email_sends_per_hour: 5
+  max_ip_email_sends_per_hour: 20
+  max_email_code_failures: 5
+  smtp_host: smtp.resend.com
+  smtp_port: 587
+  smtp_username: resend
+  smtp_from: fundlive@mail.wrenzeal.top
+  smtp_from_name: FundLive
+  smtp_security: starttls
+  smtp_timeout_seconds: 15
