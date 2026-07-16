@@ -22,6 +22,49 @@ function getInitials(name: string) {
   return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase()
 }
 
+interface AccountAvatarProps {
+  src?: string
+  displayName: string
+  size: 'sm' | 'md'
+}
+
+const accountAvatarSizeClass = {
+  sm: 'h-9 w-9 text-sm',
+  md: 'h-11 w-11 text-sm',
+}
+
+function AccountAvatar({ src, displayName, size }: AccountAvatarProps) {
+  const normalizedSrc = src?.trim() || ''
+  const [failedSrc, setFailedSrc] = useState('')
+  const showImage = normalizedSrc !== '' && failedSrc !== normalizedSrc
+
+  return (
+    <span
+      role="img"
+      aria-label={`${displayName}的头像`}
+      data-avatar-state={showImage ? 'image' : 'fallback'}
+      className={cn(
+        'flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--card-border)]',
+        accountAvatarSizeClass[size],
+        !showImage && 'bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 font-bold text-white shadow-lg shadow-cyan-500/20'
+      )}
+    >
+      {showImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={normalizedSrc}
+          alt=""
+          referrerPolicy="no-referrer"
+          className="block h-full w-full object-cover"
+          onError={() => setFailedSrc(normalizedSrc)}
+        />
+      ) : (
+        <span aria-hidden="true">{getInitials(displayName)}</span>
+      )}
+    </span>
+  )
+}
+
 const accountMenuOptionClass =
   'account-menu-option group flex items-center gap-3 rounded-2xl px-3 py-3 text-left'
 
@@ -69,7 +112,6 @@ export function UserAccountMenu() {
   }
 
   const displayName = user.display_name?.trim() || user.email
-  const initials = getInitials(displayName)
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
@@ -115,24 +157,14 @@ export function UserAccountMenu() {
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
+        aria-label={`打开${displayName}的账户菜单`}
+        aria-expanded={isOpen}
         className={cn(
           'flex items-center gap-2 rounded-2xl border border-[var(--input-border)] px-2.5 py-2.5 transition-colors md:gap-3 md:px-3',
           'glass hover:bg-[var(--input-bg)]'
         )}
       >
-        {user.avatar_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={user.avatar_url}
-            alt={`${displayName} avatar`}
-            referrerPolicy="no-referrer"
-            className="h-9 w-9 rounded-full border border-[var(--card-border)] object-cover"
-          />
-        ) : (
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 text-sm font-bold text-white shadow-lg shadow-cyan-500/20">
-            {initials}
-          </div>
-        )}
+        <AccountAvatar src={user.avatar_url} displayName={displayName} size="sm" />
 
         <div className="hidden min-w-0 text-left lg:block">
           <div className="max-w-36 truncate text-sm font-semibold text-theme-primary">{displayName}</div>
@@ -149,19 +181,7 @@ export function UserAccountMenu() {
             <div className="glass switcher-dropdown-panel overflow-hidden rounded-2xl border border-[var(--card-border)] shadow-2xl">
               <div className="border-b border-[var(--card-border)] px-4 py-4">
                 <div className="mb-3 flex items-center gap-3">
-                  {user.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={user.avatar_url}
-                      alt={`${displayName} avatar`}
-                      referrerPolicy="no-referrer"
-                      className="h-11 w-11 rounded-full border border-[var(--card-border)] object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 text-sm font-bold text-white shadow-lg shadow-cyan-500/20">
-                      {initials}
-                    </div>
-                  )}
+                  <AccountAvatar src={user.avatar_url} displayName={displayName} size="md" />
 
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold text-theme-primary">{displayName}</div>

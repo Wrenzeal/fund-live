@@ -2,7 +2,11 @@ import { expect, test, type Page, type Route } from '@playwright/test'
 
 type SessionState = 'anonymous' | 'authenticated'
 
-async function mockAppApi(page: Page, initialSession: SessionState = 'anonymous') {
+interface MockAppOptions {
+  avatarURL?: string
+}
+
+async function mockAppApi(page: Page, initialSession: SessionState = 'anonymous', options: MockAppOptions = {}) {
   let session = initialSession
 
   await page.route('**/api/v1/**', async (route: Route) => {
@@ -39,7 +43,7 @@ async function mockAppApi(page: Page, initialSession: SessionState = 'anonymous'
               id: 'test-user',
               email: 'tester@example.com',
               display_name: '测试用户',
-              avatar_url: '',
+              avatar_url: options.avatarURL ?? '',
               is_admin: false,
               preferred_quote_source: 'sina',
               provider: 'email_code',
@@ -145,5 +149,22 @@ test.describe('authentication and navigation', () => {
 
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)
     expect(overflow).toBe(false)
+  })
+
+  test('falls back to initials when a saved avatar cannot load', async ({ page }) => {
+    await page.route('**/broken-avatar.png', async (route) => {
+      await route.fulfill({ status: 404, contentType: 'image/png', body: '' })
+    })
+    await mockAppApi(page, 'authenticated', {
+      avatarURL: 'http://127.0.0.1:3100/broken-avatar.png',
+    })
+    await page.goto('/')
+
+    const accountButton = page.getByRole('button', { name: '打开测试用户的账户菜单' })
+    await expect(accountButton.locator('[data-avatar-state="fallback"]')).toBeVisible()
+    await expect(accountButton.locator('img')).toHaveCount(0)
+
+    await accountButton.click()
+    await expect(page.locator('[data-avatar-state="fallback"]')).toHaveCount(2)
   })
 })
