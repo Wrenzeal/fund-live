@@ -115,6 +115,30 @@ test.describe('authentication and navigation', () => {
     await expect(page.getByRole('link', { name: '量化' })).toBeVisible()
   })
 
+  test('keeps primary navigation visible and selected across breakpoints', async ({ page }) => {
+    await mockAppApi(page)
+
+    for (const viewport of [
+      { name: 'desktop', width: 1440, height: 900 },
+      { name: 'tablet', width: 1024, height: 768 },
+      { name: 'mobile', width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height })
+      await page.goto('/watchlist')
+
+      const navigation = page.getByRole('navigation', { name: '主要页面' })
+      await expect(navigation, `${viewport.name} navigation`).toBeVisible()
+
+      for (const label of ['首页', '自选', '持仓', '量化']) {
+        await expect(navigation.getByRole('link', { name: label, exact: true })).toBeVisible()
+      }
+
+      await expect(navigation.getByRole('link', { name: '自选', exact: true })).toHaveAttribute('aria-current', 'page')
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)
+      expect(overflow, `${viewport.name} horizontal overflow`).toBe(false)
+    }
+  })
+
   test('theme switching is keyboard reachable and persists across reloads', async ({ page }) => {
     await mockAppApi(page)
     await page.goto('/')

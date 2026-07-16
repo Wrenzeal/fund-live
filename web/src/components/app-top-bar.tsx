@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import type { Ref } from 'react'
 import { Clock, RefreshCw } from 'lucide-react'
@@ -8,7 +9,6 @@ import { FundSearch } from '@/components/fund-search'
 import { MarketStatusIndicator } from '@/components/market-status-indicator'
 import { ThemeSwitcher } from '@/components/theme-switcher'
 import { UserAccountMenu } from '@/components/user-account-menu'
-import { ActionButton } from '@/components/ui/action-button'
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
 import type { MarketStatus } from '@/hooks/use-market-status'
 import { cn } from '@/lib/utils'
@@ -31,6 +31,51 @@ const navItems = [
   { href: '/holdings', label: '持仓' },
   { href: '/analysis/rankings', label: '量化' },
 ]
+
+function isNavItemActive(pathname: string, href: string) {
+  return href === '/' ? pathname === '/' : pathname.startsWith(href)
+}
+
+function PrimaryNavigation({ pathname, placement }: { pathname: string; placement: 'inline' | 'row' }) {
+  return (
+    <nav
+      aria-label="主要页面"
+      data-primary-navigation={placement}
+      className={cn(
+        'bg-[var(--input-bg)]/45 p-1',
+        placement === 'inline'
+          ? 'hidden shrink-0 items-center rounded-xl xl:flex'
+          : 'mt-3 grid grid-cols-4 rounded-xl xl:hidden',
+      )}
+    >
+      {navItems.map((item) => {
+        const active = isNavItemActive(pathname, item.href)
+
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? 'page' : undefined}
+            className={cn(
+              'group relative flex min-h-10 items-center justify-center rounded-lg px-3 text-sm font-medium text-theme-muted outline-none transition-colors duration-160',
+              'hover:bg-[var(--card-bg)]/55 hover:text-theme-primary focus-visible:bg-[var(--card-bg)]/55 focus-visible:text-theme-primary focus-visible:ring-2 focus-visible:ring-[var(--input-focus)]/55',
+              active && 'font-semibold text-theme-primary',
+            )}
+          >
+            <span>{item.label}</span>
+            <span
+              aria-hidden="true"
+              className={cn(
+                'absolute bottom-1 h-0.5 w-4 rounded-full bg-[var(--accent-primary)] transition-[opacity,transform] duration-160',
+                active ? 'scale-x-100 opacity-100' : 'scale-x-50 opacity-0 group-hover:opacity-35',
+              )}
+            />
+          </Link>
+        )
+      })}
+    </nav>
+  )
+}
 
 export function AppTopBar({
   currentFundId,
@@ -59,7 +104,7 @@ export function AppTopBar({
 
   return (
     <header ref={headerRef} className="sticky top-0 z-50 glass-strong border-b border-[var(--card-border)]">
-      <div className="container mx-auto px-4 py-4">
+      <div className="container mx-auto px-4 py-3">
         <div ref={topBarRef} className="flex items-center justify-between gap-4">
           <BrandMark subtitle="FundLive - 实时基金估值" />
 
@@ -67,26 +112,7 @@ export function AppTopBar({
             <FundSearch onSelect={handleFundSelect} currentFundId={currentFundId} />
           </div>
 
-          <nav className="hidden items-center gap-1 xl:flex" aria-label="主要页面">
-            {navItems.map((item) => (
-              <ActionButton
-                key={item.href}
-                href={item.href}
-                variant="subtle"
-                size="sm"
-                aria-current={
-                  item.href === '/' ? pathname === '/' || undefined : pathname.startsWith(item.href) ? 'page' : undefined
-                }
-                className={cn(
-                  pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
-                    ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/10 text-theme-primary'
-                    : undefined,
-                )}
-              >
-                {item.label}
-              </ActionButton>
-            ))}
-          </nav>
+          <PrimaryNavigation pathname={pathname} placement="inline" />
 
           <div className="flex items-center gap-4">
             <div className="hidden lg:flex items-center gap-4">
@@ -129,27 +155,7 @@ export function AppTopBar({
         <div className="mt-4 flex justify-end md:hidden">
           <FundSearch onSelect={handleFundSelect} currentFundId={currentFundId} />
         </div>
-        <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 md:hidden" aria-label="主要页面">
-          {navItems.map((item) => (
-            <ActionButton
-              key={item.href}
-              href={item.href}
-              variant="subtle"
-              size="sm"
-              aria-current={
-                item.href === '/' ? pathname === '/' || undefined : pathname.startsWith(item.href) ? 'page' : undefined
-              }
-              className={cn(
-                'shrink-0',
-                pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
-                  ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]/10 text-theme-primary'
-                  : undefined,
-              )}
-            >
-              {item.label}
-            </ActionButton>
-          ))}
-        </nav>
+        <PrimaryNavigation pathname={pathname} placement="row" />
       </div>
     </header>
   )

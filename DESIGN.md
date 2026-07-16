@@ -53,7 +53,7 @@
   - Slow or partial data states where confidence and limitations matter.
 
 ## Information architecture
-- Primary navigation: Home, Watchlist, Holdings, Analysis Rankings; Issues and Announcements are secondary destinations.
+- Primary navigation: Home, Watchlist, Holdings, Analysis Rankings; Issues and Announcements are secondary destinations. Render the four primary destinations as one restrained text-navigation group rather than four independent CTA buttons. Use font weight, theme accent, and a short bottom indicator for the active route.
 - Core routes/screens:
   - `/`: fund search, valuation, intraday chart, holdings, analysis summary.
   - `/analysis/[fundId]`: full analysis board.
@@ -132,6 +132,7 @@
 - Supported breakpoints/devices: Mobile, tablet, desktop/laptop.
 - Layout adaptations:
   - Mobile: single-column sections; quick stats become two-column chips where space allows.
+  - Primary navigation: render inline in the main toolbar at `xl` and above; below `xl`, keep all four destinations visible in an equal-width second row without horizontal scrolling.
   - Desktop: two-column analysis sections with no hard widths that can overflow.
   - Wide screens: reserve multi-column grids for compact cards, not text-heavy evidence blocks.
 - Touch/hover differences: Hover lift is decorative only; core state must be visible without hover.
