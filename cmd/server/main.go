@@ -56,6 +56,8 @@ func main() {
 	var fundSectorStore *service.FundSectorStore
 	var estimateCapabilityService *service.EstimateCapabilityService
 	var analysisSnapshotStore *service.FundAnalysisSnapshotStore
+	var quantEventStore *service.QuantEventStore
+	var quantResearchStore *service.QuantResearchStore
 
 	if storageMode == "postgres" {
 		// Initialize PostgreSQL database
@@ -87,6 +89,11 @@ func main() {
 		fundSectorStore = service.NewFundSectorStore(db)
 		estimateCapabilityService = service.NewEstimateCapabilityService(db)
 		analysisSnapshotStore = service.NewFundAnalysisSnapshotStore(db)
+		quantEventStore = service.NewQuantEventStore(db)
+		quantResearchStore = service.NewQuantResearchStore(db)
+		if err := quantResearchStore.SeedPilotUniverse(context.Background(), time.Now()); err != nil {
+			log.Printf("⚠️ Failed to seed quant pilot universe: %v", err)
+		}
 		log.Println("✅ Using PostgreSQL storage")
 	} else {
 		// Use in-memory repository (for development without Docker)
@@ -127,6 +134,7 @@ func main() {
 	authConfig.DefaultQuoteSource = defaultQuoteSource
 	authService := service.NewAuthService(userRepo, sessionRepo, authConfig)
 	var authCodeStore *authcache.DragonflyAuthCodeStore
+	var quantQueue *authcache.DragonflyQuantQueue
 	if authConfig.EmailCodeEnabled {
 		redisURL, keyPrefix := loadDragonflyConfig(fileCfg)
 		store, storeErr := authcache.NewDragonflyAuthCodeStore(redisURL, keyPrefix)
@@ -157,6 +165,23 @@ func main() {
 			_ = store.Close()
 		}
 	}
+	if quantResearchStore != nil {
+		redisURL, keyPrefix := loadDragonflyConfig(fileCfg)
+		queue, queueErr := authcache.NewDragonflyQuantQueue(redisURL, keyPrefix)
+		if queueErr != nil {
+			log.Printf("⚠️ Lean backtest queue disabled: %v", queueErr)
+		} else {
+			availabilityCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+			if pingErr := queue.Ping(availabilityCtx); pingErr != nil {
+				log.Printf("⚠️ Lean backtest queue disabled until restart: %v", pingErr)
+				_ = queue.Close()
+			} else {
+				quantQueue = queue
+				log.Printf("✅ Lean backtest queue enabled with Dragonfly key prefix %q", keyPrefix)
+			}
+			cancel()
+		}
+	}
 	userPreferenceService := service.NewUserPreferenceService(fundRepo, favoriteRepo, watchlistRepo, fundHoldingRepo, overrideRepo)
 	issueService := service.NewIssueService(issueRepo)
 	announcementService := service.NewAnnouncementService(announcementRepo)
@@ -169,6 +194,8 @@ func main() {
 		valuationService.SetValuationProfileStore(service.NewValuationProfileStore(dbInstance))
 		log.Println("🔗 Fund resolver enabled for feeder fund resolution")
 	}
+	analysisCoordinator := service.NewFundAnalysisCoordinator(valuationService, fundRepo, fundResolver, fundSectorStore)
+	analysisCoordinator.SetQuantEventStore(quantEventStore)
 
 	if dbInstance != nil {
 		officialNavSync := service.NewOfficialNAVSyncService(fundRepo, fundHoldingRepo, favoriteRepo, watchlistRepo)
@@ -192,9 +219,10 @@ func main() {
 		if analysisSnapshotStore != nil {
 			analysisRefresh := service.NewFundAnalysisSnapshotRefreshService(
 				estimateCapabilityService,
-				service.NewFundAnalysisCoordinator(valuationService, fundRepo, fundResolver, fundSectorStore),
+				analysisCoordinator,
 				analysisSnapshotStore,
 			)
+			analysisRefresh.SetQuantResearchStore(quantResearchStore)
 			analysisRefresh.Start(context.Background())
 			log.Println("🧠 Fund analysis snapshot refresh scheduler started (nightly snapshot recompute)")
 		}
@@ -207,7 +235,7 @@ func main() {
 	if analysisSnapshotStore != nil {
 		fundHandler.SetAnalysisSnapshotStore(analysisSnapshotStore)
 	}
-	fundHandler.SetAnalysisCoordinator(service.NewFundAnalysisCoordinator(valuationService, fundRepo, fundResolver, fundSectorStore))
+	fundHandler.SetAnalysisCoordinator(analysisCoordinator)
 	if estimateCapabilityService != nil {
 		fundHandler.SetAnalysisRankingCandidateProvider(estimateCapabilityService)
 	}
@@ -216,6 +244,7 @@ func main() {
 	userHandler := handler.NewUserHandler(userPreferenceService, userRepo, defaultQuoteSource)
 	issueHandler := handler.NewIssueHandler(issueService)
 	announcementHandler := handler.NewAnnouncementHandler(announcementService)
+	quantHandler := handler.NewQuantHandler(quantEventStore, quantResearchStore, quantQueue)
 
 	// Setup Gin router
 	gin.SetMode(gin.ReleaseMode)
@@ -300,6 +329,7 @@ func main() {
 			fund.GET("/:id", fundHandler.GetFund)
 			fund.GET("/:id/dashboard", fundHandler.GetDashboard)
 			fund.GET("/:id/analysis", fundHandler.GetAnalysis)
+			fund.GET("/:id/events", quantHandler.ListFundEvents)
 			fund.GET("/:id/estimate", fundHandler.GetEstimate)
 			fund.GET("/:id/holdings", fundHandler.GetHoldings)
 			fund.GET("/:id/history", fundHandler.GetHistory)
@@ -321,6 +351,14 @@ func main() {
 		{
 			analysis.GET("/batch", fundHandler.GetAnalysisBatch)
 			analysis.GET("/rankings", fundHandler.GetAnalysisRankings)
+		}
+
+		quant := v1.Group("/quant")
+		{
+			quant.GET("/universe", quantHandler.ListPilotUniverse)
+			quant.GET("/validation", quantHandler.GetValidationSummary)
+			quant.GET("/backtests", quantHandler.ListBacktests)
+			quant.GET("/backtests/:id", quantHandler.GetBacktest)
 		}
 
 		issues := v1.Group("/issues")
@@ -355,6 +393,7 @@ func main() {
 			admin.PUT("/issues/:id/reply", issueHandler.UpdateReply)
 			admin.POST("/announcements", announcementHandler.Create)
 			admin.POST("/announcements/import-changelog", announcementHandler.ImportChangelog)
+			admin.POST("/quant/backtests", quantHandler.CreateBacktest)
 		}
 
 	}
@@ -463,6 +502,11 @@ func main() {
 	if authCodeStore != nil {
 		if err := authCodeStore.Close(); err != nil {
 			log.Printf("Error closing DragonFly client: %v", err)
+		}
+	}
+	if quantQueue != nil {
+		if err := quantQueue.Close(); err != nil {
+			log.Printf("Error closing quant DragonFly client: %v", err)
 		}
 	}
 

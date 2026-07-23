@@ -80,6 +80,10 @@ docker compose up -d cache
 
 开发环境设置 `AUTH_EMAIL_CODE_ENABLED=true`、`AUTH_EMAIL_DRIVER=dev`、`AUTH_EMAIL_CODE_SECRET` 和 `REDIS_URL=redis://127.0.0.1:16380/0` 后，发送接口会返回仅开发可见的 `dev_code`。生产 Resend 配置见 [`docs/email-code-login.md`](docs/email-code-login.md)。
 
+## Lean 量化验证
+
+Lean 作为隔离的回测 Worker 验证现有评分，不替换 FundLive 的 V4 分析服务。事件版本、ETF 五年日线、历史代理信号、Dragonfly 队列和部署步骤见 [`docs/lean-quant-validation.md`](docs/lean-quant-validation.md)。
+
 Google 登录需要后端和前端使用同一个 Web Client ID：
 
 ```yaml

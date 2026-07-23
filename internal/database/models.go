@@ -324,6 +324,16 @@ func AllModels() []interface{} {
 		&FundClassificationOverride{},
 		&FundEstimateCapability{},
 		&FundAnalysisSnapshot{},
+		&QuantEvent{},
+		&QuantEventVersion{},
+		&QuantEventAsset{},
+		&QuantInstrument{},
+		&QuantUniverseMember{},
+		&QuantMarketBar{},
+		&QuantCorporateAction{},
+		&QuantTradingDay{},
+		&QuantSignalHistory{},
+		&QuantBacktestJob{},
 	}
 	return append(models, UserModels()...)
 }

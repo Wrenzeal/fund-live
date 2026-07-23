@@ -28,15 +28,21 @@ func LoadIndexLayerEvents(
 	}
 
 	indexName := deriveIndexEventName(fund, sectorSnapshot, themeSnapshot)
+	expectedAt := nextWindow
 	return []domain.FundAnalysisEventImpact{
 		{
-			Code:        "index_rebalance_window_" + nextWindow.Format("20060102"),
-			Title:       indexName + "调样窗口临近",
-			Impact:      "neutral",
-			Summary:     "指数层面通常会在样本调整窗口附近更新成分股与权重；若近期跟踪指数进入调样窗口，结构解释需留意成分与权重变化。",
-			TargetScope: "index",
-			Strength:    indexWindowStrength(daysUntil),
-			Horizon:     "current",
+			Code:         "index_rebalance_window_" + nextWindow.Format("20060102"),
+			Title:        indexName + "调样窗口临近",
+			Impact:       "neutral",
+			Summary:      "指数层面通常会在样本调整窗口附近更新成分股与权重；若近期跟踪指数进入调样窗口，结构解释需留意成分与权重变化。",
+			TargetScope:  "index",
+			Strength:     indexWindowStrength(daysUntil),
+			Horizon:      "current",
+			EventType:    "index_rebalance",
+			EventStatus:  "expected",
+			ExpectedAt:   &expectedAt,
+			SourceTier:   "heuristic",
+			KnownAtBasis: "derived_calendar",
 		},
 	}
 }

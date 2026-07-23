@@ -67,6 +67,11 @@ var managedMigrations = []sqlMigration{
 		Statements:     fundAnalysisSnapshotMigrationStatements,
 	},
 	{
+		ID:             "20260723_quant_research_foundation",
+		RequiredTables: []string{"funds"},
+		Statements:     quantResearchMigrationStatements,
+	},
+	{
 		ID:             "20260416_user_holding_confirmation",
 		RequiredTables: []string{"tb_user_fund_holding"},
 		Statements:     userHoldingConfirmationMigrationStatements,

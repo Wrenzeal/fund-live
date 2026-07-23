@@ -352,7 +352,10 @@ export interface FundAnalysisModuleScore {
 }
 
 export interface FundAnalysisEventImpact {
+    event_id?: string
     code: string
+    event_type?: string
+    event_status?: 'expected' | 'disclosed' | 'active' | 'expired' | 'cancelled'
     title: string
     impact: 'positive' | 'neutral' | 'negative'
     summary: string
@@ -365,7 +368,30 @@ export interface FundAnalysisEventImpact {
     source_url?: string
     source_published_at?: string
     source_confidence?: 'low' | 'medium' | 'high'
+    source_tier?: 'official' | 'official_aggregator' | 'secondary' | 'heuristic'
     mapping_basis?: string
+    expected_at?: string
+    announced_at?: string
+    effective_at?: string
+    expires_at?: string
+    known_at?: string
+    ingested_at?: string
+    known_at_basis?: string
+    version?: number
+}
+
+export interface FundAnalysisEventIntelligence {
+    mode: 'shadow'
+    as_of_time: string
+    shadow_event_score: string
+    shadow_total_score: string
+    shadow_delta: string
+    expected_count: number
+    disclosed_count: number
+    active_count: number
+    latest_known_at?: string
+    timeline: FundAnalysisEventImpact[]
+    production_boundary: string
 }
 
 export interface FundAnalysisConfidenceFactor {
@@ -442,12 +468,49 @@ export interface FundAnalysis {
     reasons: string[]
     warnings: string[]
     event_impacts: FundAnalysisEventImpact[]
+    event_intelligence?: FundAnalysisEventIntelligence
     module_scores: FundAnalysisModuleScore[]
     confidence_factors?: FundAnalysisConfidenceFactor[]
     primary_evidence?: FundAnalysisEvidenceItem[]
     counter_evidence?: FundAnalysisEvidenceItem[]
     confidence_deductions?: string[]
     ai_explanation?: FundAnalysisAIExplanation
+}
+
+export interface QuantForwardHorizonSummary {
+    horizon_days: number
+    sample_count: number
+    average_return: string
+    average_excess_return: string
+    positive_rate: string
+    average_rank_ic: string
+}
+
+export interface QuantValidationSummary {
+    mode: 'historical_proxy' | 'full_v4_forward'
+    universe_version: string
+    signal_count: number
+    first_signal_date?: string
+    last_signal_date?: string
+    horizons: QuantForwardHorizonSummary[]
+    lookahead_boundary: string
+}
+
+export interface QuantBacktestJob {
+    id: string
+    status: 'queued' | 'running' | 'completed' | 'failed' | 'queue_failed'
+    strategy: string
+    universe_version: string
+    signal_mode: string
+    engine: string
+    engine_version?: string
+    parameters: Record<string, unknown>
+    metrics?: Record<string, unknown>
+    equity_curve?: Record<string, unknown>
+    benchmarks?: Record<string, unknown>
+    error_message?: string
+    created_at: string
+    completed_at?: string
 }
 
 // 默认 SWR 配置
@@ -1197,6 +1260,33 @@ export function useFundAnalysisRankings() {
         error,
         mutate,
     }
+}
+
+export function useQuantValidationSummary(mode: 'historical_proxy' | 'full_v4_forward' = 'historical_proxy') {
+    const { data, error, isLoading, isValidating } = useSWR<{ data: QuantValidationSummary }>(
+        `${API_BASE_URL}/api/v1/quant/validation?mode=${encodeURIComponent(mode)}`,
+        (url: string) => fetchEnvelopeWithTimeout<QuantValidationSummary>(url, 15000),
+        { refreshInterval: 5 * 60 * 1000, revalidateOnFocus: false }
+    )
+    return { summary: data?.data, error, isLoading, isValidating }
+}
+
+export function useQuantBacktests() {
+    const { data, error, isLoading, isValidating } = useSWR<{ data: { items: QuantBacktestJob[]; count: number } }>(
+        `${API_BASE_URL}/api/v1/quant/backtests?limit=6`,
+        (url: string) => fetchEnvelopeWithTimeout<{ items: QuantBacktestJob[]; count: number }>(url, 15000),
+        { refreshInterval: 30000, revalidateOnFocus: false }
+    )
+    return { jobs: data?.data?.items || [], error, isLoading, isValidating }
+}
+
+export function useQuantBacktest(jobId: string) {
+    const { data, error, isLoading, isValidating } = useSWR<{ data: QuantBacktestJob }>(
+        jobId ? `${API_BASE_URL}/api/v1/quant/backtests/${encodeURIComponent(jobId)}` : null,
+        (url: string) => fetchEnvelopeWithTimeout<QuantBacktestJob>(url, 15000),
+        { refreshInterval: (latest) => latest?.data?.status === 'queued' || latest?.data?.status === 'running' ? 5000 : 0, revalidateOnFocus: false }
+    )
+    return { job: data?.data, error, isLoading, isValidating }
 }
 
 /**

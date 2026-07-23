@@ -15,7 +15,7 @@ import { AnalysisEventTraceMeta } from '@/components/analysis-event-trace-meta'
 import { FundHistoryTrend } from '@/components/fund-history-trend'
 import { FundAnalysisDecisionList } from '@/components/fund-analysis-decision-points'
 import { Disclosure } from '@/components/ui/disclosure'
-import { useFundAnalysis, useFundDashboard, useFundHistory, useFundHoldings, type Fund, type FundAnalysis, type FundAnalysisEventImpact, type FundAnalysisModuleScore, type FundClassificationOverride, type FundEstimate, type FundSectorSnapshot, type FundThemeSnapshot } from '@/hooks/use-fund-data'
+import { useFundAnalysis, useFundDashboard, useFundHistory, useFundHoldings, type Fund, type FundAnalysis, type FundAnalysisEventImpact, type FundAnalysisEventIntelligence, type FundAnalysisModuleScore, type FundClassificationOverride, type FundEstimate, type FundSectorSnapshot, type FundThemeSnapshot } from '@/hooks/use-fund-data'
 import { cn } from '@/lib/utils'
 import { buildFundAnalysisDecision, type FundAnalysisDecisionView } from '@/lib/fund-analysis-decision'
 import {
@@ -69,7 +69,7 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
   const isAnalysisPending = (isAnalysisLoading || isAnalysisValidating) && !analysis
   const isHoldingsPending = isHoldingsLoading && displayItems.length === 0
   const holdingsReady = displayItems.length > 0
-  const timelineEvents = (analysis?.event_impacts || []).slice().sort((left, right) => eventTimelineRank(left) - eventTimelineRank(right))
+  const timelineEvents = (analysis?.event_intelligence?.timeline || analysis?.event_impacts || []).slice().sort((left, right) => eventTimelineRank(left) - eventTimelineRank(right))
   const realtimeRadarEvents = buildRealtimeRadarEvents(analysis?.event_impacts || [])
   const quarterlyEvents = (analysis?.event_impacts || []).filter((item) => item.horizon === 'quarterly')
   const exposureEvents = (analysis?.event_impacts || []).filter((item) => item.target_scope === 'exposure')
@@ -136,6 +136,10 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
 
           <RevealSection delay={120}>
             <EvidenceFocusGrid analysis={analysis} decision={decision} isLoading={isAnalysisPending} />
+          </RevealSection>
+
+          <RevealSection delay={120}>
+            <EventIntelligenceOverview intelligence={analysis?.event_intelligence} isLoading={isAnalysisPending} />
           </RevealSection>
 
           <RevealSection delay={120}>
@@ -217,6 +221,66 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
         </div>
       </main>
       <SiteFooter compact />
+    </div>
+  )
+}
+
+function EventIntelligenceOverview({
+  intelligence,
+  isLoading = false,
+}: {
+  intelligence?: FundAnalysisEventIntelligence
+  isLoading?: boolean
+}) {
+  const delta = parseAnalysisNumber(intelligence?.shadow_delta)
+  const deltaText = intelligence ? `${delta > 0 ? '+' : ''}${delta.toFixed(1)}` : '--'
+  const timelineCount = intelligence?.timeline?.length || 0
+
+  return (
+    <section className="glass overflow-hidden rounded-3xl p-5 md:p-6">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="max-w-2xl">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100">
+              影子验证
+            </span>
+            <span className="rounded-full border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-1 text-xs text-theme-secondary">
+              不影响正式评分
+            </span>
+          </div>
+          <h2 className="mt-4 text-xl font-black text-theme-primary">事件时间轴与评分隔离</h2>
+          <p className="mt-2 text-sm leading-6 text-theme-secondary">
+            事件按系统首次可知时间进入时间轴；预期、披露和生效分别记录。影子分用于前向验证，不会改写当前 V4 结论。
+          </p>
+          <p className="mt-3 text-xs leading-5 text-theme-muted">
+            {intelligence?.production_boundary || (isLoading ? '正在读取事件边界…' : '当前尚未形成可验证的事件样本。')}
+          </p>
+        </div>
+
+        <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 lg:max-w-xl">
+          <EventMetric label="影子事件分" value={intelligence ? formatAnalysisScore(intelligence.shadow_event_score) : '--'} />
+          <EventMetric label="模拟总分变化" value={deltaText} tone={delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral'} />
+          <EventMetric label="时间轴事件" value={`${timelineCount}`} />
+          <EventMetric label="即将发生" value={`${intelligence?.expected_count || 0}`} />
+          <EventMetric label="已披露" value={`${intelligence?.disclosed_count || 0}`} />
+          <EventMetric label="当前生效" value={`${intelligence?.active_count || 0}`} />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function EventMetric({ label, value, tone = 'neutral' }: { label: string; value: string; tone?: 'positive' | 'negative' | 'neutral' }) {
+  return (
+    <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-3">
+      <div className="text-[11px] tracking-[0.08em] text-theme-muted">{label}</div>
+      <div className={cn(
+        'mt-1 text-lg font-black text-theme-primary',
+        tone === 'positive' && 'text-emerald-200',
+        tone === 'negative' && 'text-rose-200'
+      )}>
+        {value}
+      </div>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"math"
 	"sort"
@@ -135,7 +136,10 @@ func (s *FundAnalysisService) Build(input FundAnalysisInput) *domain.FundAnalysi
 	classificationSignal := recognizedClassificationSignal(input.SectorSnapshot, input.ThemeSnapshot)
 	holdingChanges := analyzeHoldingChanges(input.Holdings, input.PreviousHoldings, input.PreviousHoldingPeriod)
 	exposureShift := analyzeExposureShift(input.SectorSnapshot, input.ThemeSnapshot, input.PreviousSectorSnapshot, input.PreviousThemeSnapshot)
-	currentFocusEvents := mergeCurrentEventImpacts(input.CurrentHoldingEvents, input.CurrentMacroEvents, input.CurrentFundEvents, input.CurrentTargetEvents, input.CurrentIndexEvents)
+	currentFocusEvents := normalizeCurrentEventMetadata(
+		mergeCurrentEventImpacts(input.CurrentHoldingEvents, input.CurrentMacroEvents, input.CurrentFundEvents, input.CurrentTargetEvents, input.CurrentIndexEvents),
+		now,
+	)
 	currentExposureEvent := analyzeCurrentExposureEvent(input.CurrentHoldingEvents, input.SectorSnapshot, input.ThemeSnapshot)
 	exposureBreakdowns := analyzeExposureBreakdownChanges(input.SectorSnapshot, input.ThemeSnapshot, input.PreviousSectorSnapshot, input.PreviousThemeSnapshot)
 	coveragePenalty := lowCoveragePenalty(coveragePercent)
@@ -288,6 +292,7 @@ func (s *FundAnalysisService) Build(input FundAnalysisInput) *domain.FundAnalysi
 	eventImpacts := buildEventImpacts(analysisBasis, latestPeriod, disclosureAgeDays, confidence, concentrationWeight, currentFocusEvents, currentExposureEvent, exposureBreakdowns, holdingChanges, exposureShift, input.Estimate.HoldingDetails, input.SectorSnapshot, input.ThemeSnapshot)
 	primaryEvidence := buildPrimaryEvidenceItems(DominantRecommendationFromPercents(increasePercent, decreasePercent), eventImpacts, trendScore, structureScore, heatScore, input.SectorSnapshot, input.ThemeSnapshot)
 	counterEvidence := buildCounterEvidenceItems(DominantRecommendationFromPercents(increasePercent, decreasePercent), eventImpacts, confidenceFactors, riskScore, concentrationWeight, disclosureAgeDays)
+	eventIntelligence := buildShadowEventIntelligence(now, currentFocusEvents, totalScore, eventScore)
 
 	return &domain.FundAnalysis{
 		AnalysisVersion:      CurrentFundAnalysisVersion,
@@ -305,12 +310,202 @@ func (s *FundAnalysisService) Build(input FundAnalysisInput) *domain.FundAnalysi
 		Reasons:              reasons,
 		Warnings:             warnings,
 		EventImpacts:         eventImpacts,
+		EventIntelligence:    eventIntelligence,
 		ModuleScores:         moduleScores,
 		ConfidenceFactors:    confidenceFactors,
 		PrimaryEvidence:      primaryEvidence,
 		CounterEvidence:      counterEvidence,
 		ConfidenceDeductions: confidenceDeductions,
 	}
+}
+
+func normalizeCurrentEventMetadata(events []domain.FundAnalysisEventImpact, now time.Time) []domain.FundAnalysisEventImpact {
+	if len(events) == 0 {
+		return nil
+	}
+	result := make([]domain.FundAnalysisEventImpact, 0, len(events))
+	for _, event := range events {
+		if strings.TrimSpace(event.EventID) == "" {
+			identityParts := []string{
+				strings.TrimSpace(event.TargetScope),
+				strings.TrimSpace(event.Code),
+				strings.TrimSpace(event.SourceURL),
+			}
+			if strings.TrimSpace(event.Code) == "" && strings.TrimSpace(event.SourceURL) == "" {
+				identityParts = append(identityParts, strings.TrimSpace(event.Title))
+			}
+			identity := strings.Join(identityParts, "|")
+			sum := sha256.Sum256([]byte(identity))
+			event.EventID = fmt.Sprintf("%x", sum[:])
+		}
+		if strings.TrimSpace(event.EventType) == "" {
+			event.EventType = inferAnalysisEventType(event)
+		}
+		if strings.TrimSpace(event.EventStatus) == "" {
+			event.EventStatus = inferAnalysisEventStatus(event, now)
+		}
+		if strings.TrimSpace(event.SourceTier) == "" {
+			event.SourceTier = inferAnalysisEventSourceTier(event)
+		}
+		if event.AnnouncedAt == nil {
+			event.AnnouncedAt = parseAnalysisEventDate(event.SourcePublishedAt)
+		}
+		if event.KnownAt == nil {
+			knownAt := now
+			event.KnownAt = &knownAt
+			event.KnownAtBasis = "first_seen"
+		}
+		if event.IngestedAt == nil {
+			ingestedAt := now
+			event.IngestedAt = &ingestedAt
+		}
+		if event.Version <= 0 {
+			event.Version = 1
+		}
+		result = append(result, event)
+	}
+	return result
+}
+
+func inferAnalysisEventType(event domain.FundAnalysisEventImpact) string {
+	text := strings.TrimSpace(event.Title + " " + event.Summary)
+	checks := []struct {
+		code     string
+		keywords []string
+	}{
+		{"earnings_forecast", []string{"业绩预告", "预增", "预亏", "扭亏"}},
+		{"earnings_report", []string{"业绩快报", "季度报告", "年度报告", "半年度报告"}},
+		{"dividend", []string{"分红", "收益分配"}},
+		{"management_change", []string{"基金经理", "高级管理人员变更"}},
+		{"suspension", []string{"暂停申购", "暂停赎回", "停牌", "复牌"}},
+		{"index_rebalance", []string{"调样", "样本调整", "成分调整"}},
+		{"regulatory", []string{"处罚", "问询", "调查"}},
+		{"corporate_action", []string{"回购", "增持", "减持", "重组"}},
+	}
+	for _, check := range checks {
+		for _, keyword := range check.keywords {
+			if strings.Contains(text, keyword) {
+				return check.code
+			}
+		}
+	}
+	switch strings.TrimSpace(event.TargetScope) {
+	case "macro":
+		return "macro_policy"
+	case "fund":
+		return "fund_notice"
+	case "holding":
+		return "company_disclosure"
+	case "index":
+		return "index_notice"
+	default:
+		return "other"
+	}
+}
+
+func inferAnalysisEventStatus(event domain.FundAnalysisEventImpact, now time.Time) string {
+	if event.ExpiresAt != nil && now.After(*event.ExpiresAt) {
+		return "expired"
+	}
+	if strings.TrimSpace(event.TargetScope) == "index" && strings.TrimSpace(event.SourceURL) == "" {
+		return "expected"
+	}
+	if strings.TrimSpace(event.TargetScope) == "macro" || event.EffectiveAt != nil {
+		return "active"
+	}
+	return "disclosed"
+}
+
+func inferAnalysisEventSourceTier(event domain.FundAnalysisEventImpact) string {
+	source := strings.ToLower(strings.TrimSpace(event.SourceName + " " + event.SourceURL))
+	if strings.TrimSpace(event.SourceConfidence) == "high" ||
+		strings.Contains(source, "cninfo") || strings.Contains(source, "巨潮") ||
+		strings.Contains(source, "gov.cn") || strings.Contains(source, "证监") ||
+		strings.Contains(source, "交易所") {
+		return "official"
+	}
+	if strings.Contains(source, "eastmoney") || strings.Contains(source, "东方财富") {
+		return "official_aggregator"
+	}
+	if strings.TrimSpace(event.SourceURL) == "" {
+		return "heuristic"
+	}
+	return "secondary"
+}
+
+func parseAnalysisEventDate(value string) *time.Time {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02"} {
+		if parsed, err := time.ParseInLocation(layout, value, time.Local); err == nil {
+			return &parsed
+		}
+	}
+	return nil
+}
+
+func buildShadowEventIntelligence(now time.Time, events []domain.FundAnalysisEventImpact, totalScore, productionEventScore float64) *domain.FundAnalysisEventIntelligence {
+	if len(events) == 0 {
+		return &domain.FundAnalysisEventIntelligence{
+			Mode:               "shadow",
+			AsOfTime:           now,
+			ShadowEventScore:   scoreDecimal(50),
+			ShadowTotalScore:   scoreDecimal(totalScore),
+			ShadowDelta:        decimal.Zero,
+			Timeline:           []domain.FundAnalysisEventImpact{},
+			ProductionBoundary: "影子事件分仅用于验证，不影响当前 V4 总分与推荐比例。",
+		}
+	}
+
+	shadow := 50.0
+	intelligence := &domain.FundAnalysisEventIntelligence{
+		Mode:               "shadow",
+		AsOfTime:           now,
+		Timeline:           append([]domain.FundAnalysisEventImpact(nil), events...),
+		ProductionBoundary: "影子事件分仅用于验证，不影响当前 V4 总分与推荐比例。",
+	}
+	for _, event := range events {
+		delta := 0.0
+		switch strings.TrimSpace(event.Impact) {
+		case "positive":
+			delta = 3
+		case "negative":
+			delta = -4
+		}
+		switch strings.TrimSpace(event.Strength) {
+		case "high":
+			delta *= 1.5
+		case "low":
+			delta *= 0.6
+		}
+		if event.SourceTier != "official" && event.SourceTier != "official_aggregator" {
+			delta *= 0.4
+		}
+		if event.EventStatus == "expected" {
+			delta *= 0.5
+		}
+		shadow += delta
+		switch event.EventStatus {
+		case "expected":
+			intelligence.ExpectedCount++
+		case "disclosed":
+			intelligence.DisclosedCount++
+		case "active":
+			intelligence.ActiveCount++
+		}
+		if event.KnownAt != nil && (intelligence.LatestKnownAt == nil || event.KnownAt.After(*intelligence.LatestKnownAt)) {
+			knownAt := *event.KnownAt
+			intelligence.LatestKnownAt = &knownAt
+		}
+	}
+	shadow = clamp(shadow, 10, 90)
+	shadowTotal := clamp(totalScore+0.10*(shadow-productionEventScore), 5, 95)
+	intelligence.ShadowEventScore = scoreDecimal(shadow)
+	intelligence.ShadowTotalScore = scoreDecimal(shadowTotal)
+	intelligence.ShadowDelta = scoreDecimal(shadowTotal - totalScore)
+	return intelligence
 }
 
 func normalizeAnalysisBasis(source string) (string, string) {

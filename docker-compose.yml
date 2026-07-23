@@ -41,5 +41,34 @@ services:
       timeout: 3s
       retries: 5
 
+  lean-worker:
+    profiles: [ "quant" ]
+    build:
+      context: .
+      dockerfile: quant/lean-worker/Dockerfile
+      args:
+        LEAN_COMMIT: 0136529cd8d9194f401aa5322bf90e547d1f0b56
+    container_name: fundlive_lean_worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: fundlive
+      DB_PASSWORD: fundlive_secret
+      DB_NAME: fundlive
+      DB_SSLMODE: disable
+      REDIS_URL: redis://cache:6379/0
+      REDIS_KEY_PREFIX: fundlive
+      LEAN_WORKER_GROUP: lean-workers
+      LEAN_JOB_TIMEOUT_MINUTES: 30
+    volumes:
+      - fundlive_lean_jobs:/var/lib/fundlive/lean-jobs
+
 volumes:
   fundlive_dragonfly_data:
+  fundlive_lean_jobs:

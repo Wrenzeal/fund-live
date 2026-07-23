@@ -14,8 +14,15 @@ type FundAnalysisSnapshotRefreshService struct {
 	candidateProvider analysisSnapshotCandidateProvider
 	coordinator       *FundAnalysisCoordinator
 	snapshotStore     *FundAnalysisSnapshotStore
+	quantStore        *QuantResearchStore
 	now               func() time.Time
 	lastRunDate       string
+}
+
+func (s *FundAnalysisSnapshotRefreshService) SetQuantResearchStore(store *QuantResearchStore) {
+	if s != nil {
+		s.quantStore = store
+	}
 }
 
 func NewFundAnalysisSnapshotRefreshService(
@@ -75,6 +82,11 @@ func (s *FundAnalysisSnapshotRefreshService) maybeRun(ctx context.Context) {
 		if saveErr := s.snapshotStore.Save(ctx, fundID, analysis, now); saveErr != nil {
 			log.Printf("⚠️ analysis snapshot refresh save %s failed: %v", fundID, saveErr)
 			continue
+		}
+		if s.quantStore != nil {
+			if signalErr := s.quantStore.SaveForwardSignal(ctx, fundID, analysis, now); signalErr != nil {
+				log.Printf("⚠️ quant forward signal save %s failed: %v", fundID, signalErr)
+			}
 		}
 		successCount++
 	}

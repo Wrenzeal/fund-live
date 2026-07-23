@@ -157,6 +157,7 @@ func TestIsFundAnalysisSnapshotFreshRequiresCurrentVersionAndExplanationCache(t 
 	now := time.Date(2026, time.May, 8, 15, 0, 0, 0, time.Local)
 	analysis := testAIExplanationAnalysis()
 	analysis.AnalysisVersion = CurrentFundAnalysisVersion
+	analysis.EventIntelligence = &domain.FundAnalysisEventIntelligence{Mode: "shadow", AsOfTime: now}
 	explanation, err := NewAIExplanationService(nil).Explain(context.Background(), AIExplanationInput{Analysis: analysis, Now: now})
 	if err != nil {
 		t.Fatalf("Explain() error = %v", err)
@@ -171,6 +172,11 @@ func TestIsFundAnalysisSnapshotFreshRequiresCurrentVersionAndExplanationCache(t 
 		t.Fatalf("old analysis version should be stale")
 	}
 	analysis.AnalysisVersion = CurrentFundAnalysisVersion
+	analysis.EventIntelligence = nil
+	if IsFundAnalysisSnapshotFresh(analysis, now.Add(-time.Hour), now) {
+		t.Fatalf("snapshot without event intelligence metadata should be stale")
+	}
+	analysis.EventIntelligence = &domain.FundAnalysisEventIntelligence{Mode: "shadow", AsOfTime: now}
 	analysis.AIExplanation = nil
 	if IsFundAnalysisSnapshotFresh(analysis, now.Add(-time.Hour), now) {
 		t.Fatalf("snapshot without AI explanation metadata should be stale")

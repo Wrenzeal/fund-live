@@ -259,15 +259,20 @@ func announcementToImpact(item cninfoAnnouncement, holding domain.StockHolding) 
 	}
 
 	return domain.FundAnalysisEventImpact{
-		Code:           "holding_current_notice_" + strings.TrimSpace(holding.StockCode) + "_" + strings.TrimSpace(item.AnnouncementID),
-		Title:          compressAnnouncementTitle(holding.StockName, title),
-		Impact:         impact,
-		Summary:        summary,
-		TargetScope:    "holding",
-		Strength:       strength,
-		Horizon:        "current",
-		RelatedSymbols: compactSymbols(holding.StockCode),
-		WeightHint:     decimalPointerFromValue(holding.HoldingRatio),
+		Code:              "holding_current_notice_" + strings.TrimSpace(holding.StockCode) + "_" + strings.TrimSpace(item.AnnouncementID),
+		Title:             compressAnnouncementTitle(holding.StockName, title),
+		Impact:            impact,
+		Summary:           summary,
+		TargetScope:       "holding",
+		Strength:          strength,
+		Horizon:           "current",
+		RelatedSymbols:    compactSymbols(holding.StockCode),
+		WeightHint:        decimalPointerFromValue(holding.HoldingRatio),
+		SourceName:        "巨潮资讯",
+		SourceURL:         "https://static.cninfo.com.cn/" + strings.TrimLeft(item.AdjunctURL, "/"),
+		SourcePublishedAt: date,
+		SourceConfidence:  "high",
+		SourceTier:        "official",
 	}, true
 }
 

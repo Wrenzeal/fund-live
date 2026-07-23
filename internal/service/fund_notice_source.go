@@ -157,13 +157,18 @@ func fundNoticeToImpact(item eastmoneyFundNoticeItem, fundCode string, now time.
 	}
 
 	return domain.FundAnalysisEventImpact{
-		Code:        "fund_notice_" + fundCode + "_" + strings.TrimSpace(item.ID),
-		Title:       limitTextForImpact(trimFundNoticeTitle(title), 24),
-		Impact:      impact,
-		Summary:     summary,
-		TargetScope: "fund",
-		Strength:    strength,
-		Horizon:     "current",
+		Code:              "fund_notice_" + fundCode + "_" + strings.TrimSpace(item.ID),
+		Title:             limitTextForImpact(trimFundNoticeTitle(title), 24),
+		Impact:            impact,
+		Summary:           summary,
+		TargetScope:       "fund",
+		Strength:          strength,
+		Horizon:           "current",
+		SourceName:        "东方财富基金公告",
+		SourceURL:         "https://fundf10.eastmoney.com/jjgg_" + fundCode + ".html",
+		SourcePublishedAt: strings.TrimSpace(item.PublishDate),
+		SourceConfidence:  "medium",
+		SourceTier:        "official_aggregator",
 	}, true
 }
 

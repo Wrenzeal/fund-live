@@ -33,6 +33,9 @@ func IsFundAnalysisSnapshotFresh(analysis *domain.FundAnalysis, generatedAt time
 	if analysis.AnalysisVersion != CurrentFundAnalysisVersion {
 		return false
 	}
+	if analysis.EventIntelligence == nil {
+		return false
+	}
 	if analysis.AIExplanation == nil {
 		return false
 	}

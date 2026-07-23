@@ -9,7 +9,7 @@ import { FundAnalysisBadge } from '@/components/fund-analysis-badge'
 import { FundAnalysisEventHint } from '@/components/fund-analysis-event-hint'
 import { LoadingSpinner } from '@/components/loading-indicator'
 import { SiteFooter } from '@/components/site-footer'
-import { useFundAnalysisRankings, type FundAnalysisRankingItem } from '@/hooks/use-fund-data'
+import { useFundAnalysisRankings, useQuantBacktests, useQuantValidationSummary, type FundAnalysisRankingItem } from '@/hooks/use-fund-data'
 import { cn } from '@/lib/utils'
 
 function percentValue(value?: string) {
@@ -102,6 +102,75 @@ function HeroStat({ label, value, active = false }: { label: string; value: stri
       <div className="mt-1 truncate text-xs font-semibold text-theme-primary sm:text-sm">{value}</div>
     </div>
   )
+}
+
+function QuantValidationPanel() {
+  const { summary, isLoading, error } = useQuantValidationSummary()
+  const { jobs } = useQuantBacktests()
+  const latestJob = jobs[0]
+
+  return (
+    <section className="overflow-hidden rounded-3xl border border-cyan-500/20 bg-cyan-500/[0.06] p-5 md:p-6">
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+        <div className="max-w-2xl">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-100">验证层</span>
+            <span className="rounded-full border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-3 py-1 text-xs text-theme-secondary">pilot-v1 · 25 只 ETF</span>
+          </div>
+          <h2 className="mt-4 text-xl font-black text-theme-primary">先验证排序，再讨论交易结论</h2>
+          <p className="mt-2 text-sm leading-6 text-theme-secondary">
+            历史代理信号只使用当日收盘前已有数据，组合在下一交易日开盘成交。Lean 负责成交、费用与回撤复核，不替代当前评分引擎。
+          </p>
+          <div className="mt-4 text-xs leading-5 text-theme-muted">
+            {error ? '验证数据尚未初始化，请先同步 ETF 日线并生成历史代理信号。' : summary?.lookahead_boundary || (isLoading ? '正在读取验证样本…' : '尚无验证样本。')}
+          </div>
+        </div>
+
+        <div className="grid w-full gap-2 sm:grid-cols-2 xl:max-w-2xl xl:grid-cols-4">
+          <ValidationMetric label="信号样本" value={summary ? `${summary.signal_count}` : '--'} />
+          {(summary?.horizons || []).map((item) => (
+            <ValidationMetric
+              key={item.horizon_days}
+              label={`${item.horizon_days} 日超额`}
+              value={`${Number.parseFloat(item.average_excess_return || '0').toFixed(2)}%`}
+              detail={`IC ${Number.parseFloat(item.average_rank_ic || '0').toFixed(3)} · ${item.sample_count} 样本`}
+            />
+          ))}
+          {!summary?.horizons?.length && <ValidationMetric label="前向收益" value="等待样本" />}
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-col gap-2 border-t border-cyan-500/15 pt-4 text-xs text-theme-secondary sm:flex-row sm:items-center sm:justify-between">
+        <span>三重基准：沪深300 / 试点池等权 / 现金</span>
+        {latestJob ? (
+          <Link href={`/analysis/backtests/${latestJob.id}`} className="text-cyan-100 transition-colors hover:text-cyan-50">
+            Lean 任务：{backtestStatusLabel(latestJob.status)} · {latestJob.id.slice(0, 8)}
+          </Link>
+        ) : <span>Lean 任务：尚未运行</span>}
+      </div>
+    </section>
+  )
+}
+
+function ValidationMetric({ label, value, detail }: { label: string; value: string; detail?: string }) {
+  return (
+    <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-3">
+      <div className="text-[11px] tracking-[0.08em] text-theme-muted">{label}</div>
+      <div className="mt-1 text-lg font-black text-theme-primary">{value}</div>
+      {detail && <div className="mt-1 text-[10px] leading-4 text-theme-muted">{detail}</div>}
+    </div>
+  )
+}
+
+function backtestStatusLabel(status: string) {
+  switch (status) {
+    case 'queued': return '排队中'
+    case 'running': return '运行中'
+    case 'completed': return '已完成'
+    case 'failed': return '运行失败'
+    case 'queue_failed': return '队列不可用'
+    default: return status
+  }
 }
 
 function RankingsOverview({ sections }: { sections: RankingSectionConfig[] }) {
@@ -354,6 +423,10 @@ export default function AnalysisRankingsPage() {
         <div className="space-y-5 md:space-y-6">
           <RevealBlock>
             <RankingsHero generatedAt={rankings?.generated_at} isValidating={isValidating} totalCount={totalCount} />
+          </RevealBlock>
+
+          <RevealBlock delay={60}>
+            <QuantValidationPanel />
           </RevealBlock>
 
           {isLoading && !rankings ? (

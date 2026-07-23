@@ -36,6 +36,13 @@ type FundAnalysisCoordinator struct {
 	sectorStore        analysisSectorStore
 	analysisService    *FundAnalysisService
 	explanationService *AIExplanationService
+	eventStore         *QuantEventStore
+}
+
+func (c *FundAnalysisCoordinator) SetQuantEventStore(store *QuantEventStore) {
+	if c != nil {
+		c.eventStore = store
+	}
 }
 
 func NewFundAnalysisCoordinator(
@@ -167,6 +174,18 @@ func (c *FundAnalysisCoordinator) buildInput(
 	if source == SectorSourceTargetETFFallback && targetCode != "" {
 		input.CurrentTargetEvents = LoadCurrentFundNoticeEvents(ctx, targetCode, now)
 	}
+	if c.eventStore != nil {
+		currentEvents := mergeCurrentEventImpacts(input.CurrentHoldingEvents, input.CurrentFundEvents, input.CurrentTargetEvents, input.CurrentMacroEvents, input.CurrentIndexEvents)
+		if saveErr := c.eventStore.SaveImpacts(ctx, fundID, currentEvents, now); saveErr != nil {
+			log.Printf("⚠️ Failed to persist quant events for %s: %v", fundID, saveErr)
+		} else if persisted, listErr := c.eventStore.ListAsOf(ctx, fundID, now, "", 50); listErr == nil && len(persisted) > 0 {
+			input.CurrentHoldingEvents = filterEventsByTargetScope(persisted, "holding")
+			input.CurrentFundEvents = filterEventsByTargetScope(persisted, "fund")
+			input.CurrentTargetEvents = nil
+			input.CurrentMacroEvents = filterEventsByTargetScope(persisted, "macro")
+			input.CurrentIndexEvents = filterEventsByTargetScope(persisted, "index")
+		}
+	}
 	previousHoldings, previousHoldingPeriod, previousErr := LoadPreviousQuarterHoldings(ctx, historySourceCode, holdings)
 	if previousErr != nil {
 		log.Printf("⚠️ Failed to load previous quarter holdings for %s: %v", fundID, previousErr)
@@ -179,6 +198,16 @@ func (c *FundAnalysisCoordinator) buildInput(
 	}
 
 	return sectorSnapshot, themeSnapshot, input, nil
+}
+
+func filterEventsByTargetScope(events []domain.FundAnalysisEventImpact, scope string) []domain.FundAnalysisEventImpact {
+	result := make([]domain.FundAnalysisEventImpact, 0, len(events))
+	for _, event := range events {
+		if strings.TrimSpace(event.TargetScope) == scope {
+			result = append(result, event)
+		}
+	}
+	return result
 }
 
 func (c *FundAnalysisCoordinator) resolveClassificationHoldings(ctx context.Context, fundID string, fund *domain.Fund) ([]domain.StockHolding, string, error) {

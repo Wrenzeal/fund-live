@@ -5,7 +5,41 @@ export type AnalysisEventTrace = {
   source_url?: string
   source_published_at?: string
   source_confidence?: string
+  source_tier?: string
   mapping_basis?: string
+  event_status?: string
+  expected_at?: string
+  announced_at?: string
+  effective_at?: string
+  known_at?: string
+}
+
+function eventStatusLabel(status?: string) {
+  switch (status) {
+    case 'expected': return '即将发生'
+    case 'disclosed': return '已披露'
+    case 'active': return '当前生效'
+    case 'expired': return '已失效'
+    case 'cancelled': return '已取消'
+    default: return ''
+  }
+}
+
+function sourceTierLabel(tier?: string) {
+  switch (tier) {
+    case 'official': return '官方来源'
+    case 'official_aggregator': return '公告聚合'
+    case 'secondary': return '补充来源'
+    case 'heuristic': return '规则推演'
+    default: return ''
+  }
+}
+
+function formatTraceTime(value?: string) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 interface AnalysisEventTraceMetaProps {
@@ -40,8 +74,13 @@ export function AnalysisEventTraceMeta({ trace, dense = false, className }: Anal
   const sourcePublishedAt = trace.source_published_at
   const sourceConfidence = trace.source_confidence
   const mappingBasis = trace.mapping_basis
+  const eventStatus = eventStatusLabel(trace.event_status)
+  const sourceTier = sourceTierLabel(trace.source_tier)
+  const expectedAt = formatTraceTime(trace.expected_at)
+  const effectiveAt = formatTraceTime(trace.effective_at)
+  const knownAt = formatTraceTime(trace.known_at)
 
-  if (!sourceName && !sourceURL && !sourcePublishedAt && !sourceConfidence && !mappingBasis) {
+  if (!sourceName && !sourceURL && !sourcePublishedAt && !sourceConfidence && !mappingBasis && !eventStatus && !knownAt) {
     return null
   }
 
@@ -52,6 +91,10 @@ export function AnalysisEventTraceMeta({ trace, dense = false, className }: Anal
 
   return (
     <div className={cn('flex flex-wrap gap-1.5', dense ? 'mt-2' : 'mt-3', className)}>
+      {eventStatus && <span className={pillClass}>{eventStatus}</span>}
+      {expectedAt && <span className={pillClass}>预计：{expectedAt}</span>}
+      {effectiveAt && <span className={pillClass}>生效：{effectiveAt}</span>}
+      {knownAt && <span className={pillClass}>可知：{knownAt}</span>}
       {mappingBasis && (
         <span className={pillClass}>映射：{compactTraceText(mappingBasis, dense ? 38 : 74)}</span>
       )}
@@ -73,6 +116,7 @@ export function AnalysisEventTraceMeta({ trace, dense = false, className }: Anal
       {sourceConfidence && (
         <span className={pillClass}>{sourceConfidenceLabel(sourceConfidence) || sourceConfidence}</span>
       )}
+      {sourceTier && <span className={pillClass}>{sourceTier}</span>}
     </div>
   )
 }

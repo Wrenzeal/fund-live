@@ -277,7 +277,10 @@ type FundAnalysisModuleScore struct {
 
 // FundAnalysisEventImpact represents a structured disclosure / event signal.
 type FundAnalysisEventImpact struct {
+	EventID           string           `json:"event_id,omitempty"`
 	Code              string           `json:"code"`
+	EventType         string           `json:"event_type,omitempty"`
+	EventStatus       string           `json:"event_status,omitempty"`
 	Title             string           `json:"title"`
 	Impact            string           `json:"impact"`
 	Summary           string           `json:"summary"`
@@ -290,7 +293,33 @@ type FundAnalysisEventImpact struct {
 	SourceURL         string           `json:"source_url,omitempty"`
 	SourcePublishedAt string           `json:"source_published_at,omitempty"`
 	SourceConfidence  string           `json:"source_confidence,omitempty"`
+	SourceTier        string           `json:"source_tier,omitempty"`
 	MappingBasis      string           `json:"mapping_basis,omitempty"`
+	ExpectedAt        *time.Time       `json:"expected_at,omitempty"`
+	AnnouncedAt       *time.Time       `json:"announced_at,omitempty"`
+	EffectiveAt       *time.Time       `json:"effective_at,omitempty"`
+	ExpiresAt         *time.Time       `json:"expires_at,omitempty"`
+	KnownAt           *time.Time       `json:"known_at,omitempty"`
+	IngestedAt        *time.Time       `json:"ingested_at,omitempty"`
+	KnownAtBasis      string           `json:"known_at_basis,omitempty"`
+	Version           int              `json:"version,omitempty"`
+}
+
+// FundAnalysisEventIntelligence is an observation-only event layer. Its score
+// is deliberately separated from TotalScore until forward validation approves
+// a production weight.
+type FundAnalysisEventIntelligence struct {
+	Mode               string                    `json:"mode"`
+	AsOfTime           time.Time                 `json:"as_of_time"`
+	ShadowEventScore   decimal.Decimal           `json:"shadow_event_score"`
+	ShadowTotalScore   decimal.Decimal           `json:"shadow_total_score"`
+	ShadowDelta        decimal.Decimal           `json:"shadow_delta"`
+	ExpectedCount      int                       `json:"expected_count"`
+	DisclosedCount     int                       `json:"disclosed_count"`
+	ActiveCount        int                       `json:"active_count"`
+	LatestKnownAt      *time.Time                `json:"latest_known_at,omitempty"`
+	Timeline           []FundAnalysisEventImpact `json:"timeline"`
+	ProductionBoundary string                    `json:"production_boundary"`
 }
 
 // FundAnalysisConfidenceFactor explains one component of the overall analysis confidence.
@@ -376,6 +405,7 @@ type FundAnalysis struct {
 	Reasons              []string                       `json:"reasons"`
 	Warnings             []string                       `json:"warnings"`
 	EventImpacts         []FundAnalysisEventImpact      `json:"event_impacts"`
+	EventIntelligence    *FundAnalysisEventIntelligence `json:"event_intelligence,omitempty"`
 	ModuleScores         []FundAnalysisModuleScore      `json:"module_scores"`
 	ConfidenceFactors    []FundAnalysisConfidenceFactor `json:"confidence_factors,omitempty"`
 	PrimaryEvidence      []FundAnalysisEvidenceItem     `json:"primary_evidence,omitempty"`
