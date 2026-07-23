@@ -22,7 +22,6 @@ interface AppTopBarProps {
   isRefreshing?: boolean
   onRefresh?: () => void
   headerRef?: Ref<HTMLElement>
-  topBarRef?: Ref<HTMLDivElement>
 }
 
 const navItems = [
@@ -33,6 +32,9 @@ const navItems = [
 ]
 
 function isNavItemActive(pathname: string, href: string) {
+  if (href === '/analysis/rankings') {
+    return pathname.startsWith('/analysis/')
+  }
   return href === '/' ? pathname === '/' : pathname.startsWith(href)
 }
 
@@ -45,7 +47,7 @@ function PrimaryNavigation({ pathname, placement }: { pathname: string; placemen
         'bg-[var(--input-bg)]/45 p-1',
         placement === 'inline'
           ? 'hidden shrink-0 items-center rounded-xl xl:flex'
-          : 'mt-3 grid grid-cols-4 rounded-xl xl:hidden',
+          : 'mt-2 grid grid-cols-4 rounded-xl xl:hidden',
       )}
     >
       {navItems.map((item) => {
@@ -57,7 +59,7 @@ function PrimaryNavigation({ pathname, placement }: { pathname: string; placemen
             href={item.href}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'group relative flex min-h-10 items-center justify-center rounded-lg px-3 text-sm font-medium text-theme-muted outline-none transition-colors duration-160',
+              'group relative flex min-h-11 items-center justify-center rounded-lg px-2 text-sm font-medium text-theme-muted outline-none transition-colors duration-160 sm:px-3',
               'hover:bg-[var(--card-bg)]/55 hover:text-theme-primary focus-visible:bg-[var(--card-bg)]/55 focus-visible:text-theme-primary focus-visible:ring-2 focus-visible:ring-[var(--input-focus)]/55',
               active && 'font-semibold text-theme-primary',
             )}
@@ -86,7 +88,6 @@ export function AppTopBar({
   isRefreshing,
   onRefresh,
   headerRef,
-  topBarRef,
 }: AppTopBarProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -104,9 +105,10 @@ export function AppTopBar({
 
   return (
     <header ref={headerRef} className="sticky top-0 z-50 glass-strong border-b border-[var(--card-border)]">
-      <div className="container mx-auto px-4 py-3">
-        <div ref={topBarRef} className="flex items-center justify-between gap-4">
-          <BrandMark subtitle="FundLive - 实时基金估值" />
+      <div className="container mx-auto px-3 py-2 sm:px-4 sm:py-3">
+        <div className="flex min-h-11 items-center gap-2 md:justify-between md:gap-4">
+          <BrandMark compact subtitle="FundLive - 实时基金估值" className="shrink-0 md:hidden" />
+          <BrandMark subtitle="FundLive - 实时基金估值" className="hidden shrink-0 md:flex" />
 
           <div className="hidden shrink-0 md:block">
             <FundSearch onSelect={handleFundSelect} currentFundId={currentFundId} />
@@ -114,7 +116,11 @@ export function AppTopBar({
 
           <PrimaryNavigation pathname={pathname} placement="inline" />
 
-          <div className="flex items-center gap-4">
+          <div className="ml-auto flex items-center gap-2 md:ml-0 md:gap-4">
+            <div className="md:hidden">
+              <FundSearch onSelect={handleFundSelect} currentFundId={currentFundId} />
+            </div>
+
             <div className="hidden lg:flex items-center gap-4">
               <MarketStatusIndicator showDetails status={marketStatus} />
 
@@ -150,10 +156,6 @@ export function AppTopBar({
               setViewMode={setViewMode}
             />
           </div>
-        </div>
-
-        <div className="mt-4 flex justify-end md:hidden">
-          <FundSearch onSelect={handleFundSelect} currentFundId={currentFundId} />
         </div>
         <PrimaryNavigation pathname={pathname} placement="row" />
       </div>

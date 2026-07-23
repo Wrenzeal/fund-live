@@ -92,7 +92,7 @@ export function UserAccountMenu() {
         <Link
           href={authRouteWithReturnTo('/auth/login', pathname)}
           className={cn(
-            'group relative overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-theme-secondary transition-all duration-200',
+            'group relative inline-flex h-11 items-center overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-sm text-theme-secondary transition-all duration-200',
             'hover:border-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/10 hover:text-theme-primary'
           )}
         >
@@ -101,7 +101,7 @@ export function UserAccountMenu() {
         <Link
           href={authRouteWithReturnTo('/auth/register', pathname)}
           className={cn(
-            'group relative overflow-hidden rounded-xl bg-[var(--accent-primary)] px-3 py-2 text-sm font-medium text-white transition-[filter]',
+            'group relative hidden h-11 items-center overflow-hidden rounded-xl bg-[var(--accent-primary)] px-3 text-sm font-medium text-white transition-[filter] md:inline-flex',
             'hover:brightness-105'
           )}
         >

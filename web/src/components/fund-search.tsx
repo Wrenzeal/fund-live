@@ -40,7 +40,7 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
     const { recentFunds, quickSelectFunds } = useSearchPreferences()
 
     const debouncedQuery = useDebounce(inputValue, 300)
-    const { results, isLoading } = useFundSearch(debouncedQuery)
+    const { results, isLoading, isQueryReady } = useFundSearch(debouncedQuery)
 
     const openSearch = useCallback(() => {
         if (closeTimerRef.current !== null) {
@@ -126,9 +126,11 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
         }
     }, [])
 
-    const showResults = results.length > 0
-    const showEmpty = Boolean(inputValue && debouncedQuery && !isLoading && !showResults)
-    const showDiscovery = !showResults && !showEmpty
+    const hasDebouncedQuery = Boolean(debouncedQuery.trim())
+    const showResults = isQueryReady && results.length > 0
+    const showQueryHint = hasDebouncedQuery && !isQueryReady
+    const showEmpty = isQueryReady && !isLoading && !showResults
+    const showDiscovery = !hasDebouncedQuery && !showResults
 
     return (
         <div className={cn('relative inline-flex', className)}>
@@ -194,7 +196,7 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
                                     type="text"
                                     value={inputValue}
                                     onChange={(event) => setInputValue(event.target.value)}
-                                    placeholder="例如 005827、蓝筹、易方达"
+                                    placeholder="例如 005827、蓝、易方达"
                                     className={cn(
                                         'w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] py-4 pl-12 pr-12 text-base font-medium',
                                         'text-theme-primary placeholder:text-theme-muted focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[var(--input-focus)]'
@@ -217,6 +219,12 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
                         </div>
 
                         <div className="max-h-[calc(100dvh-12rem)] overflow-y-auto px-4 py-4 sm:max-h-[30rem] sm:px-5">
+                            {showQueryHint && (
+                                <div className="rounded-3xl border border-[var(--card-border)] bg-[var(--input-bg)]/45 px-4 py-6 text-center text-sm leading-6 text-theme-secondary">
+                                    中文名称可输入 1 个字；基金代码或英文至少输入 2 个字符。
+                                </div>
+                            )}
+
                             {showResults && (
                                 <ul className="space-y-2">
                                     {results.map((fund) => (

@@ -5,9 +5,11 @@ import Link from 'next/link'
 import { AlertTriangle, ArrowLeft, BarChart3, CalendarClock, FileText, Gauge, Layers3, PieChart, ShieldCheck, ShieldAlert, Sparkles, Target, TimerReset, Zap } from 'lucide-react'
 import { AnimatedScoreGauge } from '@/components/animated-score-gauge'
 import { AnalysisReveal as RevealSection, AnalysisSectionHeading as SectionHeading, useLazyReveal } from '@/components/analysis-layout'
+import { AppTopBar } from '@/components/app-top-bar'
 import { EstimateCard } from '@/components/estimate-card'
 import { FundSectorCard } from '@/components/fund-sector-card'
 import { HoldingsTable } from '@/components/holdings-table'
+import { SiteFooter } from '@/components/site-footer'
 import { TargetETFHoldingsCard } from '@/components/target-etf-holdings-card'
 import { AnalysisEventTraceMeta } from '@/components/analysis-event-trace-meta'
 import { FundHistoryTrend } from '@/components/fund-history-trend'
@@ -77,9 +79,10 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
   const decision = buildFundAnalysisDecision(analysis)
 
   return (
-    <main className="min-h-[100dvh]">
-      <div className="container mx-auto max-w-7xl px-4 py-6 md:py-8">
-        <header className="mb-6 overflow-hidden rounded-[2rem] border border-[var(--card-border)] bg-[var(--card-bg)]/45 p-5 shadow-[0_22px_60px_rgba(0,0,0,0.10)] md:p-6">
+    <div className="min-h-[100dvh]">
+      <AppTopBar currentFundId={fundId} />
+      <main id="main-content" className="container mx-auto max-w-7xl px-4 py-4 md:py-8">
+        <header className="mb-5 overflow-hidden rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/45 p-4 shadow-[0_22px_60px_rgba(0,0,0,0.10)] md:mb-6 md:rounded-[2rem] md:p-6">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
               <Link
@@ -212,8 +215,9 @@ export function AnalysisBoardPageClient({ fundId }: { fundId: string }) {
             <MethodCompactCard analysis={analysis} decision={decision} />
           </RevealSection>
         </div>
-      </div>
-    </main>
+      </main>
+      <SiteFooter compact />
+    </div>
   )
 }
 

@@ -1202,11 +1202,23 @@ export function useFundAnalysisRankings() {
 /**
  * useFundSearch - 搜索基金
  */
+const singleHanCharacterPattern = /^[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]$/
+
+function isFundSearchQueryReady(query: string) {
+    const normalizedQuery = query.trim()
+    if (!normalizedQuery) {
+        return false
+    }
+
+    const characters = Array.from(normalizedQuery)
+    return characters.length >= 2 || (characters.length === 1 && singleHanCharacterPattern.test(characters[0]))
+}
+
 export function useFundSearch(query: string) {
-    // 仅当 query 长度 >= 2 时搜索
-    const shouldSearch = query.trim().length >= 2
-    const swrKey = shouldSearch
-        ? `${API_BASE_URL}/api/v1/fund/search?q=${encodeURIComponent(query)}`
+    const normalizedQuery = query.trim()
+    const isQueryReady = isFundSearchQueryReady(normalizedQuery)
+    const swrKey = isQueryReady
+        ? `${API_BASE_URL}/api/v1/fund/search?q=${encodeURIComponent(normalizedQuery)}`
         : null
 
     const { data, error, isLoading } = useSWR<{ data: Fund[]; meta?: ResponseMeta }>(
@@ -1219,8 +1231,9 @@ export function useFundSearch(query: string) {
     )
 
     return {
-        results: data?.data || [],
-        isLoading: shouldSearch && isLoading,
-        isError: !!error,
+        results: isQueryReady ? data?.data || [] : [],
+        isLoading: isQueryReady && isLoading,
+        isError: isQueryReady && !!error,
+        isQueryReady,
     }
 }

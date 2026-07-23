@@ -88,6 +88,7 @@ func TestPostgresFundRepositorySearchFundsOnlyReturnsActiveCatalogFunds(t *testi
 		{ID: "000001", Name: "华夏成长混合", CatalogStatus: domain.FundCatalogStatusActive},
 		{ID: "000002", Name: "华夏成长混合(后端)", CatalogStatus: domain.FundCatalogStatusUnavailable},
 		{ID: "002755", Name: "华夏成长旧代码", CatalogStatus: domain.FundCatalogStatusCatalogMissing},
+		{ID: "005827", Name: "易方达蓝筹精选混合", CatalogStatus: domain.FundCatalogStatusActive},
 	}
 	for _, fund := range funds {
 		if err := repo.SaveFund(ctx, fund); err != nil {
@@ -104,6 +105,14 @@ func TestPostgresFundRepositorySearchFundsOnlyReturnsActiveCatalogFunds(t *testi
 	}
 	if results[0].ID != "000001" {
 		t.Fatalf("results[0].ID = %s, want 000001", results[0].ID)
+	}
+
+	results, err = repo.SearchFunds(ctx, "蓝", 10)
+	if err != nil {
+		t.Fatalf("SearchFunds(蓝) error = %v", err)
+	}
+	if len(results) != 1 || results[0].ID != "005827" {
+		t.Fatalf("SearchFunds(蓝) = %+v, want only 005827", results)
 	}
 
 	results, err = repo.SearchFunds(ctx, "000002", 10)

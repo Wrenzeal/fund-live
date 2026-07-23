@@ -2,11 +2,13 @@
 
 import { type ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, Eye, Flame, RefreshCw, ShieldAlert, Sparkles } from 'lucide-react'
+import { AlertTriangle, ArrowRight, BarChart3, Eye, Flame, RefreshCw, ShieldAlert, Sparkles } from 'lucide-react'
 import { AnalysisReveal as RevealBlock, AnalysisSectionHeading as SectionHeading } from '@/components/analysis-layout'
+import { AppTopBar } from '@/components/app-top-bar'
 import { FundAnalysisBadge } from '@/components/fund-analysis-badge'
 import { FundAnalysisEventHint } from '@/components/fund-analysis-event-hint'
 import { LoadingSpinner } from '@/components/loading-indicator'
+import { SiteFooter } from '@/components/site-footer'
 import { useFundAnalysisRankings, type FundAnalysisRankingItem } from '@/hooks/use-fund-data'
 import { cn } from '@/lib/utils'
 
@@ -71,24 +73,16 @@ function RankingsHero({
   totalCount: number
 }) {
   return (
-    <header className="overflow-hidden rounded-[2rem] border border-[var(--card-border)] bg-[var(--card-bg)]/45 p-5 shadow-[0_22px_60px_rgba(0,0,0,0.10)] md:p-6">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+    <header className="overflow-hidden rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/45 p-4 shadow-[0_22px_60px_rgba(0,0,0,0.10)] md:rounded-[2rem] md:p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between lg:gap-5">
         <div className="min-w-0">
-          <Link
-            href="/"
-            className="mb-4 inline-flex items-center gap-2 text-sm text-theme-secondary transition-colors hover:text-theme-primary"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            返回首页
-          </Link>
-
           <div className="text-2xl font-black tracking-tight text-theme-primary md:text-3xl">量化排行榜</div>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-theme-secondary">
             按近期分析快照列出三类观察池：结构偏积极、适合继续观察、风险暴露偏高。点击基金查看完整看板。
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-xs text-theme-secondary sm:grid-cols-3 lg:min-w-[26rem]">
+        <div className="grid grid-cols-3 gap-2 text-xs text-theme-secondary lg:min-w-[26rem]">
           <HeroStat label="覆盖基金" value={`${totalCount}`} />
           <HeroStat label="生成时间" value={generatedAt ? new Date(generatedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '等待生成'} />
           <HeroStat label="状态" value={isValidating ? '刷新中' : '已就绪'} active={isValidating} />
@@ -100,12 +94,12 @@ function RankingsHero({
 
 function HeroStat({ label, value, active = false }: { label: string; value: string; active?: boolean }) {
   return (
-    <div className={cn('rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-3 py-2.5', active && 'border-cyan-500/25 bg-cyan-500/10 text-cyan-100')}>
-      <div className="flex items-center gap-1.5 text-[10px] tracking-[0.18em] text-theme-muted">
+    <div className={cn('rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-2 py-2.5 sm:rounded-2xl sm:px-3', active && 'border-cyan-500/25 bg-cyan-500/10 text-cyan-100')}>
+      <div className="flex items-center gap-1 text-[10px] tracking-[0.08em] text-theme-muted sm:gap-1.5 sm:tracking-[0.18em]">
         {active && <RefreshCw className="h-3 w-3 animate-spin" />}
         {label}
       </div>
-      <div className="mt-1 truncate text-sm font-semibold text-theme-primary">{value}</div>
+      <div className="mt-1 truncate text-xs font-semibold text-theme-primary sm:text-sm">{value}</div>
     </div>
   )
 }
@@ -354,8 +348,9 @@ export default function AnalysisRankingsPage() {
   const featuredItem = featuredConfig.items[0]
 
   return (
-    <main className="min-h-[100dvh]">
-      <div className="container mx-auto max-w-7xl px-4 py-6 md:py-8">
+    <div className="min-h-[100dvh]">
+      <AppTopBar />
+      <main id="main-content" className="container mx-auto max-w-7xl px-4 py-4 md:py-8">
         <div className="space-y-5 md:space-y-6">
           <RevealBlock>
             <RankingsHero generatedAt={rankings?.generated_at} isValidating={isValidating} totalCount={totalCount} />
@@ -396,7 +391,8 @@ export default function AnalysisRankingsPage() {
             <MethodNote />
           </RevealBlock>
         </div>
-      </div>
-    </main>
+      </main>
+      <SiteFooter compact />
+    </div>
   )
 }

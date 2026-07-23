@@ -20,7 +20,6 @@ const tabs = [
   { href: "/holdings", label: "持仓", icon: Wallet },
 ];
 
-const MOBILE_BREAKPOINT_QUERY = "(min-width: 768px)";
 const MIN_ANCHOR_OFFSET_PX = 112;
 const ANCHOR_OFFSET_GAP_PX = 16;
 
@@ -32,7 +31,6 @@ export function AccountAreaShell({
   const pathname = usePathname();
   const { isAtTop, showBackToTop, scrollToTop } = useMobileTopSection();
   const headerRef = useRef<HTMLElement | null>(null);
-  const topBarRef = useRef<HTMLDivElement | null>(null);
   const [anchorOffsetPx, setAnchorOffsetPx] = useState(MIN_ANCHOR_OFFSET_PX);
 
   useEffect(() => {
@@ -43,14 +41,8 @@ export function AccountAreaShell({
     const updateAnchorOffset = () => {
       const headerHeight =
         headerRef.current?.getBoundingClientRect().height ?? 0;
-      const topBarHeight =
-        topBarRef.current?.getBoundingClientRect().height ?? 0;
-      const isDesktop = window.matchMedia(MOBILE_BREAKPOINT_QUERY).matches;
-      const measuredHeight = isDesktop
-        ? headerHeight
-        : topBarHeight || headerHeight;
       const nextOffset = Math.max(
-        Math.ceil(measuredHeight + ANCHOR_OFFSET_GAP_PX),
+        Math.ceil(headerHeight + ANCHOR_OFFSET_GAP_PX),
         MIN_ANCHOR_OFFSET_PX,
       );
       setAnchorOffsetPx(nextOffset);
@@ -65,10 +57,6 @@ export function AccountAreaShell({
     if (headerRef.current) {
       resizeObserver.observe(headerRef.current);
     }
-    if (topBarRef.current) {
-      resizeObserver.observe(topBarRef.current);
-    }
-
     window.addEventListener("resize", updateAnchorOffset);
     return () => {
       resizeObserver.disconnect();
@@ -82,31 +70,31 @@ export function AccountAreaShell({
 
   return (
     <div className="min-h-[100dvh]" style={shellStyle}>
-      <AppTopBar headerRef={headerRef} topBarRef={topBarRef} />
+      <AppTopBar headerRef={headerRef} />
 
       <section
         className={cn(
           "container mx-auto overflow-hidden px-4 transition-all duration-300 md:overflow-visible md:transition-none",
           isAtTop
-            ? "pt-4 max-h-[32rem] opacity-100"
+            ? "pt-3 max-h-[32rem] opacity-100"
             : "pt-0 max-h-0 opacity-0 pointer-events-none md:pointer-events-auto",
           "md:pt-4 md:max-h-none md:opacity-100",
         )}
       >
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl space-y-3">
+          <div className="max-w-3xl space-y-2 sm:space-y-3">
             <div className="text-sm font-semibold text-[var(--accent-primary)]">账户数据</div>
             <div>
-              <h1 className="text-3xl font-black text-theme-primary sm:text-4xl">
+              <h1 className="text-2xl font-black text-theme-primary sm:text-4xl">
                 {title}
               </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-theme-secondary sm:text-base">
+              <p className="mt-1.5 max-w-2xl text-sm leading-6 text-theme-secondary sm:mt-2 sm:text-base">
                 {description}
               </p>
             </div>
           </div>
 
-          <nav className="flex flex-wrap gap-3">
+          <nav aria-label="账户页面" className="hidden flex-wrap gap-3 md:flex">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
@@ -141,7 +129,7 @@ export function AccountAreaShell({
         </div>
       </section>
 
-      <main id="main-content" className="container mx-auto px-4 py-8">
+      <main id="main-content" className="container mx-auto px-4 py-5 md:py-8">
         {children}
       </main>
 

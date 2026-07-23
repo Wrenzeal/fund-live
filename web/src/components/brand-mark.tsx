@@ -7,30 +7,37 @@ interface BrandMarkProps {
   subtitle: string
   href?: string | null
   className?: string
+  compact?: boolean
 }
 
-export function BrandMark({ subtitle, href = '/', className }: BrandMarkProps) {
+export function BrandMark({ subtitle, href = '/', className, compact = false }: BrandMarkProps) {
   const content = (
     <>
       <div className="relative">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20">
-          <Activity className="h-6 w-6" />
+        <div className={cn(
+          'flex items-center justify-center bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20',
+          compact ? 'h-9 w-9 rounded-xl' : 'h-11 w-11 rounded-2xl'
+        )}>
+          <Activity className={compact ? 'h-5 w-5' : 'h-6 w-6'} />
         </div>
-        <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 opacity-30 blur" />
+        <div className={cn(
+          'absolute -inset-1 bg-gradient-to-br from-cyan-500 to-blue-600 opacity-30 blur',
+          compact ? 'rounded-xl' : 'rounded-2xl'
+        )} />
       </div>
       <div>
-        <div className="text-lg font-bold gradient-text">涨了多少</div>
-        <div className="text-xs text-theme-muted">{subtitle}</div>
+        <div className={cn('font-bold gradient-text', compact ? 'text-base' : 'text-lg')}>涨了多少</div>
+        {!compact && <div className="text-xs text-theme-muted">{subtitle}</div>}
       </div>
     </>
   )
 
   if (href === null) {
-    return <div className={cn('flex items-center gap-3', className)}>{content}</div>
+    return <div className={cn('flex items-center', compact ? 'gap-2' : 'gap-3', className)}>{content}</div>
   }
 
   return (
-    <Link href={href} className={cn('flex items-center gap-3', className)}>
+    <Link href={href} className={cn('flex min-h-11 items-center', compact ? 'gap-2' : 'gap-3', className)}>
       {content}
     </Link>
   )

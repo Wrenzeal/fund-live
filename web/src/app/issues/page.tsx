@@ -221,17 +221,17 @@ export default function IssuesPage() {
       eyebrowLabel="反馈入口"
       EyebrowIcon={WandSparkles}
     >
-      <div className="space-y-8">
-        <ScrollRevealStack className="grid gap-5 lg:grid-cols-4" stagger={65}>
+      <div className="space-y-6 md:space-y-8">
+        <ScrollRevealStack className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4" stagger={65}>
           {[
             { label: '反馈总数', value: counts.total, accent: 'text-cyan-300' },
             { label: '待接收', value: counts.pending, accent: 'text-amber-300' },
             { label: '处理中', value: counts.accepted, accent: 'text-cyan-300' },
             { label: '已完成', value: counts.completed, accent: 'text-emerald-300' },
           ].map((item) => (
-            <Surface as="article" key={item.label} radius="lg" padding="md">
-              <div className="text-xs tracking-[0.22em] text-theme-muted">{item.label}</div>
-              <div className={cn('mt-3 text-4xl font-black', item.accent)}>{item.value}</div>
+            <Surface as="article" key={item.label} radius="md" padding="md" className="p-4 md:p-6">
+              <div className="text-xs tracking-[0.14em] text-theme-muted sm:tracking-[0.22em]">{item.label}</div>
+              <div className={cn('mt-2 text-3xl font-black sm:mt-3 sm:text-4xl', item.accent)}>{item.value}</div>
             </Surface>
           ))}
         </ScrollRevealStack>
