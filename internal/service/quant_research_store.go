@@ -332,6 +332,15 @@ var pilotV1Instruments = []PilotInstrument{
 	{"513500", "标普500ETF", "overseas"},
 }
 
+func quantInstrumentUpsert() clause.OnConflict {
+	return clause.OnConflict{
+		Columns: []clause.Column{{Name: "symbol"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"name", "exchange", "asset_class", "universe_group", "source", "updated_at",
+		}),
+	}
+}
+
 func (s *QuantResearchStore) SeedPilotUniverse(ctx context.Context, now time.Time) error {
 	if s == nil || s.db == nil {
 		return nil
@@ -341,7 +350,7 @@ func (s *QuantResearchStore) SeedPilotUniverse(ctx context.Context, now time.Tim
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		benchmark := database.QuantInstrument{Symbol: "000300", Name: "沪深300", Exchange: "CSI", AssetClass: "index", UniverseGroup: "benchmark", Source: "eastmoney"}
-		if err := tx.Clauses(clause.OnConflict{DoUpdates: clause.AssignmentColumns([]string{"name", "exchange", "asset_class", "universe_group", "source", "updated_at"})}).Create(&benchmark).Error; err != nil {
+		if err := tx.Clauses(quantInstrumentUpsert()).Create(&benchmark).Error; err != nil {
 			return err
 		}
 		for _, item := range pilotV1Instruments {
@@ -350,7 +359,7 @@ func (s *QuantResearchStore) SeedPilotUniverse(ctx context.Context, now time.Tim
 				exchange = "SH"
 			}
 			instrument := database.QuantInstrument{Symbol: item.Symbol, Name: item.Name, Exchange: exchange, AssetClass: "etf", UniverseGroup: item.Bucket, Source: "eastmoney"}
-			if err := tx.Clauses(clause.OnConflict{DoUpdates: clause.AssignmentColumns([]string{"name", "exchange", "asset_class", "universe_group", "source", "updated_at"})}).Create(&instrument).Error; err != nil {
+			if err := tx.Clauses(quantInstrumentUpsert()).Create(&instrument).Error; err != nil {
 				return err
 			}
 			member := database.QuantUniverseMember{UniverseVersion: QuantUniversePilotV1, Symbol: item.Symbol, Bucket: item.Bucket, IncludedAt: now}

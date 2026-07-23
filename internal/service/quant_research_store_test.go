@@ -71,3 +71,13 @@ func TestSameISOWeek(t *testing.T) {
 		t.Fatal("Friday and next Monday should not share ISO week")
 	}
 }
+
+func TestQuantInstrumentUpsertTargetsSymbolPrimaryKey(t *testing.T) {
+	conflict := quantInstrumentUpsert()
+	if len(conflict.Columns) != 1 || conflict.Columns[0].Name != "symbol" {
+		t.Fatalf("unexpected conflict target: %#v", conflict.Columns)
+	}
+	if conflict.DoNothing || len(conflict.DoUpdates) == 0 {
+		t.Fatalf("unexpected conflict action: %#v", conflict)
+	}
+}
