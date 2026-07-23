@@ -38,6 +38,15 @@ docker compose --profile quant up -d --build lean-worker
 docker compose logs -f lean-worker
 ```
 
+上面的 Compose 配置只用于本地环境。生产服务器使用既有 PostgreSQL 与 Dragonfly 时，运行：
+
+```bash
+./scripts/deploy-lean-worker.sh
+docker logs -f fundlive_lean_worker
+```
+
+部署脚本以只读方式挂载 `/etc/fund-live/fundlive.yaml`，通过 Docker host gateway 连接生产 PostgreSQL，并通过 `fund_default` 网络连接 Dragonfly。数据库密码不会写入镜像或 Docker 环境变量。可通过 `LEAN_CONFIG_PATH`、`LEAN_ENV_PATH`、`LEAN_DOCKER_NETWORK` 和 `LEAN_REDIS_URL` 覆盖生产拓扑。
+
 该 Lean 版本自带的结果诊断固定请求美股 SPY，不适用于 FundLive 的中国 ETF 基准，镜像构建时会关闭这项诊断。Lean 的组合净值、订单、成交、费用、回撤和统计结果仍照常生成；基准比较使用任务内导出的沪深300、试点池等权与现金曲线。
 
 Worker 配置：

@@ -4,14 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       deploy_target:
-        description: "Deploy backend, frontend, or both"
+        description: "Deploy backend, frontend, quant worker, or all services"
         required: true
         default: "both"
         type: choice
         options:
           - backend
           - frontend
+          - quant
           - both
+          - all
       frontend_release_label:
         description: "Optional frontend release label (defaults to timestamp)"
         required: false
@@ -56,7 +58,7 @@ jobs:
           npm run build
 
       - name: Deploy backend
-        if: ${{ inputs.deploy_target == 'backend' || inputs.deploy_target == 'both' }}
+        if: ${{ inputs.deploy_target == 'backend' || inputs.deploy_target == 'both' || inputs.deploy_target == 'all' }}
         env:
           BACKEND_SERVICE_NAME: ${{ vars.BACKEND_SERVICE_NAME || 'fund-live-backend' }}
           BACKEND_HEALTHCHECK_URL: ${{ vars.BACKEND_HEALTHCHECK_URL || 'http://127.0.0.1:13896/health' }}
@@ -64,7 +66,7 @@ jobs:
         run: ./scripts/deploy-backend.sh
 
       - name: Deploy frontend
-        if: ${{ inputs.deploy_target == 'frontend' || inputs.deploy_target == 'both' }}
+        if: ${{ inputs.deploy_target == 'frontend' || inputs.deploy_target == 'both' || inputs.deploy_target == 'all' }}
         env:
           FRONTEND_ROOT: ${{ vars.FRONTEND_ROOT || '/var/www/fund-live' }}
           FRONTEND_PM2_NAME: ${{ vars.FRONTEND_PM2_NAME || 'fund-live-frontend' }}
@@ -74,3 +76,7 @@ jobs:
           FRONTEND_KEEP_RELEASES: ${{ vars.FRONTEND_KEEP_RELEASES || '5' }}
           FRONTEND_RELEASE_LABEL: ${{ inputs.frontend_release_label }}
         run: ./scripts/deploy-frontend.sh
+
+      - name: Deploy Lean worker
+        if: ${{ inputs.deploy_target == 'quant' || inputs.deploy_target == 'all' }}
+        run: ./scripts/deploy-lean-worker.sh

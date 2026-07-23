@@ -139,7 +139,7 @@ go run ./cmd/crawler --history-only --tracked-only --history-days 30 --save-db
 - 邮箱验证码生产环境必须使用 SMTP 驱动，并将 DragonFly、验证码密钥和 Resend 凭据放入 `/etc/fund-live/fundlive.env`。
 - 当前生产链路通常为：Nginx -> Next.js 前端 -> Go API。
 - 若前端通过 Next.js API 代理访问后端，PM2 / 运行环境需要设置 `BACKEND_URL`。
-- 部署脚本位于 `scripts/deploy-backend.sh` 与 `scripts/deploy-frontend.sh`。
+- 部署脚本位于 `scripts/deploy-backend.sh`、`scripts/deploy-frontend.sh` 与 `scripts/deploy-lean-worker.sh`。
 
 ## 当前边界
 
