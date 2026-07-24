@@ -1,9 +1,12 @@
 package service
 
 import (
+	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/RomaticDOG/fund/internal/database"
 	"github.com/RomaticDOG/fund/internal/domain"
 )
 
@@ -17,6 +20,9 @@ func TestNormalizeQuantBacktestRequestAppliesPointInTimeDefaults(t *testing.T) {
 	}
 	if request.MinimumListingDays != 120 || request.MinimumAverageAmount.String() != "20000000" {
 		t.Fatalf("unexpected eligibility defaults: %#v", request)
+	}
+	if request.RebalanceFrequency != QuantRebalanceWeekly || request.ExitRank != 5 || request.WeightingMethod != QuantWeightEqual || request.WeakMarketExposureBPS != 10_000 {
+		t.Fatalf("unexpected strategy defaults: %#v", request)
 	}
 }
 
@@ -79,5 +85,69 @@ func TestQuantInstrumentUpsertTargetsSymbolPrimaryKey(t *testing.T) {
 	}
 	if conflict.DoNothing || len(conflict.DoUpdates) == 0 {
 		t.Fatalf("unexpected conflict action: %#v", conflict)
+	}
+}
+
+func TestRiskV1RequestsAreFixedAndIncremental(t *testing.T) {
+	variants, err := RiskV1Requests(QuantBacktestRequest{StartDate: "2022-01-19", EndDate: "2026-07-23"})
+	if err != nil {
+		t.Fatalf("RiskV1Requests() error = %v", err)
+	}
+	if len(variants) != 4 {
+		t.Fatalf("len(variants) = %d, want 4", len(variants))
+	}
+	if got := quantBacktestStrategy(variants[0].Request); got != QuantStrategyTop5Weekly {
+		t.Fatalf("variant A strategy = %s", got)
+	}
+	if got := quantBacktestStrategy(variants[1].Request); got != QuantStrategyTop5Buffer {
+		t.Fatalf("variant B strategy = %s", got)
+	}
+	if got := quantBacktestStrategy(variants[2].Request); got != QuantStrategyTop5LowTurnover {
+		t.Fatalf("variant C strategy = %s", got)
+	}
+	if got := quantBacktestStrategy(variants[3].Request); got != QuantStrategyTop5RiskControl {
+		t.Fatalf("variant D strategy = %s", got)
+	}
+	if QuantBacktestImplementation != "risk-v1.2" {
+		t.Fatalf("unexpected strategy implementation version: %s", QuantBacktestImplementation)
+	}
+	d := variants[3].Request
+	if d.RebalanceFrequency != QuantRebalanceMonthly || d.ExitRank != 8 || d.MinimumWeightChangeBPS != 250 || d.WeightingMethod != QuantWeightInverseVolatility || d.TrendFilterDays != 120 || d.WeakMarketExposureBPS != 5_000 {
+		t.Fatalf("unexpected D parameters: %#v", d)
+	}
+}
+
+func TestNormalizeQuantBacktestRequestRejectsInvalidStrategyParameters(t *testing.T) {
+	_, err := NormalizeQuantBacktestRequest(QuantBacktestRequest{
+		StartDate: "2022-01-19", EndDate: "2026-07-23", TopN: 5, ExitRank: 4,
+	})
+	if err == nil {
+		t.Fatal("expected exit_rank validation error")
+	}
+	_, err = NormalizeQuantBacktestRequest(QuantBacktestRequest{
+		StartDate: "2022-01-19", EndDate: "2026-07-23", WeightingMethod: "black_box",
+	})
+	if err == nil {
+		t.Fatal("expected weighting_method validation error")
+	}
+}
+
+func TestWriteLeanSignalCSVUsesMonthlyPeriodEnd(t *testing.T) {
+	directory := t.TempDir()
+	path := directory + "/signals.csv"
+	signals := []database.QuantSignalHistory{
+		{SignalDate: time.Date(2026, 1, 30, 0, 0, 0, 0, time.UTC)},
+		{SignalDate: time.Date(2026, 2, 2, 0, 0, 0, 0, time.UTC)},
+	}
+	if err := writeLeanSignalCSV(path, signals, QuantRebalanceMonthly); err != nil {
+		t.Fatalf("writeLeanSignalCSV() error = %v", err)
+	}
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(payload)), "\n")
+	if len(lines) != 2 || !strings.HasSuffix(lines[0], ",1") || !strings.HasSuffix(lines[1], ",1") {
+		t.Fatalf("unexpected monthly signals: %q", string(payload))
 	}
 }

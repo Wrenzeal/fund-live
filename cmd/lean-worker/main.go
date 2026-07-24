@@ -95,7 +95,7 @@ func processBacktest(parent context.Context, store *service.QuantResearchStore, 
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	root := envOrDefault("LEAN_JOB_ROOT", "/var/lib/fundlive/lean-jobs")
-	workDir, _, err := store.ExportLeanJob(ctx, message.JobID, root, leanEngineVersion())
+	workDir, manifest, err := store.ExportLeanJob(ctx, message.JobID, root, leanEngineVersion())
 	if err != nil {
 		_ = store.FailBacktestJob(parent, message.JobID, err, "")
 		_ = queue.AckBacktest(parent, group, message.ID)
@@ -108,7 +108,7 @@ func processBacktest(parent context.Context, store *service.QuantResearchStore, 
 		_ = queue.AckBacktest(parent, group, message.ID)
 		return
 	}
-	result, resultErr := readLeanResult(filepath.Join(workDir, "output"), logSummary)
+	result, resultErr := readLeanResult(filepath.Join(workDir, "output"), logSummary, manifest)
 	if resultErr != nil {
 		_ = store.FailBacktestJob(parent, message.JobID, resultErr, logSummary)
 		_ = queue.AckBacktest(parent, group, message.ID)
@@ -138,7 +138,7 @@ func runLean(ctx context.Context, workDir string) ([]byte, error) {
 	return command.CombinedOutput()
 }
 
-func readLeanResult(outputDir, logSummary string) (service.LeanBacktestResult, error) {
+func readLeanResult(outputDir, logSummary string, manifest *service.LeanJobManifest) (service.LeanBacktestResult, error) {
 	var selected string
 	var selectedSize int64
 	err := filepath.WalkDir(outputDir, func(path string, entry fs.DirEntry, walkErr error) error {
@@ -170,6 +170,15 @@ func readLeanResult(outputDir, logSummary string) (service.LeanBacktestResult, e
 	result.EquityCurve = firstRaw(root, "Charts", "charts")
 	result.Trades = firstRaw(root, "Orders", "orders", "TotalPerformance", "totalPerformance")
 	result.Benchmarks = result.EquityCurve
+	tradingDates, tradingDatesErr := readLeanTradingDates(filepath.Join(filepath.Dir(outputDir), "data", "fundlive", "market", "000300.csv"))
+	if tradingDatesErr != nil {
+		return service.LeanBacktestResult{}, fmt.Errorf("read Lean trading dates: %w", tradingDatesErr)
+	}
+	normalized, normalizeErr := normalizeLeanResult(root, manifest, tradingDates)
+	if normalizeErr != nil {
+		return service.LeanBacktestResult{}, fmt.Errorf("normalize Lean result: %w", normalizeErr)
+	}
+	result.Normalized = normalized
 	if len(result.Metrics) == 0 {
 		result.Metrics = payload
 	}

@@ -20,6 +20,7 @@ type LeanJobManifest struct {
 	UniverseVersion  string               `json:"universe_version"`
 	SignalMode       string               `json:"signal_mode"`
 	EngineVersion    string               `json:"engine_version"`
+	StrategyVersion  string               `json:"strategy_version"`
 	Parameters       QuantBacktestRequest `json:"parameters"`
 	Symbols          []string             `json:"symbols"`
 	BenchmarkSymbols []string             `json:"benchmark_symbols"`
@@ -33,6 +34,7 @@ type LeanBacktestResult struct {
 	EquityCurve   json.RawMessage `json:"equity_curve"`
 	Trades        json.RawMessage `json:"trades"`
 	Benchmarks    json.RawMessage `json:"benchmarks"`
+	Normalized    json.RawMessage `json:"normalized_result"`
 	LogSummary    string          `json:"log_summary"`
 }
 
@@ -74,14 +76,15 @@ func (s *QuantResearchStore) CompleteBacktestJob(ctx context.Context, jobID stri
 	return s.db.WithContext(ctx).Model(&database.QuantBacktestJob{}).
 		Where("id = ? AND status = ?", strings.TrimSpace(jobID), "running").
 		Updates(map[string]interface{}{
-			"status":          "completed",
-			"engine_version":  result.EngineVersion,
-			"metrics_json":    nullJSON(result.Metrics),
-			"equity_json":     nullJSON(result.EquityCurve),
-			"trades_json":     nullJSON(result.Trades),
-			"benchmarks_json": nullJSON(result.Benchmarks),
-			"log_summary":     result.LogSummary,
-			"completed_at":    now,
+			"status":                 "completed",
+			"engine_version":         result.EngineVersion,
+			"metrics_json":           nullJSON(result.Metrics),
+			"equity_json":            nullJSON(result.EquityCurve),
+			"trades_json":            nullJSON(result.Trades),
+			"benchmarks_json":        nullJSON(result.Benchmarks),
+			"normalized_result_json": nullJSON(result.Normalized),
+			"log_summary":            result.LogSummary,
+			"completed_at":           now,
 		}).Error
 }
 
@@ -128,6 +131,8 @@ func (s *QuantResearchStore) ExportLeanJob(ctx context.Context, jobID, root, eng
 	}
 	start, _ := time.Parse("2006-01-02", request.StartDate)
 	end, _ := time.Parse("2006-01-02", request.EndDate)
+	requiredWarmupDays := maxInt(request.MinimumListingDays, request.VolatilityLookbackDays, request.TrendFilterDays)
+	warmupCalendarDays := requiredWarmupDays*7/5 + 30
 
 	var members []database.QuantUniverseMember
 	if err := s.db.WithContext(ctx).Where("universe_version = ?", job.UniverseVersion).Order("bucket, symbol").Find(&members).Error; err != nil {
@@ -153,7 +158,7 @@ func (s *QuantResearchStore) ExportLeanJob(ctx context.Context, jobID, root, eng
 	for _, symbol := range append(append([]string(nil), symbols...), "000300") {
 		var bars []database.QuantMarketBar
 		if err := s.db.WithContext(ctx).
-			Where("symbol = ? AND date BETWEEN ? AND ?", symbol, start.AddDate(0, 0, -90), end.AddDate(0, 0, 25)).
+			Where("symbol = ? AND date BETWEEN ? AND ?", symbol, start.AddDate(0, 0, -warmupCalendarDays), end.AddDate(0, 0, 25)).
 			Order("date").Find(&bars).Error; err != nil {
 			return "", nil, err
 		}
@@ -171,7 +176,7 @@ func (s *QuantResearchStore) ExportLeanJob(ctx context.Context, jobID, root, eng
 			Order("signal_date").Find(&signals).Error; err != nil {
 			return "", nil, err
 		}
-		if err := writeLeanSignalCSV(filepath.Join(signalDir, symbol+".csv"), signals); err != nil {
+		if err := writeLeanSignalCSV(filepath.Join(signalDir, symbol+".csv"), signals, request.RebalanceFrequency); err != nil {
 			return "", nil, err
 		}
 	}
@@ -182,10 +187,11 @@ func (s *QuantResearchStore) ExportLeanJob(ctx context.Context, jobID, root, eng
 		UniverseVersion:  job.UniverseVersion,
 		SignalMode:       job.SignalMode,
 		EngineVersion:    engineVersion,
+		StrategyVersion:  QuantBacktestImplementation,
 		Parameters:       request,
 		Symbols:          symbols,
 		BenchmarkSymbols: []string{"000300", "pilot_equal_weight", "cash"},
-		SignalTiming:     "Friday close signal; next trading day market order",
+		SignalTiming:     request.RebalanceFrequency + " close signal; next trading day market order",
 		GeneratedAt:      time.Now(),
 	}
 	manifestJSON, _ := json.MarshalIndent(manifest, "", "  ")
@@ -214,7 +220,7 @@ func writeLeanMarketCSV(path string, bars []database.QuantMarketBar) error {
 	return writer.Error()
 }
 
-func writeLeanSignalCSV(path string, signals []database.QuantSignalHistory) error {
+func writeLeanSignalCSV(path string, signals []database.QuantSignalHistory, frequency string) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return err
@@ -224,7 +230,13 @@ func writeLeanSignalCSV(path string, signals []database.QuantSignalHistory) erro
 	defer writer.Flush()
 	for index, signal := range signals {
 		rebalance := "0"
-		if index == len(signals)-1 || !sameISOWeek(signal.SignalDate, signals[index+1].SignalDate) {
+		periodEnds := index == len(signals)-1
+		if !periodEnds && frequency == QuantRebalanceMonthly {
+			periodEnds = !sameCalendarMonth(signal.SignalDate, signals[index+1].SignalDate)
+		} else if !periodEnds {
+			periodEnds = !sameISOWeek(signal.SignalDate, signals[index+1].SignalDate)
+		}
+		if periodEnds {
 			rebalance = "1"
 		}
 		if err := writer.Write([]string{
@@ -234,6 +246,20 @@ func writeLeanSignalCSV(path string, signals []database.QuantSignalHistory) erro
 		}
 	}
 	return writer.Error()
+}
+
+func sameCalendarMonth(left, right time.Time) bool {
+	return left.Year() == right.Year() && left.Month() == right.Month()
+}
+
+func maxInt(values ...int) int {
+	maximum := 0
+	for _, value := range values {
+		if value > maximum {
+			maximum = value
+		}
+	}
+	return maximum
 }
 
 func sameISOWeek(left, right time.Time) bool {

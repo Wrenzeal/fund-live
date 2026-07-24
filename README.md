@@ -82,7 +82,7 @@ docker compose up -d cache
 
 ## Lean 量化验证
 
-Lean 作为隔离的回测 Worker 验证现有评分，不替换 FundLive 的 V4 分析服务。事件版本、ETF 五年日线、历史代理信号、Dragonfly 队列和部署步骤见 [`docs/lean-quant-validation.md`](docs/lean-quant-validation.md)。
+Lean 作为隔离的回测 Worker 验证现有评分，不替换 FundLive 的 V4 分析服务。当前提供固定 A-D 风险收益实验和公开对照页；事件版本、ETF 五年日线、历史代理信号、Dragonfly 队列与部署步骤见 [`docs/lean-quant-validation.md`](docs/lean-quant-validation.md)。TradingAgents-CN 等外部研究器仅预留 [`event-intel.v1`](docs/event-intel-shadow-contract.md) shadow 契约。
 
 Google 登录需要后端和前端使用同一个 Web Client ID：
 
@@ -131,6 +131,9 @@ go run ./cmd/crawler --list all --save-db --catalog-only
 
 # 手动补采重点基金近 30 日官方净值历史（持仓/收藏/自选）
 go run ./cmd/crawler --history-only --tracked-only --history-days 30 --save-db
+
+# 幂等创建并运行固定 A-D 风险收益实验
+go run ./cmd/run-quant-experiment --preset risk-v1
 ```
 
 ## 部署提示
@@ -156,6 +159,8 @@ go run ./cmd/crawler --history-only --tracked-only --history-days 30 --save-db
 - [`todo_list.md`](todo_list.md)：当前任务边界与后续计划
 - [`docs/overseas-data-source-selection.md`](docs/overseas-data-source-selection.md)：海外行情数据源评估
 - [`docs/email-code-login.md`](docs/email-code-login.md)：邮箱验证码、DragonFly 与 Resend 部署说明
+- [`docs/lean-quant-validation.md`](docs/lean-quant-validation.md)：Lean Worker、A-D 实验、结果口径与生产运行
+- [`docs/event-intel-shadow-contract.md`](docs/event-intel-shadow-contract.md)：外部事件研究器 shadow 接入边界
 
 ## 许可证
 

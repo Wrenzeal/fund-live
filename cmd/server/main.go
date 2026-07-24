@@ -266,7 +266,7 @@ func main() {
 			"status":           "ok",
 			"timestamp":        time.Now().Unix(),
 			"service":          "FundLive API",
-			"version":          "2026.7.23-quant-validation",
+			"version":          "2026.7.24-quant-risk-v1",
 			"storage_mode":     storageMode,
 			"email_code_login": emailCodeHealthStatus(c.Request.Context(), authConfig.EmailCodeEnabled, authService),
 		})
@@ -359,6 +359,8 @@ func main() {
 			quant.GET("/validation", quantHandler.GetValidationSummary)
 			quant.GET("/backtests", quantHandler.ListBacktests)
 			quant.GET("/backtests/:id", quantHandler.GetBacktest)
+			quant.GET("/backtest-experiments", quantHandler.ListBacktestExperiments)
+			quant.GET("/backtest-experiments/:id", quantHandler.GetBacktestExperiment)
 		}
 
 		issues := v1.Group("/issues")

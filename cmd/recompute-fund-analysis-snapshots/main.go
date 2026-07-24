@@ -48,6 +48,7 @@ func main() {
 	snapshotStore := service.NewFundAnalysisSnapshotStore(db)
 	capabilityService := service.NewEstimateCapabilityService(db)
 	coordinator := service.NewFundAnalysisCoordinator(valuationService, fundRepo, fundResolver, sectorStore)
+	coordinator.SetQuantEventStore(service.NewQuantEventStore(db))
 
 	ctx := context.Background()
 	fundIDs := resolveFundIDs(strings.TrimSpace(*fundsArg), capabilityService, ctx, *limit)

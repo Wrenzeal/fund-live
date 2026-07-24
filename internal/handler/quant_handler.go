@@ -184,3 +184,34 @@ func (h *QuantHandler) ListBacktests(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, APIResponse{Success: true, Data: gin.H{"items": jobs, "count": len(jobs)}})
 }
+
+func (h *QuantHandler) GetBacktestExperiment(c *gin.Context) {
+	if h == nil || h.researchStore == nil {
+		c.JSON(http.StatusServiceUnavailable, APIResponse{Success: false, Error: &APIError{Code: "QUANT_RESEARCH_UNAVAILABLE", Message: "量化实验仅在 PostgreSQL 模式可用"}})
+		return
+	}
+	experiment, err := h.researchStore.GetBacktestExperiment(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, APIResponse{Success: false, Error: &APIError{Code: "BACKTEST_EXPERIMENT_NOT_FOUND", Message: "Backtest experiment not found"}})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: &APIError{Code: "BACKTEST_EXPERIMENT_QUERY_FAILED", Message: err.Error()}})
+		return
+	}
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: experiment})
+}
+
+func (h *QuantHandler) ListBacktestExperiments(c *gin.Context) {
+	if h == nil || h.researchStore == nil {
+		c.JSON(http.StatusServiceUnavailable, APIResponse{Success: false, Error: &APIError{Code: "QUANT_RESEARCH_UNAVAILABLE", Message: "量化实验仅在 PostgreSQL 模式可用"}})
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "6"))
+	experiments, err := h.researchStore.ListBacktestExperiments(c.Request.Context(), limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, APIResponse{Success: false, Error: &APIError{Code: "BACKTEST_EXPERIMENT_QUERY_FAILED", Message: err.Error()}})
+		return
+	}
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: gin.H{"items": experiments, "count": len(experiments)}})
+}

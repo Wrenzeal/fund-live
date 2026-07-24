@@ -166,6 +166,18 @@ type QuantValidationSummary struct {
 	LastSignalDate    *time.Time                   `json:"last_signal_date,omitempty"`
 	Horizons          []QuantForwardHorizonSummary `json:"horizons"`
 	LookaheadBoundary string                       `json:"lookahead_boundary"`
+	Coverage          QuantResearchCoverage        `json:"coverage"`
+}
+
+type QuantResearchCoverage struct {
+	InstrumentCount    int64      `json:"instrument_count"`
+	MarketBarCount     int64      `json:"market_bar_count"`
+	EventCount         int64      `json:"event_count"`
+	EventVersionCount  int64      `json:"event_version_count"`
+	MappedFundCount    int64      `json:"mapped_fund_count"`
+	ExperimentCount    int64      `json:"experiment_count"`
+	LatestMarketDate   *time.Time `json:"latest_market_date,omitempty"`
+	LatestEventKnownAt *time.Time `json:"latest_event_known_at,omitempty"`
 }
 
 type quantSignalOutcome struct {
@@ -192,6 +204,11 @@ func (s *QuantResearchStore) ValidationSummary(ctx context.Context, mode string)
 		SignalCount:       len(signals),
 		LookaheadBoundary: "信号使用当日收盘数据，下一个交易日开盘建仓；事件必须满足 known_at <= decision_at。",
 	}
+	coverage, err := s.quantResearchCoverage(ctx)
+	if err != nil {
+		return nil, err
+	}
+	summary.Coverage = coverage
 	if len(signals) == 0 {
 		return summary, nil
 	}
@@ -247,6 +264,43 @@ func (s *QuantResearchStore) ValidationSummary(ctx context.Context, mode string)
 		summary.Horizons = append(summary.Horizons, horizonSummary)
 	}
 	return summary, nil
+}
+
+func (s *QuantResearchStore) quantResearchCoverage(ctx context.Context) (QuantResearchCoverage, error) {
+	coverage := QuantResearchCoverage{}
+	counts := []struct {
+		model  interface{}
+		target *int64
+	}{
+		{&database.QuantInstrument{}, &coverage.InstrumentCount},
+		{&database.QuantMarketBar{}, &coverage.MarketBarCount},
+		{&database.QuantEvent{}, &coverage.EventCount},
+		{&database.QuantEventVersion{}, &coverage.EventVersionCount},
+		{&database.QuantBacktestExperiment{}, &coverage.ExperimentCount},
+	}
+	for _, item := range counts {
+		if err := s.db.WithContext(ctx).Model(item.model).Count(item.target).Error; err != nil {
+			return coverage, err
+		}
+	}
+	if err := s.db.WithContext(ctx).Model(&database.QuantEventAsset{}).
+		Where("asset_type = ?", "fund").Distinct("asset_code").Count(&coverage.MappedFundCount).Error; err != nil {
+		return coverage, err
+	}
+	var latest struct {
+		MarketDate   *time.Time `gorm:"column:market_date"`
+		EventKnownAt *time.Time `gorm:"column:event_known_at"`
+	}
+	if err := s.db.WithContext(ctx).Raw(`
+		SELECT
+			(SELECT MAX(date) FROM quant_market_bars) AS market_date,
+			(SELECT MAX(known_at) FROM quant_event_versions) AS event_known_at
+	`).Scan(&latest).Error; err != nil {
+		return coverage, err
+	}
+	coverage.LatestMarketDate = latest.MarketDate
+	coverage.LatestEventKnownAt = latest.EventKnownAt
+	return coverage, nil
 }
 
 func forwardOpenToCloseReturn(bars []database.QuantMarketBar, signalDate time.Time, horizon int) (float64, bool) {

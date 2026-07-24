@@ -2,6 +2,15 @@
 
 FundLive 继续负责评分、事件解释与基金映射。QuantConnect Lean 只承担组合回测、成交、费用、滑点、回撤和基准比较，不参与线上 V4 分数计算。
 
+当前固定实验为 `risk-v1`，所有变体共享同一标的池、信号、样本区间、费用和成交规则：
+
+| 变体 | 规则 |
+| --- | --- |
+| A | 周度 Top 5 等权；跌出 Top 5 后退出 |
+| B | 周度 Top 5 进入；跌出 Top 8 后退出 |
+| C | 月度调仓、Top 8 退出缓冲；目标权重变化不足 250bps 不交易 |
+| D | C + 20 日逆波动率、单只 30% 上限、沪深300 120 日趋势过滤；弱市目标敞口 50% |
+
 ## 数据边界
 
 - `quant_event_versions` 按版本保存事件，历史查询必须满足 `known_at <= decision_at`。
@@ -94,6 +103,51 @@ curl 'http://127.0.0.1:8080/api/v1/quant/backtests/<job-id>'
 ```
 
 策略使用每周最后一个交易日收盘信号，在下一交易日以市场单成交；选取 Top 5、每只目标权重20%。上市不足120个交易日、近20日平均成交额低于2000万元或缺少价格的标的不参与，不足5只时保留现金。
+
+## 运行固定 A-D 实验
+
+先确保历史代理信号已生成且 Lean Worker 正常消费 Dragonfly Stream：
+
+```bash
+go run ./cmd/run-quant-experiment --preset risk-v1
+```
+
+命令会按共同可用日期自动确定区间，幂等创建四个任务并入队。也可显式传入 `--start` 和 `--end`。输出的 `experiment` ID 可通过以下接口和页面查看：
+
+```bash
+curl 'http://127.0.0.1:8080/api/v1/quant/backtest-experiments?limit=6'
+curl 'http://127.0.0.1:8080/api/v1/quant/backtest-experiments/<experiment-id>'
+```
+
+```text
+/analysis/experiments/<experiment-id>
+```
+
+Worker 会保留 Lean 原始结果，并写入稳定的 `quant-backtest.v1` 结果：策略、沪深300、试点池等权、现金与回撤曲线，以及收益、CAGR、回撤、Sharpe、Sortino、信息比率、换手、费用、订单和自然年收益。曲线只保留沪深300实际交易日；调仓按 1 倍现金账户目标计算数量，先提交减仓后提交加仓，换仓批次结算后恢复 1 倍买入力，并预留 1% 组合价值覆盖费用和滑点。当前实现版本为 `risk-v1.2`，实现版本会进入任务和实验幂等键。B-D 只有同时改善 Sharpe 和最大回撤、CAGR 相对 A 少于 1 个百分点，并在至少 3 个完整年度跑赢 A，才显示“风险收益改善”。
+
+## 生产更新与回填
+
+从仓库根目录按顺序执行：
+
+```bash
+./scripts/deploy-backend.sh
+./scripts/deploy-lean-worker.sh
+./scripts/deploy-frontend.sh
+
+set -a
+source /etc/fund-live/fundlive.env
+set +a
+export FUNDLIVE_CONFIG=/etc/fund-live/fundlive.yaml
+
+go run ./cmd/recompute-fund-analysis-snapshots --limit 120
+go run ./cmd/run-quant-experiment --preset risk-v1
+```
+
+后端启动时会应用事件来源字段宽度和实验表迁移。回填完成后，`/api/v1/quant/validation?mode=historical_proxy` 的 `coverage` 应出现事件、映射基金、实验数量和最新数据时间；容器日志中不应再出现 `value too long for type character varying(16)` 或分时唯一键冲突。
+
+## 外部事件研究器
+
+TradingAgents-CN 本轮只预留 [`event-intel.v1`](event-intel-shadow-contract.md) shadow 契约。它不能直接调用 Lean、修改 V4 分数或生成生产交易信号；未来导入前还需完成来源许可、事件去重、点时泄漏和前向验证。
 
 ## 事件接口
 

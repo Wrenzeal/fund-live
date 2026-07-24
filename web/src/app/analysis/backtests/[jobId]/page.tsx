@@ -7,7 +7,7 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import { AppTopBar } from '@/components/app-top-bar'
 import { LoadingSpinner } from '@/components/loading-indicator'
 import { SiteFooter } from '@/components/site-footer'
-import { useQuantBacktest } from '@/hooks/use-fund-data'
+import { useQuantBacktest, type QuantNormalizedResult } from '@/hooks/use-fund-data'
 
 type EquityPoint = { time: number; value: number }
 
@@ -15,8 +15,8 @@ export default function QuantBacktestPage() {
   const params = useParams<{ jobId: string }>()
   const jobId = typeof params?.jobId === 'string' ? params.jobId : ''
   const { job, error, isLoading, isValidating } = useQuantBacktest(jobId)
-  const equity = extractEquityPoints(job?.equity_curve)
-  const metrics = flattenMetrics(job?.metrics)
+  const chart = buildBacktestSeries(job?.normalized_result?.series.strategy, job?.normalized_result?.series.csi300, job?.equity_curve)
+  const metrics = job?.normalized_result ? normalizedMetricEntries(job.normalized_result.summary) : flattenMetrics(job?.metrics)
 
   return (
     <div className="min-h-[100dvh]">
@@ -60,14 +60,15 @@ export default function QuantBacktestPage() {
                 <h2 className="text-lg font-black text-theme-primary">组合与基准曲线</h2>
                 <p className="mt-1 text-xs text-theme-muted">成交费用与滑点已计入组合结果；基准包含沪深300、试点池等权和现金。</p>
                 <div className="mt-5 h-80">
-                  {equity.length > 1 ? (
+                  {chart.length > 1 ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={equity}>
+                      <LineChart data={chart}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--card-border)" />
                         <XAxis dataKey="time" type="number" domain={['dataMin', 'dataMax']} tickFormatter={(value) => new Date(value * 1000).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })} stroke="var(--text-muted)" />
                         <YAxis stroke="var(--text-muted)" width={56} />
                         <Tooltip labelFormatter={(value) => new Date(Number(value) * 1000).toLocaleString('zh-CN')} />
-                        <Line type="monotone" dataKey="value" stroke="#67e8f9" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="strategy" name="策略" stroke="#67e8f9" strokeWidth={2} dot={false} connectNulls />
+                        <Line type="monotone" dataKey="benchmark" name="沪深300" stroke="#f59e0b" strokeWidth={1.6} strokeDasharray="5 4" dot={false} connectNulls />
                       </LineChart>
                     </ResponsiveContainer>
                   ) : <div className="flex h-full items-center justify-center text-sm text-theme-muted">任务完成后显示净值曲线</div>}
@@ -123,4 +124,27 @@ function extractEquityPoints(charts?: Record<string, unknown>): EquityPoint[] {
   }
   visit(charts)
   return candidates.sort((left, right) => right.length - left.length)[0] || []
+}
+
+function buildBacktestSeries(strategy?: EquityPoint[], benchmark?: EquityPoint[], rawCharts?: Record<string, unknown>) {
+  const resolvedStrategy = strategy?.length ? strategy : extractEquityPoints(rawCharts)
+  const byTime = new Map<number, { time: number; strategy?: number; benchmark?: number }>()
+  resolvedStrategy.forEach((point) => byTime.set(point.time, { ...(byTime.get(point.time) || { time: point.time }), strategy: point.value }))
+  benchmark?.forEach((point) => byTime.set(point.time, { ...(byTime.get(point.time) || { time: point.time }), benchmark: point.value }))
+  return Array.from(byTime.values()).sort((left, right) => left.time - right.time)
+}
+
+function normalizedMetricEntries(summary: QuantNormalizedResult['summary']) {
+  return [
+    ['累计收益', `${summary.total_return_pct.toFixed(2)}%`],
+    ['年化收益', `${summary.cagr_pct.toFixed(2)}%`],
+    ['最大回撤', `${summary.max_drawdown_pct.toFixed(2)}%`],
+    ['Sharpe', summary.sharpe.toFixed(3)],
+    ['Sortino', summary.sortino.toFixed(3)],
+    ['沪深300超额', `${summary.excess_return_pct.toFixed(2)}%`],
+    ['组合换手率', `${summary.portfolio_turnover_pct.toFixed(2)}%`],
+    ['总费用', `¥${summary.total_fees_cny.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`],
+    ['总订单', String(summary.total_orders)],
+    ['结束净值', `¥${summary.end_equity_cny.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`],
+  ] as [string, string][]
 }

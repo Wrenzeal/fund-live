@@ -9,7 +9,7 @@ import { FundAnalysisBadge } from '@/components/fund-analysis-badge'
 import { FundAnalysisEventHint } from '@/components/fund-analysis-event-hint'
 import { LoadingSpinner } from '@/components/loading-indicator'
 import { SiteFooter } from '@/components/site-footer'
-import { useFundAnalysisRankings, useQuantBacktests, useQuantValidationSummary, type FundAnalysisRankingItem } from '@/hooks/use-fund-data'
+import { useFundAnalysisRankings, useQuantBacktests, useQuantBacktestExperiments, useQuantValidationSummary, type FundAnalysisRankingItem } from '@/hooks/use-fund-data'
 import { cn } from '@/lib/utils'
 
 function percentValue(value?: string) {
@@ -107,7 +107,9 @@ function HeroStat({ label, value, active = false }: { label: string; value: stri
 function QuantValidationPanel() {
   const { summary, isLoading, error } = useQuantValidationSummary()
   const { jobs } = useQuantBacktests()
+  const { experiments } = useQuantBacktestExperiments()
   const latestJob = jobs[0]
+  const latestExperiment = experiments[0]
 
   return (
     <section className="overflow-hidden rounded-3xl border border-cyan-500/20 bg-cyan-500/[0.06] p-5 md:p-6">
@@ -126,8 +128,9 @@ function QuantValidationPanel() {
           </div>
         </div>
 
-        <div className="grid w-full gap-2 sm:grid-cols-2 xl:max-w-2xl xl:grid-cols-4">
+        <div className="grid w-full gap-2 sm:grid-cols-2 xl:max-w-4xl xl:grid-cols-6">
           <ValidationMetric label="信号样本" value={summary ? `${summary.signal_count}` : '--'} />
+          <ValidationMetric label="真实事件" value={summary ? `${summary.coverage?.event_count || 0}` : '--'} detail={`覆盖 ${summary?.coverage?.mapped_fund_count || 0} 只基金`} />
           {(summary?.horizons || []).map((item) => (
             <ValidationMetric
               key={item.horizon_days}
@@ -142,7 +145,11 @@ function QuantValidationPanel() {
 
       <div className="mt-5 flex flex-col gap-2 border-t border-cyan-500/15 pt-4 text-xs text-theme-secondary sm:flex-row sm:items-center sm:justify-between">
         <span>三重基准：沪深300 / 试点池等权 / 现金</span>
-        {latestJob ? (
+        {latestExperiment ? (
+          <Link href={`/analysis/experiments/${latestExperiment.id}`} className="text-cyan-100 transition-colors hover:text-cyan-50">
+            A–D 风险实验：{backtestStatusLabel(latestExperiment.status)} · {latestExperiment.id.slice(0, 8)}
+          </Link>
+        ) : latestJob ? (
           <Link href={`/analysis/backtests/${latestJob.id}`} className="text-cyan-100 transition-colors hover:text-cyan-50">
             Lean 任务：{backtestStatusLabel(latestJob.status)} · {latestJob.id.slice(0, 8)}
           </Link>
@@ -164,11 +171,13 @@ function ValidationMetric({ label, value, detail }: { label: string; value: stri
 
 function backtestStatusLabel(status: string) {
   switch (status) {
+    case 'pending': return '等待运行'
     case 'queued': return '排队中'
     case 'running': return '运行中'
     case 'completed': return '已完成'
     case 'failed': return '运行失败'
     case 'queue_failed': return '队列不可用'
+    case 'empty': return '暂无任务'
     default: return status
   }
 }

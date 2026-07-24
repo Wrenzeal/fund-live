@@ -67,6 +67,8 @@ func TestInitDBCreatesCoreSchemaWithoutAutoMigrate(t *testing.T) {
 		"quant_trading_calendar",
 		"quant_signal_history",
 		"quant_backtest_jobs",
+		"quant_backtest_experiments",
+		"quant_backtest_experiment_jobs",
 		"tb_user",
 		"tb_user_session",
 		"tb_user_favorite_fund",
@@ -104,6 +106,8 @@ func TestInitDBCreatesCoreSchemaWithoutAutoMigrate(t *testing.T) {
 		"20260404_fund_history_unique_index",
 		"20260404_fund_time_series_unique_index",
 		"20260723_quant_research_foundation",
+		"20260724_quant_event_source_tier_width",
+		"20260724_quant_risk_experiments",
 		"20260406_issue_tables",
 		"20260406_announcement_tables",
 	}
@@ -116,5 +120,20 @@ func TestInitDBCreatesCoreSchemaWithoutAutoMigrate(t *testing.T) {
 		if !applied {
 			t.Fatalf("expected migration %s to be recorded as applied", id)
 		}
+	}
+
+	var sourceTierWidth int
+	if err := db.Raw(`
+		SELECT character_maximum_length
+		FROM information_schema.columns
+		WHERE table_name = 'quant_event_versions' AND column_name = 'source_tier'
+	`).Scan(&sourceTierWidth).Error; err != nil {
+		t.Fatalf("read quant_event_versions.source_tier width: %v", err)
+	}
+	if sourceTierWidth != 32 {
+		t.Fatalf("quant_event_versions.source_tier width = %d, want 32 for official_aggregator", sourceTierWidth)
+	}
+	if !db.Migrator().HasColumn(&QuantBacktestJob{}, "NormalizedJSON") {
+		t.Fatal("quant_backtest_jobs.normalized_result_json is missing or not mapped by GORM")
 	}
 }

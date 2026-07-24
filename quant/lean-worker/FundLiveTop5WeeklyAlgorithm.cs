@@ -6,6 +6,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using QuantConnect;
 using QuantConnect.Algorithm;
+using QuantConnect.Algorithm.Framework.Portfolio;
 using QuantConnect.Data;
 using QuantConnect.Orders;
 using QuantConnect.Orders.Fees;
@@ -20,10 +21,15 @@ namespace QuantConnect.Algorithm.CSharp
         private readonly Dictionary<string, Symbol> _marketSymbols = new();
         private readonly Dictionary<string, decimal> _latestScores = new();
         private readonly Dictionary<string, Queue<decimal>> _amountWindows = new();
+        private readonly Dictionary<string, Queue<decimal>> _returnWindows = new();
+        private readonly Dictionary<string, decimal> _lastAdjustedCloses = new();
+        private readonly Dictionary<string, decimal> _latestAdjustedCloses = new();
         private readonly Dictionary<string, int> _observedDays = new();
         private readonly Dictionary<string, decimal> _benchmarkStartPrices = new();
+        private readonly Queue<decimal> _benchmarkTrendWindow = new();
         private FundLiveJobManifest _job = new();
         private bool _rebalanceRequested;
+        private bool _temporaryRebalanceBuyingPower;
 
         public override void Initialize()
         {
@@ -42,31 +48,33 @@ namespace QuantConnect.Algorithm.CSharp
             SetStartDate(DateTime.ParseExact(_job.Parameters.StartDate, "yyyy-MM-dd", CultureInfo.InvariantCulture));
             SetEndDate(DateTime.ParseExact(_job.Parameters.EndDate, "yyyy-MM-dd", CultureInfo.InvariantCulture));
             SetCash(_job.Parameters.InitialCash);
-
             foreach (var ticker in _job.Symbols.Concat(new[] { "000300" }).Distinct())
             {
                 var properties = new SymbolProperties(ticker, "CNY", 1m, 0.001m, 100m, ticker);
                 var exchangeHours = SecurityExchangeHours.AlwaysOpen(TimeZones.Shanghai);
-                var security = AddData<FundLiveDailyBar>(ticker, properties, exchangeHours, Resolution.Daily);
+                var security = AddData<FundLiveDailyBar>(ticker, properties, exchangeHours, Resolution.Daily, fillForward: false);
                 security.SetFeeModel(new FundLiveEtfFeeModel(_job.Parameters.CommissionBps, _job.Parameters.MinimumCommissionCny));
                 security.SetFillModel(new FundLiveNextOpenFillModel());
                 security.SetSlippageModel(new FundLiveConstantSlippageModel(_job.Parameters.SlippageBps));
                 _marketSymbols[ticker] = security.Symbol;
                 _amountWindows[ticker] = new Queue<decimal>();
+                _returnWindows[ticker] = new Queue<decimal>();
                 _observedDays[ticker] = 0;
             }
 
             foreach (var ticker in _job.Symbols)
             {
-                AddData<FundLiveSignal>(ticker, Resolution.Daily, TimeZones.Shanghai);
+                AddData<FundLiveSignal>(ticker, Resolution.Daily, TimeZones.Shanghai, fillForward: false);
             }
 
             SetBenchmark(_marketSymbols["000300"]);
-            SetWarmUp(_job.Parameters.MinimumListingDays, Resolution.Daily);
+            SetWarmUp(Math.Max(_job.Parameters.MinimumListingDays, Math.Max(_job.Parameters.VolatilityLookbackDays, _job.Parameters.TrendFilterDays)), Resolution.Daily);
         }
 
         public override void OnData(Slice data)
         {
+            RestoreCashAccountLeverageWhenSettled();
+
             foreach (var entry in data.Get<FundLiveDailyBar>())
             {
                 var ticker = entry.Key.Value;
@@ -78,9 +86,32 @@ namespace QuantConnect.Algorithm.CSharp
                 {
                     window.Dequeue();
                 }
-                if (!_benchmarkStartPrices.ContainsKey(ticker) && bar.Close > 0)
+                if (bar.AdjustedClose > 0)
                 {
-                    _benchmarkStartPrices[ticker] = bar.Close;
+                    if (_lastAdjustedCloses.TryGetValue(ticker, out var previous) && previous > 0)
+                    {
+                        var returns = _returnWindows[ticker];
+                        returns.Enqueue(bar.AdjustedClose / previous - 1m);
+                        var maximumReturnWindow = Math.Max(20, _job.Parameters.VolatilityLookbackDays);
+                        while (returns.Count > maximumReturnWindow)
+                        {
+                            returns.Dequeue();
+                        }
+                    }
+                    _lastAdjustedCloses[ticker] = bar.AdjustedClose;
+                    _latestAdjustedCloses[ticker] = bar.AdjustedClose;
+                    if (!_benchmarkStartPrices.ContainsKey(ticker))
+                    {
+                        _benchmarkStartPrices[ticker] = bar.AdjustedClose;
+                    }
+                    if (ticker == "000300" && _job.Parameters.TrendFilterDays > 0)
+                    {
+                        _benchmarkTrendWindow.Enqueue(bar.AdjustedClose);
+                        while (_benchmarkTrendWindow.Count > _job.Parameters.TrendFilterDays)
+                        {
+                            _benchmarkTrendWindow.Dequeue();
+                        }
+                    }
                 }
             }
 
@@ -100,32 +131,166 @@ namespace QuantConnect.Algorithm.CSharp
 
         private void RebalancePortfolio()
         {
-            var selected = _latestScores
+            var ranked = _latestScores
                 .Where(entry => IsEligible(entry.Key))
                 .OrderByDescending(entry => entry.Value)
                 .ThenBy(entry => entry.Key, StringComparer.Ordinal)
-                .Take(_job.Parameters.TopN)
-                .Select(entry => entry.Key)
-                .ToHashSet(StringComparer.Ordinal);
+                .Select((entry, index) => new RankedAsset(entry.Key, entry.Value, index + 1))
+                .ToList();
 
-            foreach (var ticker in _job.Symbols)
+            var selected = ranked
+                .Where(entry => entry.Rank <= _job.Parameters.ExitRank && Portfolio[_marketSymbols[entry.Ticker]].Invested)
+                .Take(_job.Parameters.TopN)
+                .Select(entry => entry.Ticker)
+                .ToList();
+            foreach (var entry in ranked.Where(entry => entry.Rank <= _job.Parameters.TopN))
             {
-                var symbol = _marketSymbols[ticker];
-                if (Portfolio[symbol].Invested && !selected.Contains(ticker))
+                if (selected.Count >= _job.Parameters.TopN)
                 {
-                    Liquidate(symbol, "Weekly Top-N exit");
+                    break;
+                }
+                if (!selected.Contains(entry.Ticker, StringComparer.Ordinal))
+                {
+                    selected.Add(entry.Ticker);
                 }
             }
+            var targets = BuildTargetWeights(selected);
+            var portfolioTargets = new List<PortfolioTarget>();
+            foreach (var ticker in _job.Symbols.OrderBy(value => value, StringComparer.Ordinal))
+            {
+                var symbol = _marketSymbols[ticker];
+                if (!targets.TryGetValue(ticker, out var targetWeight) || targetWeight <= 0m)
+                {
+                    if (Portfolio[symbol].Invested)
+                    {
+                        portfolioTargets.Add(new PortfolioTarget(symbol, 0m));
+                    }
+                    continue;
+                }
+                var currentWeight = CurrentPortfolioWeight(symbol);
+                var differenceBps = Math.Abs(targetWeight - currentWeight) * 10000m;
+                if (Portfolio[symbol].Invested && differenceBps < _job.Parameters.MinimumWeightChangeBps)
+                {
+                    continue;
+                }
+                portfolioTargets.Add(new PortfolioTarget(symbol, targetWeight));
+            }
+            if (portfolioTargets.Count > 0)
+            {
+                var orders = portfolioTargets
+                    .Select(target => new RebalanceOrder(target.Symbol, CalculateOrderQuantity(target.Symbol, target.Quantity)))
+                    .Where(order => order.Quantity != 0m)
+                    .OrderBy(order => order.Quantity > 0m ? 1 : 0)
+                    .ThenBy(order => order.Symbol.Value, StringComparer.Ordinal)
+                    .ToList();
+                if (orders.Count == 0)
+                {
+                    return;
+                }
+                foreach (var order in orders)
+                {
+                    Securities[order.Symbol].SetLeverage(2m);
+                }
+                _temporaryRebalanceBuyingPower = true;
+                foreach (var order in orders)
+                {
+                    MarketOrder(order.Symbol, order.Quantity, false, $"{_job.Parameters.RebalanceFrequency} ranked rebalance");
+                }
+            }
+        }
 
-            if (selected.Count == 0)
+        private void RestoreCashAccountLeverageWhenSettled()
+        {
+            if (!_temporaryRebalanceBuyingPower || Transactions.GetOpenOrders().Count != 0)
             {
                 return;
             }
-            var targetWeight = 1m / _job.Parameters.TopN;
-            foreach (var ticker in selected)
+            foreach (var ticker in _job.Symbols)
             {
-                SetHoldings(_marketSymbols[ticker], targetWeight, liquidateExistingHoldings: false, tag: $"Weekly score {_latestScores[ticker]:F2}");
+                Securities[_marketSymbols[ticker]].SetLeverage(1m);
             }
+            _temporaryRebalanceBuyingPower = false;
+        }
+
+        private Dictionary<string, decimal> BuildTargetWeights(IReadOnlyCollection<string> selected)
+        {
+            var grossExposure = TargetGrossExposure() * 0.99m;
+            if (_job.Parameters.WeightingMethod != "inverse_volatility")
+            {
+                var equalWeight = grossExposure / _job.Parameters.TopN;
+                return selected.ToDictionary(ticker => ticker, _ => equalWeight, StringComparer.Ordinal);
+            }
+
+            var inverseVolatility = selected.ToDictionary(
+                ticker => ticker,
+                ticker => 1m / ReturnVolatility(ticker),
+                StringComparer.Ordinal
+            );
+            var result = new Dictionary<string, decimal>(StringComparer.Ordinal);
+            var remaining = selected.ToList();
+            var remainingExposure = grossExposure;
+            const decimal maximumWeight = 0.30m;
+            while (remaining.Count > 0 && remainingExposure > 0)
+            {
+                var rawTotal = remaining.Sum(ticker => inverseVolatility[ticker]);
+                if (rawTotal <= 0)
+                {
+                    break;
+                }
+                var newlyCapped = remaining
+                    .Where(ticker => remainingExposure * inverseVolatility[ticker] / rawTotal > maximumWeight)
+                    .ToList();
+                if (newlyCapped.Count == 0)
+                {
+                    foreach (var ticker in remaining)
+                    {
+                        result[ticker] = remainingExposure * inverseVolatility[ticker] / rawTotal;
+                    }
+                    break;
+                }
+                foreach (var ticker in newlyCapped)
+                {
+                    result[ticker] = maximumWeight;
+                    remainingExposure -= maximumWeight;
+                    remaining.Remove(ticker);
+                }
+            }
+            return result;
+        }
+
+        private decimal TargetGrossExposure()
+        {
+            if (_job.Parameters.TrendFilterDays <= 0 || _benchmarkTrendWindow.Count < _job.Parameters.TrendFilterDays)
+            {
+                return 1m;
+            }
+            var movingAverage = _benchmarkTrendWindow.Average();
+            if (!_latestAdjustedCloses.TryGetValue("000300", out var benchmarkClose) || benchmarkClose >= movingAverage)
+            {
+                return 1m;
+            }
+            return _job.Parameters.WeakMarketExposureBps / 10000m;
+        }
+
+        private decimal CurrentPortfolioWeight(Symbol symbol)
+        {
+            if (Portfolio.TotalPortfolioValue <= 0)
+            {
+                return 0m;
+            }
+            return Math.Abs(Portfolio[symbol].HoldingsValue) / Portfolio.TotalPortfolioValue;
+        }
+
+        private decimal ReturnVolatility(string ticker)
+        {
+            var values = _returnWindows[ticker].TakeLast(_job.Parameters.VolatilityLookbackDays).Select(value => (double)value).ToArray();
+            if (values.Length < _job.Parameters.VolatilityLookbackDays)
+            {
+                return 0m;
+            }
+            var mean = values.Average();
+            var variance = values.Sum(value => Math.Pow(value - mean, 2)) / (values.Length - 1);
+            return (decimal)Math.Sqrt(variance);
         }
 
         private bool IsEligible(string ticker)
@@ -139,22 +304,26 @@ namespace QuantConnect.Algorithm.CSharp
                 return false;
             }
             var amounts = _amountWindows[ticker];
-            return amounts.Count == 20 && amounts.Average() >= _job.Parameters.MinimumAverageAmount;
+            if (amounts.Count != 20 || amounts.Average() < _job.Parameters.MinimumAverageAmount)
+            {
+                return false;
+            }
+            return _job.Parameters.WeightingMethod != "inverse_volatility" || ReturnVolatility(ticker) > 0;
         }
 
         private void PlotBenchmarks()
         {
-            if (_marketSymbols.TryGetValue("000300", out var benchmark) && _benchmarkStartPrices.TryGetValue("000300", out var benchmarkStart) && benchmarkStart > 0)
+            if (_benchmarkStartPrices.TryGetValue("000300", out var benchmarkStart) && benchmarkStart > 0 && _latestAdjustedCloses.TryGetValue("000300", out var benchmarkPrice))
             {
-                Plot("Benchmarks", "沪深300", Securities[benchmark].Price / benchmarkStart * 100m);
+                Plot("Benchmarks", "沪深300", benchmarkPrice / benchmarkStart * 100m);
             }
 
             var poolReturns = new List<decimal>();
             foreach (var ticker in _job.Symbols)
             {
-                if (_benchmarkStartPrices.TryGetValue(ticker, out var start) && start > 0 && Securities[_marketSymbols[ticker]].Price > 0)
+                if (_benchmarkStartPrices.TryGetValue(ticker, out var start) && start > 0 && _latestAdjustedCloses.TryGetValue(ticker, out var current) && current > 0)
                 {
-                    poolReturns.Add(Securities[_marketSymbols[ticker]].Price / start);
+                    poolReturns.Add(current / start);
                 }
             }
             if (poolReturns.Count > 0)
@@ -163,6 +332,9 @@ namespace QuantConnect.Algorithm.CSharp
             }
             Plot("Benchmarks", "现金", 100m);
         }
+
+        private sealed record RankedAsset(string Ticker, decimal Score, int Rank);
+        private sealed record RebalanceOrder(Symbol Symbol, decimal Quantity);
     }
 
     public class FundLiveDailyBar : BaseData
@@ -320,5 +492,19 @@ namespace QuantConnect.Algorithm.CSharp
         public int MinimumListingDays { get; set; }
         [JsonProperty("minimum_average_amount")]
         public decimal MinimumAverageAmount { get; set; }
+        [JsonProperty("rebalance_frequency")]
+        public string RebalanceFrequency { get; set; } = "weekly";
+        [JsonProperty("exit_rank")]
+        public int ExitRank { get; set; }
+        [JsonProperty("minimum_weight_change_bps")]
+        public int MinimumWeightChangeBps { get; set; }
+        [JsonProperty("weighting_method")]
+        public string WeightingMethod { get; set; } = "equal";
+        [JsonProperty("volatility_lookback_days")]
+        public int VolatilityLookbackDays { get; set; }
+        [JsonProperty("trend_filter_days")]
+        public int TrendFilterDays { get; set; }
+        [JsonProperty("weak_market_exposure_bps")]
+        public int WeakMarketExposureBps { get; set; }
     }
 }

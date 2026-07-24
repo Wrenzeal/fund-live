@@ -494,6 +494,57 @@ export interface QuantValidationSummary {
     last_signal_date?: string
     horizons: QuantForwardHorizonSummary[]
     lookahead_boundary: string
+    coverage: {
+        instrument_count: number
+        market_bar_count: number
+        event_count: number
+        event_version_count: number
+        mapped_fund_count: number
+        experiment_count: number
+        latest_market_date?: string
+        latest_event_known_at?: string
+    }
+}
+
+export interface QuantSeriesPoint {
+    time: number
+    value: number
+}
+
+export interface QuantNormalizedResult {
+    schema_version: 'quant-backtest.v1'
+    summary: {
+        total_return_pct: number
+        cagr_pct: number
+        max_drawdown_pct: number
+        sharpe: number
+        sortino: number
+        information_ratio: number
+        portfolio_turnover_pct: number
+        total_fees_cny: number
+        total_orders: number
+        start_equity_cny: number
+        end_equity_cny: number
+        csi300_return_pct: number
+        pilot_equal_return_pct: number
+        cash_return_pct: number
+        excess_return_pct: number
+    }
+    series: {
+        strategy: QuantSeriesPoint[]
+        csi300: QuantSeriesPoint[]
+        pilot_equal_weight: QuantSeriesPoint[]
+        cash: QuantSeriesPoint[]
+        drawdown: QuantSeriesPoint[]
+    }
+    annual_returns: Array<{
+        year: number
+        trading_days: number
+        strategy_return_pct: number
+        csi300_return_pct: number
+        pilot_equal_return_pct: number
+        excess_over_csi300_pct: number
+    }>
 }
 
 export interface QuantBacktestJob {
@@ -504,13 +555,41 @@ export interface QuantBacktestJob {
     signal_mode: string
     engine: string
     engine_version?: string
-    parameters: Record<string, unknown>
+    parameters?: Record<string, unknown>
     metrics?: Record<string, unknown>
     equity_curve?: Record<string, unknown>
     benchmarks?: Record<string, unknown>
+    normalized_result?: QuantNormalizedResult
     error_message?: string
     created_at: string
     completed_at?: string
+}
+
+export interface QuantBacktestExperiment {
+    id: string
+    preset: 'risk-v1'
+    status: 'empty' | 'pending' | 'running' | 'completed' | 'failed'
+    universe_version: string
+    signal_mode: string
+    start_date: string
+    end_date: string
+    base_parameters: Record<string, unknown>
+    variants: Array<{
+        key: 'A' | 'B' | 'C' | 'D'
+        name: string
+        description: string
+        job: QuantBacktestJob
+        risk_gate?: {
+            qualified: boolean
+            sharpe_improved: boolean
+            drawdown_improved: boolean
+            cagr_preserved: boolean
+            annual_wins: number
+            comparable_years: number
+        }
+    }>
+    created_at: string
+    updated_at: string
 }
 
 // 默认 SWR 配置
@@ -1287,6 +1366,24 @@ export function useQuantBacktest(jobId: string) {
         { refreshInterval: (latest) => latest?.data?.status === 'queued' || latest?.data?.status === 'running' ? 5000 : 0, revalidateOnFocus: false }
     )
     return { job: data?.data, error, isLoading, isValidating }
+}
+
+export function useQuantBacktestExperiments() {
+    const { data, error, isLoading, isValidating } = useSWR<{ data: { items: QuantBacktestExperiment[]; count: number } }>(
+        `${API_BASE_URL}/api/v1/quant/backtest-experiments?limit=6`,
+        (url: string) => fetchEnvelopeWithTimeout<{ items: QuantBacktestExperiment[]; count: number }>(url, 15000),
+        { refreshInterval: 30000, revalidateOnFocus: false }
+    )
+    return { experiments: data?.data?.items || [], error, isLoading, isValidating }
+}
+
+export function useQuantBacktestExperiment(experimentId: string) {
+    const { data, error, isLoading, isValidating } = useSWR<{ data: QuantBacktestExperiment }>(
+        experimentId ? `${API_BASE_URL}/api/v1/quant/backtest-experiments/${encodeURIComponent(experimentId)}` : null,
+        (url: string) => fetchEnvelopeWithTimeout<QuantBacktestExperiment>(url, 15000),
+        { refreshInterval: (latest) => latest?.data?.status === 'running' || latest?.data?.status === 'pending' ? 5000 : 0, revalidateOnFocus: false }
+    )
+    return { experiment: data?.data, error, isLoading, isValidating }
 }
 
 /**

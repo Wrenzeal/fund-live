@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **固定 A-D 风险收益实验与公开对照页**
+  - 新增 `risk-v1` 四组固定策略，依次验证排名退出缓冲、月度低换手和逆波动率/趋势过滤；实验与任务保持幂等关联。
+  - Lean Worker 输出 `quant-backtest.v1` 标准化结果，统一收益、回撤、风险指标、费用、订单、基准曲线和自然年收益口径。
+  - 新增公开实验列表/详情 API 与 `/analysis/experiments/[experimentId]`，展示曲线、核心指标、年度表现和相对 A 的风险门槛。
+  - 新增 `cmd/run-quant-experiment --preset risk-v1`，支持生产 Dragonfly 队列运行四组真实 Lean 回测。
+  - 为 TradingAgents-CN 等外部研究器预留 `event-intel.v1` shadow 契约；本轮不提供导入器，不改变 V4 分数或 Lean 信号。
+
 - **全站前端体验收敛**
   - 主导航改为首页、自选、持仓、量化优先，公告和反馈降为次级入口；登录、搜索、主题切换和移动端导航保留键盘与触控路径。
   - 顶部主导航由四个独立描边按钮收敛为一体式文字导航；当前页使用短指示条，`xl` 以下统一切换为四列导航行，补齐平板宽度下的入口断档。
@@ -80,6 +87,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 前端 dashboard 请求增加 `include_analysis=false`，避免页面已有独立 analysis 请求时重复构建量化分析。
 
 ### Fixed
+- **量化事件与回测数据可靠性修复**
+  - `quant_event_versions.source_tier` 扩至 32 字符，修复 `official_aggregator` 导致整批事件事务回滚。
+  - 分时替换按基金和日期加 PostgreSQL advisory transaction lock，并在入库前按微秒时间戳去重，避免并发刷新触发唯一键错误。
+  - Lean 数据预热按策略最大 lookback 动态扩展，避免 120 日趋势策略首笔交易无故延后；标准化结果字段显式映射实际迁移列。
+  - 自然年收益从第二年起使用上一年最后一个净值作为年初基准，避免漏掉跨年首个交易日收益。
+
 - **基金中文单字与名称中段搜索修复**
   - 中文基金名称支持从单个汉字开始搜索，例如输入“蓝”即可命中名称中段包含该字的基金；基金代码和英文仍需至少输入 2 个字符。
   - 搜索弹层区分“字符不足”和“确实无结果”，避免未发起请求时错误显示“没有找到匹配基金”。

@@ -4,6 +4,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -239,32 +240,54 @@ func (r *PostgresFundRepository) SaveTimeSeriesPoint(ctx context.Context, point 
 func (r *PostgresFundRepository) ReplaceTimeSeriesByDate(ctx context.Context, fundID string, date time.Time, points []domain.TimeSeriesPoint) error {
 	startOfDay := date.Truncate(24 * time.Hour)
 	endOfDay := startOfDay.Add(24 * time.Hour)
+	lockScope := fmt.Sprintf("fund_time_series:%s:%s", fundID, startOfDay.Format("2006-01-02"))
+	dbPoints := normalizeFundTimeSeriesPoints(fundID, points)
 
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?, 0))`, lockScope).Error; err != nil {
+			return fmt.Errorf("failed to lock time series replacement: %w", err)
+		}
 		if err := tx.Where("fund_id = ? AND time >= ? AND time < ?", fundID, startOfDay, endOfDay).Delete(&database.FundTimeSeries{}).Error; err != nil {
 			return fmt.Errorf("failed to delete old time series: %w", err)
 		}
 
-		if len(points) == 0 {
+		if len(dbPoints) == 0 {
 			return nil
 		}
 
-		dbPoints := make([]database.FundTimeSeries, 0, len(points))
-		for _, point := range points {
-			dbPoints = append(dbPoints, database.FundTimeSeries{
-				FundID:        fundID,
-				Date:          point.Timestamp.Truncate(24 * time.Hour),
-				Time:          point.Timestamp,
-				ChangePercent: point.ChangePercent,
-				EstimateNav:   point.EstimateNav,
-			})
-		}
-
-		if err := tx.Create(&dbPoints).Error; err != nil {
+		if err := tx.Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "fund_id"}, {Name: "time"}},
+			DoUpdates: clause.AssignmentColumns([]string{
+				"date",
+				"change_percent",
+				"estimate_nav",
+			}),
+		}).Create(&dbPoints).Error; err != nil {
 			return fmt.Errorf("failed to insert replaced time series: %w", err)
 		}
 		return nil
 	})
+}
+
+func normalizeFundTimeSeriesPoints(fundID string, points []domain.TimeSeriesPoint) []database.FundTimeSeries {
+	byTimestamp := make(map[string]database.FundTimeSeries, len(points))
+	for _, point := range points {
+		timestamp := point.Timestamp.Truncate(time.Microsecond)
+		key := timestamp.UTC().Format(time.RFC3339Nano)
+		byTimestamp[key] = database.FundTimeSeries{
+			FundID:        fundID,
+			Date:          timestamp.Truncate(24 * time.Hour),
+			Time:          timestamp,
+			ChangePercent: point.ChangePercent,
+			EstimateNav:   point.EstimateNav,
+		}
+	}
+	result := make([]database.FundTimeSeries, 0, len(byTimestamp))
+	for _, point := range byTimestamp {
+		result = append(result, point)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Time.Before(result[j].Time) })
+	return result
 }
 
 // GetTimeSeriesByDate retrieves all time series points for a fund on a specific date.

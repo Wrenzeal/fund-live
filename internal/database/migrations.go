@@ -72,6 +72,43 @@ var managedMigrations = []sqlMigration{
 		Statements:     quantResearchMigrationStatements,
 	},
 	{
+		ID:             "20260724_quant_event_source_tier_width",
+		RequiredTables: []string{"quant_event_versions"},
+		Statements: []string{
+			`ALTER TABLE quant_event_versions ALTER COLUMN source_tier TYPE varchar(32)`,
+		},
+	},
+	{
+		ID:             "20260724_quant_risk_experiments",
+		RequiredTables: []string{"quant_backtest_jobs"},
+		Statements: []string{
+			`ALTER TABLE quant_backtest_jobs ADD COLUMN IF NOT EXISTS normalized_result_json jsonb`,
+			`CREATE TABLE IF NOT EXISTS quant_backtest_experiments (
+				id char(32) PRIMARY KEY,
+				idempotency_key char(64) NOT NULL UNIQUE,
+				preset varchar(48) NOT NULL,
+				universe_version varchar(32) NOT NULL,
+				signal_mode varchar(32) NOT NULL,
+				start_date date NOT NULL,
+				end_date date NOT NULL,
+				base_parameters_json jsonb NOT NULL,
+				created_at timestamptz NOT NULL DEFAULT now(),
+				updated_at timestamptz NOT NULL DEFAULT now()
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_quant_backtest_experiments_created ON quant_backtest_experiments (created_at DESC)`,
+			`CREATE INDEX IF NOT EXISTS idx_quant_backtest_experiments_scope ON quant_backtest_experiments (preset, universe_version, signal_mode)`,
+			`CREATE TABLE IF NOT EXISTS quant_backtest_experiment_jobs (
+				experiment_id char(32) NOT NULL REFERENCES quant_backtest_experiments(id) ON DELETE CASCADE,
+				job_id char(32) NOT NULL REFERENCES quant_backtest_jobs(id) ON DELETE CASCADE,
+				variant_key varchar(8) NOT NULL,
+				created_at timestamptz NOT NULL DEFAULT now(),
+				PRIMARY KEY (experiment_id, job_id),
+				UNIQUE (experiment_id, variant_key)
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_quant_backtest_experiment_jobs_job ON quant_backtest_experiment_jobs (job_id)`,
+		},
+	},
+	{
 		ID:             "20260416_user_holding_confirmation",
 		RequiredTables: []string{"tb_user_fund_holding"},
 		Statements:     userHoldingConfirmationMigrationStatements,

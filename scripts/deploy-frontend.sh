@@ -17,6 +17,7 @@ FRONTEND_RELEASE_LABEL="${FRONTEND_RELEASE_LABEL:-$(date +%Y%m%d-%H%M%S)}"
 FRONTEND_KEEP_RELEASES="${FRONTEND_KEEP_RELEASES:-5}"
 FRONTEND_INSTALL_CMD="${FRONTEND_INSTALL_CMD:-npm ci}"
 FRONTEND_BUILD_CMD="${FRONTEND_BUILD_CMD:-npm run build}"
+FRONTEND_NODE_BIN="${FRONTEND_NODE_BIN:-$(command -v node)}"
 BACKEND_URL="${BACKEND_URL:-http://127.0.0.1:13896}"
 
 RELEASE_DIR="${FRONTEND_RELEASE_ROOT}/${FRONTEND_RELEASE_LABEL}"
@@ -63,7 +64,11 @@ if pm2 describe "${FRONTEND_PM2_NAME}" >/dev/null 2>&1; then
   pm2 restart "${FRONTEND_PM2_NAME}" --update-env
 else
   echo "[frontend] starting pm2 app: ${FRONTEND_PM2_NAME}"
-  BACKEND_URL="${BACKEND_URL}" pm2 start npm --name "${FRONTEND_PM2_NAME}" --cwd "${FRONTEND_CURRENT_LINK}" -- run start -- -p "${FRONTEND_PORT}"
+  BACKEND_URL="${BACKEND_URL}" pm2 start "${FRONTEND_CURRENT_LINK}/node_modules/next/dist/bin/next" \
+    --name "${FRONTEND_PM2_NAME}" \
+    --cwd "${FRONTEND_CURRENT_LINK}" \
+    --interpreter "${FRONTEND_NODE_BIN}" \
+    -- start -p "${FRONTEND_PORT}"
 fi
 
 pm2 ls

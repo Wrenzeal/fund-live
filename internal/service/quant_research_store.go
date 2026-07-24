@@ -19,10 +19,20 @@ import (
 )
 
 const (
-	QuantUniversePilotV1        = "pilot-v1"
-	QuantSignalModeFullV4       = "full_v4_forward"
-	QuantSignalModeHistoryProxy = "historical_proxy"
-	QuantStrategyTop5Weekly     = "top5_weekly_equal_weight"
+	QuantUniversePilotV1         = "pilot-v1"
+	QuantSignalModeFullV4        = "full_v4_forward"
+	QuantSignalModeHistoryProxy  = "historical_proxy"
+	QuantStrategyTop5Weekly      = "top5_weekly_equal_weight"
+	QuantStrategyTop5Buffer      = "top5_weekly_rank_buffer"
+	QuantStrategyTop5LowTurnover = "top5_monthly_low_turnover"
+	QuantStrategyTop5RiskControl = "top5_monthly_risk_controlled"
+	QuantStrategyTopNRotation    = "top_n_rotation_v2"
+	QuantBacktestImplementation  = "risk-v1.2"
+
+	QuantRebalanceWeekly         = "weekly"
+	QuantRebalanceMonthly        = "monthly"
+	QuantWeightEqual             = "equal"
+	QuantWeightInverseVolatility = "inverse_volatility"
 )
 
 type QuantResearchStore struct {
@@ -121,33 +131,47 @@ func uniqueSortedStrings(values []string) []string {
 }
 
 type QuantBacktestRequest struct {
-	StartDate            string          `json:"start_date"`
-	EndDate              string          `json:"end_date"`
-	UniverseVersion      string          `json:"universe_version"`
-	SignalMode           string          `json:"signal_mode"`
-	InitialCash          decimal.Decimal `json:"initial_cash"`
-	TopN                 int             `json:"top_n"`
-	CommissionBPS        decimal.Decimal `json:"commission_bps"`
-	MinimumCommissionCNY decimal.Decimal `json:"minimum_commission_cny"`
-	SlippageBPS          decimal.Decimal `json:"slippage_bps"`
-	MinimumListingDays   int             `json:"minimum_listing_days"`
-	MinimumAverageAmount decimal.Decimal `json:"minimum_average_amount"`
+	StartDate              string          `json:"start_date"`
+	EndDate                string          `json:"end_date"`
+	UniverseVersion        string          `json:"universe_version"`
+	SignalMode             string          `json:"signal_mode"`
+	InitialCash            decimal.Decimal `json:"initial_cash"`
+	TopN                   int             `json:"top_n"`
+	CommissionBPS          decimal.Decimal `json:"commission_bps"`
+	MinimumCommissionCNY   decimal.Decimal `json:"minimum_commission_cny"`
+	SlippageBPS            decimal.Decimal `json:"slippage_bps"`
+	MinimumListingDays     int             `json:"minimum_listing_days"`
+	MinimumAverageAmount   decimal.Decimal `json:"minimum_average_amount"`
+	RebalanceFrequency     string          `json:"rebalance_frequency"`
+	ExitRank               int             `json:"exit_rank"`
+	MinimumWeightChangeBPS int             `json:"minimum_weight_change_bps"`
+	WeightingMethod        string          `json:"weighting_method"`
+	VolatilityLookbackDays int             `json:"volatility_lookback_days"`
+	TrendFilterDays        int             `json:"trend_filter_days"`
+	WeakMarketExposureBPS  int             `json:"weak_market_exposure_bps"`
 }
 
 func DefaultQuantBacktestRequest() QuantBacktestRequest {
 	end := time.Now().In(time.FixedZone("CST", 8*60*60))
 	return QuantBacktestRequest{
-		StartDate:            end.AddDate(-5, 0, 0).Format("2006-01-02"),
-		EndDate:              end.Format("2006-01-02"),
-		UniverseVersion:      QuantUniversePilotV1,
-		SignalMode:           QuantSignalModeHistoryProxy,
-		InitialCash:          decimal.NewFromInt(1_000_000),
-		TopN:                 5,
-		CommissionBPS:        decimal.NewFromInt(3),
-		MinimumCommissionCNY: decimal.NewFromInt(5),
-		SlippageBPS:          decimal.NewFromInt(5),
-		MinimumListingDays:   120,
-		MinimumAverageAmount: decimal.NewFromInt(20_000_000),
+		StartDate:              end.AddDate(-5, 0, 0).Format("2006-01-02"),
+		EndDate:                end.Format("2006-01-02"),
+		UniverseVersion:        QuantUniversePilotV1,
+		SignalMode:             QuantSignalModeHistoryProxy,
+		InitialCash:            decimal.NewFromInt(1_000_000),
+		TopN:                   5,
+		CommissionBPS:          decimal.NewFromInt(3),
+		MinimumCommissionCNY:   decimal.NewFromInt(5),
+		SlippageBPS:            decimal.NewFromInt(5),
+		MinimumListingDays:     120,
+		MinimumAverageAmount:   decimal.NewFromInt(20_000_000),
+		RebalanceFrequency:     QuantRebalanceWeekly,
+		ExitRank:               5,
+		MinimumWeightChangeBPS: 0,
+		WeightingMethod:        QuantWeightEqual,
+		VolatilityLookbackDays: 20,
+		TrendFilterDays:        0,
+		WeakMarketExposureBPS:  10_000,
 	}
 }
 
@@ -206,6 +230,46 @@ func NormalizeQuantBacktestRequest(input QuantBacktestRequest) (QuantBacktestReq
 	if !input.MinimumAverageAmount.IsPositive() {
 		input.MinimumAverageAmount = defaults.MinimumAverageAmount
 	}
+	input.RebalanceFrequency = strings.ToLower(strings.TrimSpace(input.RebalanceFrequency))
+	if input.RebalanceFrequency == "" {
+		input.RebalanceFrequency = defaults.RebalanceFrequency
+	}
+	if input.RebalanceFrequency != QuantRebalanceWeekly && input.RebalanceFrequency != QuantRebalanceMonthly {
+		return input, fmt.Errorf("rebalance_frequency must be weekly or monthly")
+	}
+	if input.ExitRank <= 0 {
+		input.ExitRank = input.TopN
+	}
+	if input.ExitRank < input.TopN || input.ExitRank > 20 {
+		return input, fmt.Errorf("exit_rank must be between top_n and 20")
+	}
+	if input.MinimumWeightChangeBPS < 0 || input.MinimumWeightChangeBPS > 10_000 {
+		return input, fmt.Errorf("minimum_weight_change_bps must be between 0 and 10000")
+	}
+	input.WeightingMethod = strings.ToLower(strings.TrimSpace(input.WeightingMethod))
+	if input.WeightingMethod == "" {
+		input.WeightingMethod = defaults.WeightingMethod
+	}
+	if input.WeightingMethod != QuantWeightEqual && input.WeightingMethod != QuantWeightInverseVolatility {
+		return input, fmt.Errorf("weighting_method must be equal or inverse_volatility")
+	}
+	if input.VolatilityLookbackDays <= 0 {
+		input.VolatilityLookbackDays = defaults.VolatilityLookbackDays
+	}
+	if input.VolatilityLookbackDays < 10 || input.VolatilityLookbackDays > 252 {
+		return input, fmt.Errorf("volatility_lookback_days must be between 10 and 252")
+	}
+	if input.TrendFilterDays < 0 || input.TrendFilterDays > 252 || (input.TrendFilterDays > 0 && input.TrendFilterDays < 20) {
+		return input, fmt.Errorf("trend_filter_days must be 0 or between 20 and 252")
+	}
+	if input.TrendFilterDays == 0 {
+		input.WeakMarketExposureBPS = 10_000
+	} else if input.WeakMarketExposureBPS <= 0 {
+		input.WeakMarketExposureBPS = 5_000
+	}
+	if input.WeakMarketExposureBPS < 1 || input.WeakMarketExposureBPS > 10_000 {
+		return input, fmt.Errorf("weak_market_exposure_bps must be between 1 and 10000")
+	}
 	return input, nil
 }
 
@@ -221,7 +285,8 @@ func (s *QuantResearchStore) CreateBacktestJob(ctx context.Context, request Quan
 	if err != nil {
 		return nil, false, err
 	}
-	sum := sha256.Sum256(append([]byte(QuantStrategyTop5Weekly+"|lean|"), payload...))
+	strategy := quantBacktestStrategy(normalized)
+	sum := sha256.Sum256(append([]byte(strategy+"|lean|"+QuantBacktestImplementation+"|"), payload...))
 	idempotencyKey := hex.EncodeToString(sum[:])
 
 	var existing database.QuantBacktestJob
@@ -238,7 +303,7 @@ func (s *QuantResearchStore) CreateBacktestJob(ctx context.Context, request Quan
 		ID:              jobID,
 		IdempotencyKey:  idempotencyKey,
 		Status:          "queued",
-		Strategy:        QuantStrategyTop5Weekly,
+		Strategy:        strategy,
 		UniverseVersion: normalized.UniverseVersion,
 		SignalMode:      normalized.SignalMode,
 		Engine:          "lean",
@@ -248,6 +313,22 @@ func (s *QuantResearchStore) CreateBacktestJob(ctx context.Context, request Quan
 		return nil, false, err
 	}
 	return &job, true, nil
+}
+
+func quantBacktestStrategy(request QuantBacktestRequest) string {
+	if request.TopN == 5 && request.RebalanceFrequency == QuantRebalanceWeekly && request.ExitRank == 5 && request.MinimumWeightChangeBPS == 0 && request.WeightingMethod == QuantWeightEqual && request.TrendFilterDays == 0 {
+		return QuantStrategyTop5Weekly
+	}
+	if request.TopN == 5 && request.RebalanceFrequency == QuantRebalanceWeekly && request.ExitRank == 8 && request.MinimumWeightChangeBPS == 0 && request.WeightingMethod == QuantWeightEqual && request.TrendFilterDays == 0 {
+		return QuantStrategyTop5Buffer
+	}
+	if request.TopN == 5 && request.RebalanceFrequency == QuantRebalanceMonthly && request.ExitRank == 8 && request.MinimumWeightChangeBPS == 250 && request.WeightingMethod == QuantWeightEqual && request.TrendFilterDays == 0 {
+		return QuantStrategyTop5LowTurnover
+	}
+	if request.TopN == 5 && request.RebalanceFrequency == QuantRebalanceMonthly && request.ExitRank == 8 && request.MinimumWeightChangeBPS == 250 && request.WeightingMethod == QuantWeightInverseVolatility && request.VolatilityLookbackDays == 20 && request.TrendFilterDays == 120 && request.WeakMarketExposureBPS == 5_000 {
+		return QuantStrategyTop5RiskControl
+	}
+	return QuantStrategyTopNRotation
 }
 
 func randomHex(bytesCount int) (string, error) {

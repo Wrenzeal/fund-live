@@ -334,6 +334,8 @@ func AllModels() []interface{} {
 		&QuantTradingDay{},
 		&QuantSignalHistory{},
 		&QuantBacktestJob{},
+		&QuantBacktestExperiment{},
+		&QuantBacktestExperimentJob{},
 	}
 	return append(models, UserModels()...)
 }

@@ -40,7 +40,7 @@ type QuantEventVersion struct {
 	KnownAt           time.Time       `gorm:"index;not null" json:"known_at"`
 	IngestedAt        time.Time       `gorm:"index;not null" json:"ingested_at"`
 	KnownAtBasis      string          `gorm:"type:varchar(32);not null" json:"known_at_basis"`
-	SourceTier        string          `gorm:"type:varchar(16);index;not null" json:"source_tier"`
+	SourceTier        string          `gorm:"type:varchar(32);index;not null" json:"source_tier"`
 	SourceName        string          `gorm:"type:varchar(120)" json:"source_name"`
 	SourceURL         string          `gorm:"type:text" json:"source_url"`
 	SourcePublishedAt *time.Time      `gorm:"index" json:"source_published_at,omitempty"`
@@ -170,6 +170,7 @@ type QuantBacktestJob struct {
 	EquityJSON      json.RawMessage `gorm:"type:jsonb;serializer:json" json:"equity_curve,omitempty"`
 	TradesJSON      json.RawMessage `gorm:"type:jsonb;serializer:json" json:"trades,omitempty"`
 	BenchmarksJSON  json.RawMessage `gorm:"type:jsonb;serializer:json" json:"benchmarks,omitempty"`
+	NormalizedJSON  json.RawMessage `gorm:"column:normalized_result_json;type:jsonb;serializer:json" json:"normalized_result,omitempty"`
 	LogSummary      string          `gorm:"type:text" json:"-"`
 	ErrorMessage    string          `gorm:"type:text" json:"error_message,omitempty"`
 	AttemptCount    int             `gorm:"not null;default:0" json:"attempt_count"`
@@ -180,3 +181,27 @@ type QuantBacktestJob struct {
 }
 
 func (QuantBacktestJob) TableName() string { return "quant_backtest_jobs" }
+
+type QuantBacktestExperiment struct {
+	ID                 string          `gorm:"primaryKey;type:char(32)" json:"id"`
+	IdempotencyKey     string          `gorm:"type:char(64);uniqueIndex;not null" json:"-"`
+	Preset             string          `gorm:"type:varchar(48);index;not null" json:"preset"`
+	UniverseVersion    string          `gorm:"type:varchar(32);index;not null" json:"universe_version"`
+	SignalMode         string          `gorm:"type:varchar(32);index;not null" json:"signal_mode"`
+	StartDate          time.Time       `gorm:"type:date;not null" json:"start_date"`
+	EndDate            time.Time       `gorm:"type:date;not null" json:"end_date"`
+	BaseParametersJSON json.RawMessage `gorm:"type:jsonb;serializer:json;not null" json:"base_parameters"`
+	CreatedAt          time.Time       `gorm:"autoCreateTime;index" json:"created_at"`
+	UpdatedAt          time.Time       `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+func (QuantBacktestExperiment) TableName() string { return "quant_backtest_experiments" }
+
+type QuantBacktestExperimentJob struct {
+	ExperimentID string    `gorm:"type:char(32);primaryKey" json:"experiment_id"`
+	JobID        string    `gorm:"type:char(32);primaryKey" json:"job_id"`
+	VariantKey   string    `gorm:"type:varchar(8);not null" json:"variant_key"`
+	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
+}
+
+func (QuantBacktestExperimentJob) TableName() string { return "quant_backtest_experiment_jobs" }
