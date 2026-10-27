@@ -125,7 +125,18 @@ test.describe('authentication and navigation', () => {
 
     await expect(page.getByRole('link', { name: '自选' })).toBeVisible()
     await expect(page.getByRole('link', { name: '持仓' })).toBeVisible()
-    await expect(page.getByRole('link', { name: '量化' })).toBeVisible()
+    await expect(page.getByRole('link', { name: '观察', exact: true })).toBeVisible()
+  })
+
+  test('does not request scoring or backtests from the production homepage', async ({ page }) => {
+    const paths: string[] = []
+    page.on('request', (request) => paths.push(new URL(request.url()).pathname))
+    await mockAppApi(page)
+    await page.goto('/?fund=005827')
+    await expect(page.getByRole('navigation', { name: '主要页面' })).toBeVisible()
+    await expect.poll(() => paths.some((path) => path.endsWith('/fund/005827/dashboard'))).toBe(true)
+    await expect(page.getByText('量化总分')).toHaveCount(0)
+    expect(paths.filter((path) => /\/api\/v1\/(analysis|quant)(\/|$)|\/fund\/[^/]+\/analysis$/.test(path))).toEqual([])
   })
 
   test('keeps primary navigation visible and selected across breakpoints', async ({ page }) => {
@@ -142,7 +153,7 @@ test.describe('authentication and navigation', () => {
       const navigation = page.getByRole('navigation', { name: '主要页面' })
       await expect(navigation, `${viewport.name} navigation`).toBeVisible()
 
-      for (const label of ['首页', '自选', '持仓', '量化']) {
+      for (const label of ['首页', '自选', '持仓', '观察', '研究']) {
         await expect(navigation.getByRole('link', { name: label, exact: true })).toBeVisible()
       }
 
@@ -282,16 +293,18 @@ test.describe('authentication and navigation', () => {
     await expect(page.getByRole('navigation', { name: '账户页面' })).toBeVisible()
   })
 
-  test('keeps analysis pages inside the global mobile shell', async ({ page }) => {
+  test('keeps legacy analysis links inside the observation mobile shell', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await mockAppApi(page)
 
     await page.goto('/analysis/rankings')
     await expect(page.getByRole('navigation', { name: '主要页面' })).toBeVisible()
-    await expect(page.getByRole('navigation', { name: '主要页面' }).getByRole('link', { name: '量化' })).toHaveAttribute('aria-current', 'page')
+    await expect(page).toHaveURL(/\/observations$/)
+    await expect(page.getByRole('navigation', { name: '主要页面' }).getByRole('link', { name: '观察', exact: true })).toHaveAttribute('aria-current', 'page')
     await expect(page.getByRole('link', { name: '返回首页' })).toHaveCount(0)
 
     await page.goto('/analysis/005827')
+    await expect(page).toHaveURL(/\/observations\/005827$/)
     await expect(page.getByRole('navigation', { name: '主要页面' })).toBeVisible()
     await expect(page.getByRole('link', { name: '返回基金详情' })).toBeVisible()
   })

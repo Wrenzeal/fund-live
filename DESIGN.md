@@ -2,8 +2,9 @@
 
 ## Source of truth
 - Status: Active
-- Last refreshed: 2026-07-15
-- Primary product surfaces: Fund home `/`, analysis detail `/analysis/[fundId]`, analysis rankings `/analysis/rankings`, holdings `/holdings`, watchlist `/watchlist`, issues, and announcements.
+- Last refreshed: 2026-10-16
+- Primary product surfaces: Fund home `/`, fund observations `/observations` and `/observations/[fundId]`, holdings `/holdings`, watchlist `/watchlist`, market research `/research`, issues, and product announcements.
+- Current scope: `.omx/plans/fund-observation-simplification.md`. Old fund analysis detail/rankings URLs redirect to observations; scoring and Lean remain compatibility/research internals, not production decision UI.
 - Evidence reviewed:
   - `web/src/app/analysis/[fundId]/page-client.tsx`
   - `web/src/components/fund-analysis-card.tsx`
@@ -22,10 +23,10 @@
 
 ## Product goals
 - Goals:
-  - Help users understand real-time fund valuation, holdings exposure, and quantified evidence quickly.
+  - Help users understand real-time valuation, disclosed holdings exposure, dated source documents, and data gaps quickly.
   - Let holding users see portfolio-level total value and cumulative return before drilling into per-fund details.
-  - Make analysis pages readable in layers: conclusion first, then evidence, events, risks, and raw data.
-  - Keep rule-based scores auditable and visually scannable.
+  - Give fund observations a distinct role: source announcements and disclosure availability, with links to existing fund valuation and research surfaces.
+  - Display facts and source dates without unvalidated scores, probabilities, sentiment or fund investment rankings.
   - Let administrators correct inaccurate fund classification labels without hiding the automatic holdings-derived exposure.
   - Keep login and account-protected data surfaces resistant to common brute-force, oversized payload, and cookie transport risks.
 - Non-goals:
@@ -33,19 +34,19 @@
   - Do not hide data limitations behind AI copy.
   - Do not add new design-system dependencies unless explicitly justified.
 - Success signals:
-  - Users can identify the current analysis direction, main evidence, and key risk in the first viewport.
-  - Long analysis pages have clear section rhythm and no duplicated explanation blocks.
+  - Users can identify the selected fund, disclosure date, coverage and source availability in the first viewport.
+  - Observations do not repeat the home page's charts, portfolio accounting or research formulas.
   - Mobile and laptop layouts avoid clipped cards or overly dense grids.
 
 ## Personas and jobs
 - Primary personas:
   - Retail fund holders tracking daily valuation and exposure.
-  - Users comparing funds through watchlist, holdings, and rankings.
-  - Power users reviewing evidence behind a quantitative score.
+  - Users following selected funds through watchlist, holdings and source documents.
+  - Power users reviewing market research separately from their fund disclosures.
 - User jobs:
-  - “What is the current structure/risk direction?”
-  - “Why did the system reach this observation?”
-  - “Which events or holdings are driving the score?”
+  - “Which announcements were published for this fund and its disclosed holdings?”
+  - “Where is the original document and when was it published?”
+  - “How much of the fund's disclosed portfolio is represented?”
   - “What data is stale, missing, or limited?”
 - Key contexts of use:
   - Mobile quick checks during market hours.
@@ -53,27 +54,29 @@
   - Slow or partial data states where confidence and limitations matter.
 
 ## Information architecture
-- Primary navigation: Home, Watchlist, Holdings, Analysis Rankings; Issues and Announcements are secondary destinations. Render the four primary destinations as one restrained text-navigation group rather than four independent CTA buttons. Use font weight, theme accent, and a short bottom indicator for the active route.
+- Primary navigation: Home, Watchlist, Holdings, Observations, Research; Issues and product Announcements are secondary destinations. Keep one restrained text-navigation group with a short bottom indicator for the active route.
 - Core routes/screens:
-  - `/`: fund search, valuation, intraday chart, holdings, analysis summary.
-  - `/analysis/[fundId]`: full analysis board.
-  - `/analysis/rankings`: grouped quantitative ranking lists with hero overview, observation-pool stats, featured top sample, and sectioned lists.
+  - `/`: fund search, valuation, intraday and official NAV charts, disclosed holdings and exposure, compact link to fund announcements.
+  - `/observations`: shared fund search and recently viewed fund entry points; no ranking or separate watchlist management.
+  - `/observations/[fundId]`: disclosure context, source availability, dated deduplicated announcement list and links to existing fund detail/research.
+  - `/analysis/[fundId]`, `/analysis/rankings`: compatibility redirects to the corresponding observation route.
+  - `/research`: market price charts, technical indicators and formula experiments; these are not repeated in observations.
   - `/holdings`: portfolio records, reconciliation, health, reminders.
 - Content hierarchy:
-  - Analysis detail page order: hero conclusion → quick insight strip → recommendation distribution/modules → primary and counter evidence → event signal chain → risk breakdown → structure/quarterly change → valuation → holding classification → data context → holdings → method limitations.
-  - Rankings page order: hero overview → observation-pool stats → featured top sample → sectioned ranking lists → method note.
+  - Observation detail order: fund identity and raw disclosure metadata → source status → notice filters and dated source list → concise method boundary.
+  - Observation entry order: concise module purpose and shared search → recently viewed funds → existing valuation/research links.
   - Holding classification card order: effective category/manual tags → manual correction note → automatic sector/theme exposure modules → confidence hints.
   - Holdings overview order: principal → total value → total return → today P/L → today change; total return must state whether it is official-ready or intraday-confirmed scope.
   - Holdings page workspace order: global header/quick actions → one active workspace tab at a time. Tabs are Summary, Record, Holdings, Risk, Ledger, Tools; do not show all long modules simultaneously.
 
 ## Design principles
-- Principle 1: Conclusion first, evidence second, raw data last.
+- Principle 1: Facts, source dates and explicit data gaps first; no inferred investment conclusion.
 - Principle 2: Compress repeated explanations into one explicit method/limitations zone.
 - Principle 3: Prefer progressive disclosure and scroll reveal over stacking many equal-weight cards.
 - Holdings pages should make each block's job explicit in the navigation label and keep primary actions inside the block that owns them.
-- Analysis detail should stack event signal chain above risk breakdown; do not render them as side-by-side panels.
-- Analysis detail should stack valuation, holding classification, and data context vertically rather than compressing them into one row.
-- Rankings should keep the three observation-pool stat cards (积极池 / 观察池 / 风险池) side-by-side on wider screens, while stacking the “结构偏积极 / 最值得观察 / 高风险关注” sections vertically because those are text-heavy decision modules.
+- Observations do not render scores, gauges, recommendation distributions, shadow score comparisons, sentiment labels or investment ranking pools.
+- Date-only publication fields and disclosure periods must be explicit; a fetch timestamp cannot substitute for a source's publication date.
+- Empty successful notice results and unavailable/partial sources must have distinct states. Do not infer that there are no announcements from a failed fetch.
 - Tradeoffs:
   - Visual motion is useful for comprehension, but must remain lightweight and not require extra dependencies.
   - Dense financial data is necessary, but each section needs a clear job and non-overlapping copy.
@@ -92,19 +95,17 @@
 
 ## Components
 - Existing components to reuse:
-  - `AnimatedScoreGauge`
+  - `FundSearch`, `AppTopBar`, `SiteFooter`, `Disclosure`
   - `EstimateCard`
   - `FundSectorCard`
   - `HoldingsTable`
   - `TargetETFHoldingsCard`
-  - `FundAnalysisBadge`
-  - `FundAnalysisEventHint`
 - New/changed components:
   - Shared brand helper: `BrandMark` in `web/src/components/brand-mark.tsx`; reuse it for top-left brand blocks instead of duplicating logo icon, wordmark, and subtitle JSX.
   - Shared motion helpers: `ScrollReveal`, `ScrollRevealStack`, `useLazyReveal` in `web/src/components/scroll-reveal.tsx`.
   - Shared analysis helpers: `AnalysisReveal`, `AnalysisSectionHeading`, `useLazyReveal` in `web/src/components/analysis-layout.tsx` now delegate reveal behavior to `scroll-reveal.tsx`.
   - `FundSectorCard` now consumes `classification_override`, displays manual correction chips/tags, and exposes an administrator-only inline editor for category, sector, theme, tags, and note.
-  - Analysis detail local helpers: `InsightStrip`, `QuickStat`, `DataContextPanel`, `MethodCompactCard`.
+  - Observations use the dedicated observation response; do not rebuild them from production score/evidence snapshots.
 - Variants and states:
   - Loading: preserve skeleton/empty states and non-blocking placeholders.
   - Empty: show concise empty panels; avoid repeating method copy.
@@ -132,22 +133,22 @@
 - Supported breakpoints/devices: Mobile, tablet, desktop/laptop.
 - Layout adaptations:
   - Mobile: single-column sections; quick stats become two-column chips where space allows.
-  - Primary navigation: render inline in the main toolbar at `xl` and above; below `xl`, keep all four destinations visible in an equal-width second row without horizontal scrolling.
+  - Primary navigation: render inline in the main toolbar at `xl` and above; below `xl`, keep all five destinations visible in an equal-width second row without horizontal scrolling.
   - Desktop: two-column analysis sections with no hard widths that can overflow.
   - Wide screens: reserve multi-column grids for compact cards, not text-heavy evidence blocks.
 - Touch/hover differences: Hover lift is decorative only; core state must be visible without hover.
 
 ## Interaction states
-- Loading: Keep loading text or existing spinners; analysis can render dashboard data independently.
+- Loading: Independent notice loading and source states; never keep fund A's details visible under fund B's identity.
 - Empty: Empty panels should state what is missing without implying failure.
 - Error: Existing SWR error surfaces should remain visible on pages that expose them.
-- Success: Successful analysis should show direction, score, evidence, and limitations.
-- Disabled: Not applicable for the analysis detail page in this pass.
-- Offline/slow network: Avoid blocking the whole page when only analysis is still loading.
+- Success: Successful observations show source documents, publication dates and coverage limitations.
+- Disabled: A missing upstream source does not disable available sources or existing valuation/research routes.
+- Offline/slow network: Show retry and explicit partial results instead of presenting failure as an empty successful feed.
 
 ## Content voice
 - Tone: Clear, conservative, direct; explain only when the user needs a decision or a boundary.
-- Terminology: Use “结构偏积极 / 适合观察 / 风险偏高” rather than direct “加仓 / 减仓” instructions.
+- Terminology: Use “基金观察 / 公告与资料 / 已披露持仓 / 来源暂不可用”. Avoid directional investment labels in the production observation module.
 - Microcopy rules:
   - Distinguish rule-based observations from trade advice.
   - State data limitations once in the method/limitations section.
@@ -160,10 +161,10 @@
 - Framework/styling system: Next.js App Router, React 19, TypeScript, Tailwind CSS v4, theme CSS variables.
 - Design-token constraints: Reuse existing `glass`, `text-theme-*`, `var(--card-*)`, and accent utility patterns.
 - Performance constraints: No new frontend dependency for motion; use IntersectionObserver and CSS transitions.
-- Compatibility constraints: Keep backend API payloads and analysis semantics unchanged unless separately planned.
+- Compatibility constraints: Existing analysis/research backend APIs and database data remain intact. The new observation endpoint does not invoke score calculation; old public detail/rankings links redirect.
 - Deployment constraints: production frontend runtime must set `BACKEND_URL` to the actual backend listener (`http://127.0.0.1:13896` in the current server), and deployment health checks must target the same backend port.
 - Classification constraints: Manual classification labels are an overlay; never present manual tags as automatic holdings weights, and keep automatic sector/theme breakdown visible.
 - Test/screenshot expectations: At minimum run `npm run lint` and `npm run build`; for high-risk visual changes, capture browser screenshots or run visual QA when available.
 
 ## Open questions
-- [ ] Whether `RevealSection` and `SectionHeading` should be promoted from route-local helpers to shared components after reuse appears on two or more pages / owner: frontend / impact: component governance.
+- [ ] Whether strict empirical validation will justify any future scoring product. No unvalidated score may be reintroduced through observation or portfolio labels.

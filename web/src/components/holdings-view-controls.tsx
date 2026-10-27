@@ -57,8 +57,6 @@ function sortOptions(viewMode: HoldingViewMode) {
     { id: 'change_desc', label: '涨幅最大优先' },
     { id: 'count_desc', label: '分笔多优先' },
     { id: 'recent_desc', label: '最近录入优先' },
-    { id: 'analysis_recommendation', label: '建议倾向优先' },
-    { id: 'analysis_risk', label: '风险等级优先' },
   ] as const
 }
 

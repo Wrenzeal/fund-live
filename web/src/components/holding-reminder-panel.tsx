@@ -8,7 +8,6 @@ import {
   Info,
   ShieldAlert,
 } from 'lucide-react'
-import type { FundAnalysis } from '@/hooks/use-fund-data'
 import type {
   HoldingAggregateEntry,
   HoldingEntry,
@@ -16,7 +15,6 @@ import type {
 } from '@/hooks/use-user-portfolio'
 import {
   buildHoldingReminderSummary,
-  type HoldingExposureSnapshot,
   type InsightTone,
 } from '@/lib/holding-insights'
 import type { HoldingMetricScope } from '@/lib/holding-display'
@@ -26,10 +24,8 @@ interface HoldingReminderPanelProps {
   compact?: boolean
   holdings: HoldingEntry[]
   aggregates: HoldingAggregateEntry[]
-  analysesByFundID: Record<string, FundAnalysis | null>
   aggregateMetrics: Record<string, HoldingEstimateAggregateMetrics>
   metricScope: HoldingMetricScope
-  exposureSnapshots?: Record<string, HoldingExposureSnapshot>
 }
 
 const REMINDER_STORAGE_KEY = 'fundlive.holding.reminder.state.v1'
@@ -113,10 +109,8 @@ export function HoldingReminderPanel({
   compact = false,
   holdings,
   aggregates,
-  analysesByFundID,
   aggregateMetrics,
   metricScope,
-  exposureSnapshots = {},
 }: HoldingReminderPanelProps) {
   const [reminderState, setReminderState] = useState<ReminderState>(() =>
     loadReminderState(),
@@ -124,10 +118,8 @@ export function HoldingReminderPanel({
   const summary = buildHoldingReminderSummary({
     holdings,
     aggregates,
-    analysesByFundID,
     aggregateMetrics,
     metricScope,
-    exposureSnapshots,
   })
   const visibleReminders = useMemo(
     () =>

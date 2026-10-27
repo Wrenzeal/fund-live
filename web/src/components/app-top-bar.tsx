@@ -22,18 +22,20 @@ interface AppTopBarProps {
   isRefreshing?: boolean
   onRefresh?: () => void
   headerRef?: Ref<HTMLElement>
+  standaloneResearch?: boolean
 }
 
 const navItems = [
   { href: '/', label: '首页' },
   { href: '/watchlist', label: '自选' },
   { href: '/holdings', label: '持仓' },
-  { href: '/analysis/rankings', label: '量化' },
+  { href: '/observations', label: '观察' },
+  { href: '/research', label: '研究' },
 ]
 
 function isNavItemActive(pathname: string, href: string) {
-  if (href === '/analysis/rankings') {
-    return pathname.startsWith('/analysis/')
+  if (href === '/observations') {
+    return pathname.startsWith('/observations')
   }
   return href === '/' ? pathname === '/' : pathname.startsWith(href)
 }
@@ -47,7 +49,7 @@ function PrimaryNavigation({ pathname, placement }: { pathname: string; placemen
         'bg-[var(--input-bg)]/45 p-1',
         placement === 'inline'
           ? 'hidden shrink-0 items-center rounded-xl xl:flex'
-          : 'mt-2 grid grid-cols-4 rounded-xl xl:hidden',
+          : 'mt-2 grid grid-cols-5 rounded-xl xl:hidden',
       )}
     >
       {navItems.map((item) => {
@@ -88,6 +90,7 @@ export function AppTopBar({
   isRefreshing,
   onRefresh,
   headerRef,
+  standaloneResearch = false,
 }: AppTopBarProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -110,19 +113,19 @@ export function AppTopBar({
           <BrandMark compact subtitle="FundLive - 实时基金估值" className="shrink-0 md:hidden" />
           <BrandMark subtitle="FundLive - 实时基金估值" className="hidden shrink-0 md:flex" />
 
-          <div className="hidden shrink-0 md:block">
+          {!standaloneResearch && <div className="hidden shrink-0 md:block">
             <FundSearch onSelect={handleFundSelect} currentFundId={currentFundId} />
-          </div>
+          </div>}
 
           <PrimaryNavigation pathname={pathname} placement="inline" />
 
           <div className="ml-auto flex items-center gap-2 md:ml-0 md:gap-4">
-            <div className="md:hidden">
+            {!standaloneResearch && <div className="md:hidden">
               <FundSearch onSelect={handleFundSelect} currentFundId={currentFundId} />
-            </div>
+            </div>}
 
             <div className="hidden lg:flex items-center gap-4">
-              <MarketStatusIndicator showDetails status={marketStatus} />
+              {!standaloneResearch && <MarketStatusIndicator showDetails status={marketStatus} />}
 
               {showTradingInterval && (
                 <div className="flex items-center gap-2 text-xs text-theme-muted">
@@ -147,7 +150,7 @@ export function AppTopBar({
               )}
             </div>
 
-            <UserAccountMenu />
+            {!standaloneResearch && <UserAccountMenu />}
 
             <ThemeSwitcher
               themeType={themeType}

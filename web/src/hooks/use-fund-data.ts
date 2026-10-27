@@ -84,7 +84,7 @@ async function fetchEnvelope<T>(url: string): Promise<{ data: T; meta?: Response
     }
 }
 
-async function fetchEnvelopeWithTimeout<T>(url: string, timeoutMs: number): Promise<{ data: T; meta?: ResponseMeta }> {
+export async function fetchEnvelopeWithTimeout<T>(url: string, timeoutMs: number): Promise<{ data: T; meta?: ResponseMeta }> {
     const controller = new AbortController()
     const timer = window.setTimeout(() => controller.abort(), timeoutMs)
 
@@ -342,168 +342,6 @@ export interface FundClassificationOverrideInput {
     primary_theme_code?: string
     manual_tags?: string[]
     note?: string
-}
-
-export interface FundAnalysisModuleScore {
-    code: string
-    name: string
-    score: string
-    summary?: string
-}
-
-export interface FundAnalysisEventImpact {
-    event_id?: string
-    code: string
-    event_type?: string
-    event_status?: 'expected' | 'disclosed' | 'active' | 'expired' | 'cancelled'
-    title: string
-    impact: 'positive' | 'neutral' | 'negative'
-    summary: string
-    target_scope?: 'disclosure' | 'methodology' | 'holding' | 'exposure' | 'fund' | 'macro' | 'index'
-    strength?: 'low' | 'medium' | 'high'
-    horizon?: 'intraday' | 'current' | 'quarterly' | 'medium_term'
-    related_symbols?: string[]
-    weight_hint?: string
-    source_name?: string
-    source_url?: string
-    source_published_at?: string
-    source_confidence?: 'low' | 'medium' | 'high'
-    source_tier?: 'official' | 'official_aggregator' | 'secondary' | 'heuristic'
-    mapping_basis?: string
-    expected_at?: string
-    announced_at?: string
-    effective_at?: string
-    expires_at?: string
-    known_at?: string
-    ingested_at?: string
-    known_at_basis?: string
-    version?: number
-}
-
-export interface FundAnalysisEventIntelligence {
-    mode: 'shadow'
-    as_of_time: string
-    shadow_event_score: string
-    shadow_total_score: string
-    shadow_delta: string
-    expected_count: number
-    disclosed_count: number
-    active_count: number
-    latest_known_at?: string
-    timeline: FundAnalysisEventImpact[]
-    production_boundary: string
-}
-
-export interface FundAnalysisConfidenceFactor {
-    code: string
-    name: string
-    level: 'high' | 'medium' | 'low'
-    score: string
-    summary: string
-}
-
-export interface FundAnalysisEvidenceItem {
-    code: string
-    title: string
-    summary: string
-    evidence_type: string
-    source_scope?: 'disclosure' | 'methodology' | 'holding' | 'exposure' | 'fund' | 'macro' | 'index'
-    impact?: 'positive' | 'neutral' | 'negative'
-    strength?: 'low' | 'medium' | 'high'
-    horizon?: 'intraday' | 'current' | 'quarterly' | 'medium_term'
-    related_symbols?: string[]
-    weight_hint?: string
-    source_name?: string
-    source_url?: string
-    source_published_at?: string
-    source_confidence?: 'low' | 'medium' | 'high'
-    mapping_basis?: string
-}
-
-export interface FundAnalysisAIExplanationCitation {
-    code: string
-    source_type: string
-    source_scope?: 'disclosure' | 'methodology' | 'holding' | 'exposure' | 'fund' | 'macro' | 'index'
-    title: string
-    summary?: string
-}
-
-export interface FundAnalysisAIExplanationSection {
-    title: string
-    summary: string
-    citation_codes?: string[]
-}
-
-export interface FundAnalysisAIExplanation {
-    status: 'ready' | 'disabled' | 'fallback' | 'rejected' | 'failed'
-    provider: string
-    model?: string
-    generated_at?: string
-    cache_key?: string
-    cache_status?: 'generated' | 'snapshot_hit' | 'not_cacheable'
-    expires_at?: string
-    invalidation_basis?: string[]
-    rule_recommendation?: 'increase' | 'hold' | 'decrease'
-    boundary_notice: string
-    summary: string
-    attribution?: FundAnalysisAIExplanationSection[]
-    risk_notes?: FundAnalysisAIExplanationSection[]
-    citations?: FundAnalysisAIExplanationCitation[]
-    limitations?: string[]
-}
-
-export interface FundAnalysis {
-    analysis_version: string
-    analysis_type: 'direct_holdings' | 'tracked_etf' | 'qdii_holdings'
-    analysis_basis: string
-    as_of_time: string
-    total_score: string
-    confidence: 'high' | 'medium' | 'low'
-    risk_level: 'low' | 'medium' | 'high'
-    increase_percent: string
-    hold_percent: string
-    decrease_percent: string
-    latest_holding_period?: string
-    summary: string
-    reasons: string[]
-    warnings: string[]
-    event_impacts: FundAnalysisEventImpact[]
-    event_intelligence?: FundAnalysisEventIntelligence
-    module_scores: FundAnalysisModuleScore[]
-    confidence_factors?: FundAnalysisConfidenceFactor[]
-    primary_evidence?: FundAnalysisEvidenceItem[]
-    counter_evidence?: FundAnalysisEvidenceItem[]
-    confidence_deductions?: string[]
-    ai_explanation?: FundAnalysisAIExplanation
-}
-
-export interface QuantForwardHorizonSummary {
-    horizon_days: number
-    sample_count: number
-    average_return: string
-    average_excess_return: string
-    positive_rate: string
-    average_rank_ic: string
-}
-
-export interface QuantValidationSummary {
-    mode: 'historical_proxy' | 'full_v4_forward'
-    universe_version: string
-    signal_count: number
-    first_signal_date?: string
-    last_signal_date?: string
-    horizons: QuantForwardHorizonSummary[]
-    lookahead_boundary: string
-    coverage: {
-        instrument_count: number
-        market_bar_count: number
-        event_count: number
-        event_version_count: number
-        mapped_fund_count: number
-        experiment_count: number
-        latest_market_date?: string
-        latest_event_known_at?: string
-    }
 }
 
 export interface QuantSeriesPoint {
@@ -813,7 +651,6 @@ export interface TimeSeriesResponse {
 export interface FundDashboardPayload {
     fund?: Fund
     estimate?: FundEstimate
-    analysis?: FundAnalysis
     sector_snapshot?: FundSectorSnapshot
     theme_snapshot?: FundThemeSnapshot
     classification_override?: FundClassificationOverride
@@ -823,23 +660,6 @@ export interface FundDashboardPayload {
     is_historical: boolean
     session: 'pre_market' | 'morning' | 'lunch_break' | 'afternoon' | 'after_hours' | 'weekend' | 'holiday'
     last_trading_day: string
-}
-
-export interface FundAnalysisPayload {
-    fund?: Fund
-    analysis?: FundAnalysis
-}
-
-export interface FundAnalysisRankingItem {
-    fund?: Fund
-    analysis?: FundAnalysis
-}
-
-export interface FundAnalysisRankingsPayload {
-    generated_at: string
-    increase_ideas: FundAnalysisRankingItem[]
-    watch_ideas: FundAnalysisRankingItem[]
-    risk_alerts: FundAnalysisRankingItem[]
 }
 
 export interface FundExposureSnapshotEntry {
@@ -993,7 +813,6 @@ export function useFundDashboard(fundId: string | null, options?: SWRConfigurati
     return {
         fund: dashboard.payload?.fund,
         estimate: dashboard.payload?.estimate,
-        analysis: dashboard.payload?.analysis,
         sectorSnapshot: dashboard.payload?.sector_snapshot,
         themeSnapshot: dashboard.payload?.theme_snapshot,
         classificationOverride: dashboard.payload?.classification_override,
@@ -1200,165 +1019,6 @@ function normalizeFundHistoryDays(days: number) {
     return Math.max(1, Math.min(180, Math.trunc(days)))
 }
 
-export function useFundAnalysis(fundId: string | null, options?: SWRConfiguration) {
-    const { isTrading } = useMarketTradingState()
-    const refreshInterval = isTrading ? DEFAULT_TRADING_INTERVAL : DEFAULT_CLOSED_INTERVAL
-    const {
-        onSuccess,
-        onError,
-        ...restOptions
-    } = options ?? {}
-
-    const swrKey = fundId ? `${API_BASE_URL}/api/v1/fund/${fundId}/analysis` : null
-
-    const { data, error, isLoading, isValidating, mutate } = useSWR<{ data: FundAnalysisPayload; meta?: ResponseMeta }>(
-        swrKey,
-        fetchEnvelope,
-        {
-            refreshInterval,
-            keepPreviousData: true,
-            revalidateOnFocus: false,
-            shouldRetryOnError: false,
-            onErrorRetry: (retryError, _key, _config, revalidate, { retryCount }) => {
-                if (isFundDataWarmingError(retryError)) {
-                    scheduleRetry(retryError, retryCount, revalidate, 12, 5000)
-                    return
-                }
-                scheduleRetry(retryError, retryCount, revalidate, 3, 5000)
-            },
-            onSuccess: (payload, key, config) => {
-                if (typeof onSuccess === 'function') {
-                    ;(onSuccess as (data: FundAnalysisPayload, key: string, config: unknown) => void)(payload.data, key, config)
-                }
-            },
-            onError: (requestError, key, config) => {
-                if (typeof onError === 'function') {
-                    ;(onError as (error: unknown, key: string, config: unknown) => void)(requestError, key, config)
-                }
-            },
-            ...restOptions,
-        }
-    )
-
-    const triggerRetry = useEffectEvent(() => {
-        void mutate()
-    })
-
-    useEffect(() => {
-        if (data?.meta?.cache_status !== 'warming') {
-            return
-        }
-
-        const timer = window.setTimeout(() => {
-            triggerRetry()
-        }, 5000)
-
-        return () => window.clearTimeout(timer)
-    }, [data?.meta?.cache_status])
-
-    return {
-        fund: data?.data?.fund,
-        analysis: data?.data?.analysis,
-        cacheStatus: data?.meta?.cache_status || '',
-        isLoading,
-        isValidating,
-        isError: !!error,
-        error,
-        mutate,
-        isTrading,
-        refreshInterval,
-        isWarming: data?.meta?.cache_status === 'warming',
-    }
-}
-
-async function fetchFundAnalyses(fundIDs: string[]): Promise<Record<string, FundAnalysis | null>> {
-    if (fundIDs.length === 0) {
-        return {}
-    }
-    try {
-        const payload = await fetchEnvelope<{ analyses: Record<string, FundAnalysis | null> }>(
-            `${API_BASE_URL}/api/v1/analysis/batch?fund_ids=${encodeURIComponent(fundIDs.join(','))}`
-        )
-        return payload.data?.analyses || {}
-    } catch {
-        const entries = await Promise.all(
-            fundIDs.map(async (fundID) => {
-                try {
-                    const payload = await fetchEnvelope<FundAnalysisPayload>(`${API_BASE_URL}/api/v1/fund/${fundID}/analysis`)
-                    return [fundID, payload.data?.analysis ?? null] as const
-                } catch {
-                    return [fundID, null] as const
-                }
-            })
-        )
-        return Object.fromEntries(entries)
-    }
-}
-
-export function useFundAnalyses(fundIDs: string[]) {
-    const { isTrading } = useMarketTradingState()
-    const normalizedFundIDs = [...new Set(fundIDs.filter(Boolean))].sort()
-
-    const { data = {}, error, isLoading, isValidating } = useSWR<Record<string, FundAnalysis | null>>(
-        normalizedFundIDs.length > 0 ? ['fund-analyses', normalizedFundIDs.join(',')] : null,
-        () => fetchFundAnalyses(normalizedFundIDs),
-        {
-            refreshInterval: isTrading ? DEFAULT_TRADING_INTERVAL : DEFAULT_CLOSED_INTERVAL,
-            revalidateOnFocus: false,
-            dedupingInterval: 5000,
-        }
-    )
-
-    return {
-        analysesByFundID: data,
-        isLoading,
-        isValidating,
-        isError: !!error,
-    }
-}
-
-export function useFundAnalysisRankings() {
-    const { isTrading } = useMarketTradingState()
-    const refreshInterval = isTrading ? DEFAULT_TRADING_INTERVAL : DEFAULT_CLOSED_INTERVAL
-
-    const { data, error, isLoading, isValidating, mutate } = useSWR<{ data: FundAnalysisRankingsPayload; meta?: ResponseMeta }>(
-        `${API_BASE_URL}/api/v1/analysis/rankings`,
-        (url: string) => fetchEnvelopeWithTimeout<FundAnalysisRankingsPayload>(url, 15000),
-        {
-            refreshInterval,
-            revalidateOnFocus: false,
-            dedupingInterval: 5000,
-        }
-    )
-
-    return {
-        rankings: data?.data,
-        isLoading,
-        isValidating,
-        isError: !!error,
-        error,
-        mutate,
-    }
-}
-
-export function useQuantValidationSummary(mode: 'historical_proxy' | 'full_v4_forward' = 'historical_proxy') {
-    const { data, error, isLoading, isValidating } = useSWR<{ data: QuantValidationSummary }>(
-        `${API_BASE_URL}/api/v1/quant/validation?mode=${encodeURIComponent(mode)}`,
-        (url: string) => fetchEnvelopeWithTimeout<QuantValidationSummary>(url, 15000),
-        { refreshInterval: 5 * 60 * 1000, revalidateOnFocus: false }
-    )
-    return { summary: data?.data, error, isLoading, isValidating }
-}
-
-export function useQuantBacktests() {
-    const { data, error, isLoading, isValidating } = useSWR<{ data: { items: QuantBacktestJob[]; count: number } }>(
-        `${API_BASE_URL}/api/v1/quant/backtests?limit=6`,
-        (url: string) => fetchEnvelopeWithTimeout<{ items: QuantBacktestJob[]; count: number }>(url, 15000),
-        { refreshInterval: 30000, revalidateOnFocus: false }
-    )
-    return { jobs: data?.data?.items || [], error, isLoading, isValidating }
-}
-
 export function useQuantBacktest(jobId: string) {
     const { data, error, isLoading, isValidating } = useSWR<{ data: QuantBacktestJob }>(
         jobId ? `${API_BASE_URL}/api/v1/quant/backtests/${encodeURIComponent(jobId)}` : null,
@@ -1366,15 +1026,6 @@ export function useQuantBacktest(jobId: string) {
         { refreshInterval: (latest) => latest?.data?.status === 'queued' || latest?.data?.status === 'running' ? 5000 : 0, revalidateOnFocus: false }
     )
     return { job: data?.data, error, isLoading, isValidating }
-}
-
-export function useQuantBacktestExperiments() {
-    const { data, error, isLoading, isValidating } = useSWR<{ data: { items: QuantBacktestExperiment[]; count: number } }>(
-        `${API_BASE_URL}/api/v1/quant/backtest-experiments?limit=6`,
-        (url: string) => fetchEnvelopeWithTimeout<{ items: QuantBacktestExperiment[]; count: number }>(url, 15000),
-        { refreshInterval: 30000, revalidateOnFocus: false }
-    )
-    return { experiments: data?.data?.items || [], error, isLoading, isValidating }
 }
 
 export function useQuantBacktestExperiment(experimentId: string) {

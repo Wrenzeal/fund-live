@@ -3,7 +3,7 @@
 import { HoldingAggregateRow } from '@/components/holding-aggregate-row'
 import { HoldingFundRow } from '@/components/holding-fund-row'
 import { ScrollReveal } from '@/components/scroll-reveal'
-import type { FundAnalysis, FundEstimate, FundHistorySeries } from '@/hooks/use-fund-data'
+import type { FundEstimate, FundHistorySeries } from '@/hooks/use-fund-data'
 import type {
   AdjustHoldingSharesPayload,
   DividendHoldingPayload,
@@ -25,7 +25,6 @@ interface HoldingsListProps {
   holdingsByFundID: Record<string, HoldingEntry[]>
   aggregateMetrics: Record<string, HoldingEstimateAggregateMetrics>
   estimatesByFundID: Record<string, FundEstimate | null>
-  analysesByFundID: Record<string, FundAnalysis | null>
   historiesByFundID?: Record<string, FundHistorySeries>
   isHistoryLoading?: boolean
   showIncompleteOnly: boolean
@@ -44,7 +43,6 @@ export function HoldingsList({
   holdingsByFundID,
   aggregateMetrics,
   estimatesByFundID,
-  analysesByFundID,
   historiesByFundID = {},
   isHistoryLoading = false,
   showIncompleteOnly,
@@ -63,7 +61,6 @@ export function HoldingsList({
                 aggregate={aggregate}
                 metricScope={metricScope}
                 estimateMetrics={aggregateMetrics[aggregate.fund_id]}
-                analysis={analysesByFundID[aggregate.fund_id]}
                 history={historiesByFundID[aggregate.fund_id]}
                 isHistoryLoading={isHistoryLoading}
               >
@@ -73,7 +70,6 @@ export function HoldingsList({
                     holding={holding}
                     metricScope={metricScope}
                     estimate={estimatesByFundID[holding.fund_id]}
-                    analysis={analysesByFundID[holding.fund_id]}
                     onRemove={() => onRemoveHolding(holding.id)}
                     onUpdate={(payload) => onUpdateHolding(holding.id, payload)}
                     onSell={(payload) => onSellHolding(holding.id, payload)}
@@ -90,7 +86,6 @@ export function HoldingsList({
                 holding={holding}
                 metricScope={metricScope}
                 estimate={estimatesByFundID[holding.fund_id]}
-                analysis={analysesByFundID[holding.fund_id]}
                 onRemove={() => onRemoveHolding(holding.id)}
                 onUpdate={(payload) => onUpdateHolding(holding.id, payload)}
                 onSell={(payload) => onSellHolding(holding.id, payload)}

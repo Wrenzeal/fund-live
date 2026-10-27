@@ -260,7 +260,7 @@ export function HoldingRecordComposer({
                   录入后你会得到
                 </div>
                 <div>真实市值与今日盈亏</div>
-                <div>量化建议与风险标签</div>
+                <div>持仓占比与公开资料</div>
                 <div>组合风险与结构回顾</div>
               </div>
             </div>

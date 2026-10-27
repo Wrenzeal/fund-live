@@ -4,7 +4,7 @@
   <h1>涨了多少 · FundLive</h1>
 
   <p>
-    <strong>实时基金估值、持仓管理与量化观察系统</strong>
+    <strong>实时基金估值、持仓管理与公告观察系统</strong>
   </p>
 
   <p>
@@ -20,7 +20,7 @@
 
 ## 项目简介
 
-FundLive（涨了多少）通过基金公开持仓、目标 ETF、实时行情与本地快照，估算基金盘中涨跌，帮助用户观察自选基金、个人持仓、行业/主题暴露和量化信号。
+FundLive（涨了多少）通过基金公开持仓、目标 ETF、实时行情与本地快照，估算基金盘中涨跌，帮助用户观察自选基金、个人持仓、行业/主题暴露和近期公告。
 
 > 本项目只做数据整理与观察辅助，不构成任何投资建议。
 
@@ -29,7 +29,8 @@ FundLive（涨了多少）通过基金公开持仓、目标 ETF、实时行情�
 - **实时估值**：基于前十大重仓股、联接基金目标 ETF、QDII 海外持仓等链路估算盘中涨跌。
 - **基金搜索与详情**：支持基金目录同步、可用状态治理、详情/持仓预热与分时图展示。
 - **自选与持仓**：支持自选分组、持仓记录、官方口径与盘中预估口径切换。
-- **量化看板**：输出综合评分、建议分布、主/反证据、风险提示、事件链和数据可信度拆解。
+- **基金观察**：查看基金及已披露重仓股的近期公告、原文来源、持仓披露日期和覆盖范围；不输出综合评分、买卖比例或投资排名。
+- **市场研究**：大盘、通信/CPO、半导体与 AI 行情，走势对比、技术状态、板块资金、可保存的公式曲线与组合事件验证；无需登录或数据库。
 - **分类与主题暴露**：按行业/主题聚合持仓，可叠加管理员人工分类修正。
 - **账号与认证**：支持邮箱验证码、邮箱密码、Google 登录、HttpOnly Cookie 会话和认证限流。
 
@@ -82,7 +83,7 @@ docker compose up -d cache
 
 ## Lean 量化验证
 
-Lean 作为隔离的回测 Worker 验证现有评分，不替换 FundLive 的 V4 分析服务。当前提供固定 A-D 风险收益实验和公开对照页；事件版本、ETF 五年日线、历史代理信号、Dragonfly 队列与部署步骤见 [`docs/lean-quant-validation.md`](docs/lean-quant-validation.md)。TradingAgents-CN 等外部研究器仅预留 [`event-intel.v1`](docs/event-intel-shadow-contract.md) shadow 契约。
+Lean 作为隔离的回测 Worker 运行历史代理策略实验，不参与正式基金观察页面，也不证明旧 V4 评分的预测能力。固定 A-D 实验、ETF 五年日线、历史代理信号、Dragonfly 队列与部署步骤见 [`docs/lean-quant-validation.md`](docs/lean-quant-validation.md)。旧分析 API 和实验档案保留兼容，生产前端不再请求评分或显示投资排名。TradingAgents-CN 等外部研究器仅预留 [`event-intel.v1`](docs/event-intel-shadow-contract.md) shadow 契约。
 
 Google 登录需要后端和前端使用同一个 Web Client ID：
 
@@ -114,6 +115,8 @@ npm run dev
 ```
 
 打开 `http://localhost:3000`。
+
+Windows 本机市场研究可运行 `powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1`，打开 `http://127.0.0.1:3100/research`。启动方式、数据来源和历史统计口径见 [`docs/market-research.md`](docs/market-research.md)。
 
 ## 常用命令
 
@@ -160,6 +163,7 @@ go run ./cmd/run-quant-experiment --preset risk-v1
 - [`docs/overseas-data-source-selection.md`](docs/overseas-data-source-selection.md)：海外行情数据源评估
 - [`docs/email-code-login.md`](docs/email-code-login.md)：邮箱验证码、DragonFly 与 Resend 部署说明
 - [`docs/lean-quant-validation.md`](docs/lean-quant-validation.md)：Lean Worker、A-D 实验、结果口径与生产运行
+- [`docs/easyk-workspace.md`](docs/easyk-workspace.md)：公式曲线、组合事件、本地方案和板块资金研究
 - [`docs/event-intel-shadow-contract.md`](docs/event-intel-shadow-contract.md)：外部事件研究器 shadow 接入边界
 
 ## 许可证

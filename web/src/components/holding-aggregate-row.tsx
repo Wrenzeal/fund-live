@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
+import Link from 'next/link'
 import { ChevronDown, ChevronUp, Layers3 } from 'lucide-react'
-import { FundAnalysisBadge } from '@/components/fund-analysis-badge'
 import { FundHistoryTrend } from '@/components/fund-history-trend'
-import { FundAnalysisEventHint } from '@/components/fund-analysis-event-hint'
-import type { FundAnalysis, FundHistorySeries } from '@/hooks/use-fund-data'
+import type { FundHistorySeries } from '@/hooks/use-fund-data'
 import { cn } from '@/lib/utils'
 import type {
   HoldingAggregateEntry,
@@ -16,7 +15,6 @@ interface HoldingAggregateRowProps {
   aggregate: HoldingAggregateEntry
   metricScope: 'official' | 'estimate'
   estimateMetrics?: HoldingEstimateAggregateMetrics
-  analysis?: FundAnalysis | null
   history?: FundHistorySeries
   isHistoryLoading?: boolean
   children?: ReactNode
@@ -52,7 +50,7 @@ function formatPercent(value?: string) {
   return `${parsed >= 0 ? '+' : ''}${parsed.toFixed(2)}%`
 }
 
-export function HoldingAggregateRow({ aggregate, metricScope, estimateMetrics, analysis, history, isHistoryLoading = false, children }: HoldingAggregateRowProps) {
+export function HoldingAggregateRow({ aggregate, metricScope, estimateMetrics, history, isHistoryLoading = false, children }: HoldingAggregateRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const fundName = aggregate.fund?.name || aggregate.fund_id
   const hasChildren = Boolean(children)
@@ -125,12 +123,9 @@ export function HoldingAggregateRow({ aggregate, metricScope, estimateMetrics, a
             </span>
           </div>
           <div className="mt-1 text-xs text-theme-muted">{aggregate.fund_id}</div>
-          <div className="mt-2">
-            <FundAnalysisBadge analysis={analysis} showScore />
-          </div>
-          <div className="mt-2">
-            <FundAnalysisEventHint analysis={analysis} />
-          </div>
+          <Link href={`/observations/${aggregate.fund_id}`} className="mt-2 inline-block text-xs text-theme-secondary hover:text-theme-primary">
+            公告与资料
+          </Link>
           <div className="mt-2 text-xs text-theme-secondary">{valueNote}</div>
         </div>
 

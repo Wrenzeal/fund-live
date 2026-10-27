@@ -2,13 +2,13 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { useFundAnalysis, useFundDashboard, useFundHistory, useFundHoldings, useTimeSeries } from '@/hooks/use-fund-data'
+import { useFundDashboard, useFundHistory, useFundHoldings, useTimeSeries } from '@/hooks/use-fund-data'
 import { useMarketStatus, getSessionLabel, formatTimeUntil } from '@/hooks/use-market-status'
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { useUserWatchlistGroups, type WatchlistFundEntry } from '@/hooks/use-user-portfolio'
 import { EstimateCard } from '@/components/estimate-card'
-import { FundAnalysisCard } from '@/components/fund-analysis-card'
+import Link from 'next/link'
 import { FundSectorCard } from '@/components/fund-sector-card'
 import { IntradayChart } from '@/components/intraday-chart'
 import { FundHistoryTrend } from '@/components/fund-history-trend'
@@ -165,11 +165,6 @@ function HomeContent({
     onError: handleDashboardError,
   })
   const {
-    analysis,
-    isLoading: isAnalysisLoading,
-    mutate: refreshAnalysis,
-  } = useFundAnalysis(isCallAuction ? null : displayFundId)
-  const {
     timeSeries,
     displayDate,
     isHistorical,
@@ -247,7 +242,6 @@ function HomeContent({
   const handleRefresh = () => {
     setSelectionError(null)
     refreshDashboard()
-    refreshAnalysis()
     refreshTimeSeries()
   }
 
@@ -262,7 +256,6 @@ function HomeContent({
   const activeFund = isCallAuction ? undefined : fund
   const activeTimeSeries = isCallAuction ? [] : timeSeries
   const activeLastUpdated = isCallAuction ? null : lastUpdated
-  const activeAnalysis = isCallAuction ? undefined : analysis
   const warmupDetailText = isDashboardWarming
     ? '约 5 秒后自动重试'
     : isCallAuction
@@ -576,7 +569,6 @@ function HomeContent({
               classificationOverride={isCallAuction ? undefined : classificationOverride}
               onClassificationOverrideUpdated={() => {
                 void refreshDashboard()
-                void refreshAnalysis()
               }}
             />
 
@@ -596,11 +588,13 @@ function HomeContent({
               />
             )}
 
-            <FundAnalysisCard
-              analysis={activeAnalysis}
-              fundId={activeFund?.id || displayFundId}
-              isLoading={!isCallAuction && isAnalysisLoading}
-            />
+            <Link
+              href={`/observations/${encodeURIComponent(activeFund?.id || displayFundId)}`}
+              className="flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-[var(--card-border)] px-5 py-4 text-sm text-theme-primary transition-colors hover:bg-[var(--input-bg)] focus-visible:outline-2 focus-visible:outline-[var(--accent-primary)]"
+            >
+              <span>查看基金公告与披露资料</span>
+              <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+            </Link>
           </ScrollRevealStack>
         )}
       </main>

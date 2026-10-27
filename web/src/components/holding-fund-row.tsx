@@ -1,10 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Gift, MinusCircle, Pencil, Save, SlidersHorizontal, Trash2, X } from 'lucide-react'
-import { FundAnalysisBadge } from '@/components/fund-analysis-badge'
-import { FundAnalysisEventHint } from '@/components/fund-analysis-event-hint'
-import type { FundAnalysis } from '@/hooks/use-fund-data'
 import { useMarketTradingState } from '@/hooks/use-market-status'
 import { useFund, type FundEstimate } from '@/hooks/use-fund-data'
 import {
@@ -48,7 +46,6 @@ interface HoldingFundRowProps {
   holding: HoldingEntry
   metricScope?: 'official' | 'estimate'
   estimate?: FundEstimate | null
-  analysis?: FundAnalysis | null
   onRemove: () => Promise<void> | void
   onUpdate: (payload: UpdateHoldingPayload) => Promise<void> | void
   onSell: (payload: SellHoldingPayload) => Promise<void> | void
@@ -60,7 +57,6 @@ export function HoldingFundRow({
   holding,
   metricScope = 'official',
   estimate: providedEstimate,
-  analysis,
   onRemove,
   onUpdate,
   onSell,
@@ -449,12 +445,9 @@ export function HoldingFundRow({
         <div className="min-w-0">
           <div className="truncate text-base font-semibold text-theme-primary">{fundName}</div>
           <div className="mt-1 text-xs text-theme-muted">{holding.fund_id}</div>
-          <div className="mt-2">
-            <FundAnalysisBadge analysis={analysis} compact />
-          </div>
-          <div className="mt-2">
-            <FundAnalysisEventHint analysis={analysis} compact />
-          </div>
+          <Link href={`/observations/${holding.fund_id}`} className="mt-2 inline-block text-xs text-theme-secondary hover:text-theme-primary">
+            公告与资料
+          </Link>
           {holding.note && <div className="mt-2 text-xs text-theme-secondary">{holding.note}</div>}
           {holding.manual_confirmation && (
             <div className="mt-2 inline-flex items-center rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-200">

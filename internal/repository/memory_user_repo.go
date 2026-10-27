@@ -521,7 +521,8 @@ func (r *MemoryUserRepository) ListFundHoldingTransactionsFiltered(ctx context.C
 	transactions := r.holdingTxs[userID]
 	result := make([]domain.UserFundHoldingTransaction, 0, len(transactions))
 	types := holdingTransactionTypeSet(filter.Types)
-	for i := range transactions {
+	// Preserve latest insertion first when the clock gives transactions equal timestamps.
+	for i := len(transactions) - 1; i >= 0; i-- {
 		tx := transactions[i]
 		if filter.FundID != "" && tx.FundID != filter.FundID {
 			continue

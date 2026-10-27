@@ -1,4 +1,4 @@
-import { AnalysisBoardPageClient } from './page-client'
+import { redirect } from 'next/navigation'
 
 export default async function AnalysisBoardPage({
   params,
@@ -7,5 +7,5 @@ export default async function AnalysisBoardPage({
 }) {
   const { fundId } = await params
 
-  return <AnalysisBoardPageClient fundId={fundId} />
+  redirect(`/observations/${encodeURIComponent(fundId)}`)
 }

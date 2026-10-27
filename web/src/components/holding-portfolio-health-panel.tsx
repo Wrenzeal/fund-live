@@ -8,7 +8,7 @@ import {
   Info,
   ShieldAlert,
 } from 'lucide-react'
-import type { FundAnalysis, FundHoldingRecord } from '@/hooks/use-fund-data'
+import type { FundHoldingRecord } from '@/hooks/use-fund-data'
 import type {
   HoldingAggregateEntry,
   HoldingEntry,
@@ -26,7 +26,6 @@ interface HoldingPortfolioHealthPanelProps {
   compact?: boolean
   holdings: HoldingEntry[]
   aggregates: HoldingAggregateEntry[]
-  analysesByFundID: Record<string, FundAnalysis | null>
   aggregateMetrics: Record<string, HoldingEstimateAggregateMetrics>
   metricScope: HoldingMetricScope
   exposureSnapshots?: Record<string, HoldingExposureSnapshot>
@@ -65,7 +64,6 @@ export function HoldingPortfolioHealthPanel({
   compact = false,
   holdings,
   aggregates,
-  analysesByFundID,
   aggregateMetrics,
   metricScope,
   exposureSnapshots = {},
@@ -74,7 +72,6 @@ export function HoldingPortfolioHealthPanel({
   const summary = buildPortfolioHealthSummary({
     aggregates,
     holdings,
-    analysesByFundID,
     aggregateMetrics,
     metricScope,
     exposureSnapshots,
@@ -100,9 +97,9 @@ export function HoldingPortfolioHealthPanel({
           </div>
           <div className="mt-5 flex items-end gap-3">
             <div className="text-5xl font-black text-theme-primary">
-              {summary.score}
+              {summary.reviewCount}
             </div>
-            <div className="pb-1 text-sm text-theme-muted">/ 100</div>
+            <div className="pb-1 text-sm text-theme-muted">项待复核</div>
           </div>
           <div className="mt-3 text-xl font-black text-theme-primary">
             {summary.title}

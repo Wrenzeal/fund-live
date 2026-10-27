@@ -216,20 +216,14 @@ func main() {
 		estimateCoverageScheduler := service.NewEstimateCoverageScheduler(estimateCapabilityService, valuationService, defaultQuoteSource)
 		estimateCoverageScheduler.Start(context.Background())
 		log.Println("📡 Estimate coverage scheduler started (all supported funds will gradually enter collector pools)")
-		if analysisSnapshotStore != nil {
-			analysisRefresh := service.NewFundAnalysisSnapshotRefreshService(
-				estimateCapabilityService,
-				analysisCoordinator,
-				analysisSnapshotStore,
-			)
-			analysisRefresh.SetQuantResearchStore(quantResearchStore)
-			analysisRefresh.Start(context.Background())
-			log.Println("🧠 Fund analysis snapshot refresh scheduler started (nightly snapshot recompute)")
-		}
 	}
 
 	// Initialize handlers
 	fundHandler := handler.NewFundHandler(valuationService, fundRepo, fundResolver)
+	observationHandler := handler.NewFundObservationHandler(fundRepo, nil)
+	if fundResolver != nil {
+		observationHandler = handler.NewFundObservationHandler(fundRepo, fundResolver)
+	}
 	fundHandler.SetTransientFundDataLoader(fundDataLoader)
 	fundHandler.SetFundSectorStore(fundSectorStore)
 	if analysisSnapshotStore != nil {
@@ -266,7 +260,7 @@ func main() {
 			"status":           "ok",
 			"timestamp":        time.Now().Unix(),
 			"service":          "FundLive API",
-			"version":          "2026.7.24-quant-risk-v1",
+			"version":          "2026.10.16-fund-observation",
 			"storage_mode":     storageMode,
 			"email_code_login": emailCodeHealthStatus(c.Request.Context(), authConfig.EmailCodeEnabled, authService),
 		})
@@ -329,6 +323,7 @@ func main() {
 			fund.GET("/:id", fundHandler.GetFund)
 			fund.GET("/:id/dashboard", fundHandler.GetDashboard)
 			fund.GET("/:id/analysis", fundHandler.GetAnalysis)
+			fund.GET("/:id/observation", observationHandler.Get)
 			fund.GET("/:id/events", quantHandler.ListFundEvents)
 			fund.GET("/:id/estimate", fundHandler.GetEstimate)
 			fund.GET("/:id/holdings", fundHandler.GetHoldings)

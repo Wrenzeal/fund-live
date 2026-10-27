@@ -26,7 +26,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { useCurrentUser } from "@/hooks/use-auth";
 import {
-  useFundAnalyses,
   useFundHistoryBatch,
   useFundExposureSnapshots,
   useFundSearch,
@@ -47,8 +46,6 @@ import {
   aggregateChangeValue,
   aggregateLatestUpdatedAt,
   aggregateProfitValue,
-  analysisRecommendationWeight,
-  analysisRiskWeight,
   buildTradeAtValue,
   compareOptionalNumbers,
   detailChangeValue,
@@ -135,18 +132,17 @@ export default function HoldingsPage() {
   const [isAddingHolding, setIsAddingHolding] = useState(false);
   const defaultsInitializedRef = useRef(false);
   const { results } = useFundSearch(query);
-  const fundIDsForAnalysis = useMemo(
+  const heldFundIDs = useMemo(
     () =>
       Array.from(
         new Set(holdings.map((holding) => holding.fund_id).filter(Boolean)),
       ),
     [holdings],
   );
-  const { analysesByFundID } = useFundAnalyses(fundIDsForAnalysis);
-  const { historiesByFundID, isLoading: isHistoryLoading } = useFundHistoryBatch(fundIDsForAnalysis, 15);
+  const { historiesByFundID, isLoading: isHistoryLoading } = useFundHistoryBatch(heldFundIDs, 15);
   const { exposureSnapshotsByFundID } =
-    useFundExposureSnapshots(fundIDsForAnalysis);
-  const { topHoldingsByFundID } = useFundTopHoldings(fundIDsForAnalysis);
+    useFundExposureSnapshots(heldFundIDs);
+  const { topHoldingsByFundID } = useFundTopHoldings(heldFundIDs);
   const normalizedQuery = query.trim();
 
   const autoMatchedFund = useMemo(() => {
@@ -322,22 +318,6 @@ export default function HoldingsPage() {
     }
 
     return filteredHoldingAggregates.slice().sort((left, right) => {
-      const leftAnalysis = analysesByFundID[left.fund_id];
-      const rightAnalysis = analysesByFundID[right.fund_id];
-
-      if (sortMode === "analysis_recommendation") {
-        return (
-          analysisRecommendationWeight(rightAnalysis) -
-          analysisRecommendationWeight(leftAnalysis)
-        );
-      }
-
-      if (sortMode === "analysis_risk") {
-        return (
-          analysisRiskWeight(rightAnalysis) - analysisRiskWeight(leftAnalysis)
-        );
-      }
-
       if (sortMode === "principal_desc") {
         return compareOptionalNumbers(
           parseOptionalNumber(left.total_principal),
@@ -398,7 +378,6 @@ export default function HoldingsPage() {
     });
   }, [
     aggregateMetrics,
-    analysesByFundID,
     filteredHoldingAggregates,
     holdingsByFundID,
     metricScope,
@@ -410,22 +389,6 @@ export default function HoldingsPage() {
     }
 
     return filteredHoldings.slice().sort((left, right) => {
-      const leftAnalysis = analysesByFundID[left.fund_id];
-      const rightAnalysis = analysesByFundID[right.fund_id];
-
-      if (sortMode === "analysis_recommendation") {
-        return (
-          analysisRecommendationWeight(rightAnalysis) -
-          analysisRecommendationWeight(leftAnalysis)
-        );
-      }
-
-      if (sortMode === "analysis_risk") {
-        return (
-          analysisRiskWeight(rightAnalysis) - analysisRiskWeight(leftAnalysis)
-        );
-      }
-
       if (sortMode === "principal_desc") {
         return compareOptionalNumbers(
           parseOptionalNumber(left.amount),
@@ -485,7 +448,6 @@ export default function HoldingsPage() {
       );
     });
   }, [
-    analysesByFundID,
     estimatesByFundID,
     filteredHoldings,
     holdingsByFundID,
@@ -710,7 +672,7 @@ export default function HoldingsPage() {
             title="还没有持仓记录"
             features={[
               { title: "自动补齐", description: "净值、份额、市值" },
-              { title: "看见风险", description: "量化建议、事件标签" },
+              { title: "核对持仓", description: "仓位占比、公开资料" },
               { title: "形成组合", description: "组合分析入口" },
             ]}
           />
@@ -813,7 +775,6 @@ export default function HoldingsPage() {
                 holdingsByFundID={holdingsByFundID}
                 aggregateMetrics={aggregateMetrics}
                 estimatesByFundID={estimatesByFundID}
-                analysesByFundID={analysesByFundID}
                 historiesByFundID={historiesByFundID}
                 isHistoryLoading={isHistoryLoading}
                 showIncompleteOnly={showIncompleteOnly}
@@ -833,7 +794,6 @@ export default function HoldingsPage() {
               compact
               holdings={holdings}
               aggregates={holdingAggregates}
-              analysesByFundID={analysesByFundID}
               aggregateMetrics={aggregateMetrics}
               metricScope={metricScope}
               exposureSnapshots={exposureSnapshotsByFundID}
@@ -843,10 +803,8 @@ export default function HoldingsPage() {
               compact
               holdings={holdings}
               aggregates={holdingAggregates}
-              analysesByFundID={analysesByFundID}
               aggregateMetrics={aggregateMetrics}
               metricScope={metricScope}
-              exposureSnapshots={exposureSnapshotsByFundID}
             />
           </>
         )}

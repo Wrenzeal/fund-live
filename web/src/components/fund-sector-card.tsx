@@ -12,7 +12,7 @@ import {
   type FundThemeSnapshot,
 } from '@/hooks/use-fund-data'
 import { useCurrentUser } from '@/hooks/use-auth'
-import { confidenceLevelLabel } from '@/lib/fund-analysis-display'
+import { coverageLevelLabel } from '@/lib/fund-exposure-display'
 
 interface FundSectorCardProps {
   fund?: Fund
@@ -238,8 +238,8 @@ export function FundSectorCard({
 
   const snapshotDate = sectorSnapshot?.as_of_date || themeSnapshot?.as_of_date || '--'
   const confidenceLabels = { high: '识别覆盖较高', medium: '识别覆盖一般', low: '识别覆盖有限', unknown: '' }
-  const sectorConfidence = confidenceLevelLabel(sectorSnapshot?.confidence, confidenceLabels)
-  const themeConfidence = confidenceLevelLabel(themeSnapshot?.confidence, confidenceLabels)
+  const sectorConfidence = coverageLevelLabel(sectorSnapshot?.confidence, confidenceLabels)
+  const themeConfidence = coverageLevelLabel(themeSnapshot?.confidence, confidenceLabels)
   const showCoverageHint = sectorSnapshot?.confidence === 'low' || themeSnapshot?.confidence === 'low'
 
   const modules = [

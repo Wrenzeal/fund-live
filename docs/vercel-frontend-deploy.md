@@ -1,6 +1,8 @@
 # Vercel 前端部署说明
 
-当前前端在浏览器里默认请求同源 `/api/v1/*`。这些请求会先进入 Next.js Route Handler，再由 `web/src/lib/backend-proxy.ts` 代理到 Go 后端。
+当前前端在浏览器里默认请求同源 `/api/v1/*`。账号、基金、持仓等请求会先进入 Next.js Route Handler，再由 `web/src/lib/backend-proxy.ts` 代理到 Go 后端。
+
+`/research` 的 `/api/v1/market/research/overview`、`instrument`、`study` 由独立 Next.js Node.js Route Handler 提供，直接请求公开数据源并计算指标，不依赖 Go 服务器或 `BACKEND_URL`。研究功能无需新增环境变量，后端重装期间也可使用。公开源能否从 Vercel 节点访问需以部署后状态为准；函数实例的旧数据缓存不共享或持久化。详情见 [市场研究](market-research.md)。
 
 ## 必填环境变量
 

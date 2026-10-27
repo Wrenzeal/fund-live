@@ -23,8 +23,8 @@ export default function QuantBacktestPage() {
       <AppTopBar />
       <main id="main-content" className="container mx-auto max-w-7xl px-4 py-4 md:py-8">
         <header className="rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/45 p-5 md:p-6">
-          <Link href="/analysis/rankings" className="inline-flex items-center gap-2 text-sm text-theme-secondary hover:text-theme-primary">
-            <ArrowLeft className="h-4 w-4" />返回量化验证
+          <Link href="/observations" className="inline-flex items-center gap-2 text-sm text-theme-secondary hover:text-theme-primary">
+            <ArrowLeft className="h-4 w-4" />返回基金观察
           </Link>
           <div className="mt-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
@@ -32,6 +32,7 @@ export default function QuantBacktestPage() {
                 <BarChart3 className="h-6 w-6 text-cyan-200" />Lean 回测结果
               </div>
               <p className="mt-2 text-sm text-theme-secondary">任务 {jobId.slice(0, 12)} · 周度 Top 5 等权组合</p>
+              <p className="mt-2 text-xs text-theme-muted">历史实验档案，不用于生成当前基金的买卖结论。</p>
             </div>
             <div className="flex items-center gap-2 rounded-full border border-[var(--card-border)] bg-[var(--card-bg)]/35 px-3 py-2 text-xs text-theme-secondary">
               {isValidating && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}

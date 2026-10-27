@@ -4,7 +4,7 @@
   <h1>FundLive</h1>
 
   <p>
-    <strong>Real-time fund estimation, portfolio tracking, and quantitative insight dashboard</strong>
+    <strong>Real-time fund estimation, portfolio tracking, and disclosure observation</strong>
   </p>
 
   <p>
@@ -20,7 +20,7 @@
 
 ## Overview
 
-FundLive estimates intraday fund movement from public holdings, target ETFs, real-time quotes, and local snapshots. It helps users track watchlists, personal holdings, sector/theme exposure, and quantitative signals.
+FundLive estimates intraday fund movement from public holdings, target ETFs, real-time quotes, and local snapshots. It helps users track watchlists, personal holdings, sector/theme exposure, and recent source announcements.
 
 > This project is for data observation and research only. It is not investment advice.
 
@@ -29,7 +29,7 @@ FundLive estimates intraday fund movement from public holdings, target ETFs, rea
 - **Real-time estimation**: Estimates intraday fund movement from top holdings, feeder ETF targets, and QDII overseas holdings.
 - **Fund search and profile**: Supports catalog sync, availability status, detail/holding warm-up, and intraday charts.
 - **Watchlist and portfolio**: Supports grouped watchlists, holding records, official NAV view, and intraday estimate view.
-- **Quant dashboard**: Provides scores, recommendation distribution, supporting/opposing evidence, risks, events, and confidence breakdowns.
+- **Fund observations**: Dated announcements from funds and disclosed holdings, original source links, holding report dates, coverage and explicit source availability; no investment ranking or recommendation percentages.
 - **Sector and theme exposure**: Aggregates holdings by sector/theme and supports admin classification overrides.
 - **Authentication**: Supports email-code, email/password, Google Sign-In, HttpOnly cookie sessions, and rate limiting.
 

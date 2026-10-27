@@ -1409,3 +1409,19 @@ textarea::selection {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* Research motion starts when a chart enters view; plotted prices stay unmodified. */
+.research-chart-frame { position: relative; min-width: 0; isolation: isolate; }
+.research-chart-surface { animation: research-chart-enter 240ms ease-out both; }
+.research-chart-placeholder {
+  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, color-mix(in srgb, var(--card-border) 55%, transparent) 56px, transparent 57px);
+}
+.research-chart-frame .recharts-reference-line { animation: research-chart-guides 420ms ease-out both; }
+.research-chart-frame .recharts-active-dot { pointer-events: none; }
+.research-chart-frame .recharts-tooltip-wrapper { outline: none; }
+@keyframes research-chart-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes research-chart-guides { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .research-chart-surface, .research-chart-frame .recharts-reference-line { animation: none; }
+}

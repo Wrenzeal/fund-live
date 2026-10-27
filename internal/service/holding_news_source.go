@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"sync"
@@ -360,4 +361,60 @@ func eventImpactRank(event domain.FundAnalysisEventImpact) int {
 		}
 	}
 	return score
+}
+
+// LoadHoldingObservationNotices reuses stock lookup and disclosure requests, but
+// bypasses event caches, title classifiers, impact ranking, and title truncation.
+func (s *HoldingNewsSource) LoadHoldingObservationNotices(ctx context.Context, holdings []domain.StockHolding, now time.Time) ObservationNoticeBatch {
+	batch := ObservationNoticeBatch{}
+	selected := selectAnnouncementTargetHoldings(holdings, 3)
+	if len(selected) == 0 {
+		return batch
+	}
+	source := &HoldingNewsSource{
+		client: observationHTTPClient(s.client).
+			SetHeader("Referer", "https://www.cninfo.com.cn/new/commonUrl/pageOfSearch?url=disclosure/list/search").
+			SetHeader("X-Requested-With", "XMLHttpRequest"),
+		orgCache: make(map[string]cninfoSearchResult),
+	}
+	for _, holding := range selected {
+		if err := ctx.Err(); err != nil {
+			batch.recordRequest(err)
+			break
+		}
+		stock, err := source.resolveCninfoStock(ctx, holding.StockCode)
+		if err == nil && stock.OrgID == "" {
+			err = errors.New("holding disclosure organization unavailable")
+		}
+		if err != nil {
+			batch.recordRequest(err)
+			continue
+		}
+		items, err := source.fetchRecentAnnouncements(ctx, holding, stock.OrgID, now)
+		batch.recordRequest(err)
+		if err != nil {
+			continue
+		}
+		for _, item := range items {
+			noticeID := ""
+			if strings.TrimSpace(item.AnnouncementID) != "" {
+				noticeID = "holding:" + holding.StockCode + ":" + item.AnnouncementID
+			}
+			publishedAt := ""
+			if item.AnnouncementTime > 0 {
+				publishedAt = time.UnixMilli(item.AnnouncementTime).In(now.Location()).Format(time.RFC3339)
+			}
+			sourceURL := strings.TrimSpace(item.AdjunctURL)
+			if sourceURL != "" && !strings.Contains(sourceURL, "://") {
+				sourceURL = "https://static.cninfo.com.cn/" + strings.TrimLeft(sourceURL, "/")
+			}
+			batch.Notices = append(batch.Notices, domain.FundObservationNotice{
+				ID:    noticeID,
+				Title: item.AnnouncementTitle, Scope: "holding", PublishedAt: publishedAt,
+				SourceName: "巨潮资讯", SourceURL: sourceURL,
+				RelatedSymbol: holding.StockCode, RelatedName: holding.StockName,
+			})
+		}
+	}
+	return batch
 }

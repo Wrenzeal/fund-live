@@ -25,8 +25,8 @@ export default function QuantExperimentPage() {
       <AppTopBar />
       <main id="main-content" className="container mx-auto max-w-7xl px-4 py-4 md:py-8">
         <header className="overflow-hidden rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/45 p-5 md:rounded-[2rem] md:p-7">
-          <Link href="/analysis/rankings" className="inline-flex items-center gap-2 text-sm text-theme-secondary transition-colors hover:text-theme-primary">
-            <ArrowLeft className="h-4 w-4" />返回量化排行榜
+          <Link href="/observations" className="inline-flex items-center gap-2 text-sm text-theme-secondary transition-colors hover:text-theme-primary">
+            <ArrowLeft className="h-4 w-4" />返回基金观察
           </Link>
           <div className="mt-5 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
@@ -35,7 +35,7 @@ export default function QuantExperimentPage() {
               </div>
               <h1 className="mt-3 text-2xl font-black tracking-tight text-theme-primary md:text-3xl">A–D 风险收益对照</h1>
               <p className="mt-2 text-sm leading-6 text-theme-secondary">
-                在同一信号、区间、费用和成交规则下，依次比较排名缓冲、低换手与风险控制。结果只用于验证策略，不改变FundLive正式评分。
+                历史实验档案：在同一信号、区间、费用和成交规则下，比较排名缓冲、低换手与风险控制。结果不用于生成当前基金的买卖结论。
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4 lg:min-w-[32rem]">

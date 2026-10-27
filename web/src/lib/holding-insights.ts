@@ -1,10 +1,9 @@
-import type { FundAnalysis, FundHoldingRecord, FundSectorSnapshot, FundThemeSnapshot } from '@/hooks/use-fund-data'
+import type { FundHoldingRecord, FundSectorSnapshot, FundThemeSnapshot } from '@/hooks/use-fund-data'
 import type {
   HoldingAggregateEntry,
   HoldingEntry,
   HoldingEstimateAggregateMetrics,
 } from '@/hooks/use-user-portfolio'
-import { dominantAnalysisRecommendation } from '@/lib/fund-analysis-display'
 import {
   aggregateChangeValue,
   aggregateProfitValue,
@@ -50,7 +49,7 @@ export interface PortfolioHealthSignal {
 }
 
 export interface PortfolioHealthSummary {
-  score: number
+  reviewCount: number
   tone: InsightTone
   title: string
   description: string
@@ -211,20 +210,6 @@ function formatMoneyMetric(value: number) {
   }).format(value)
 }
 
-function signalWeight(tone: InsightTone) {
-  switch (tone) {
-    case 'danger':
-      return 24
-    case 'warning':
-      return 14
-    case 'info':
-      return 5
-    case 'good':
-    default:
-      return -4
-  }
-}
-
 function addExposure(bucket: Map<string, number>, name: string | undefined, amount: number) {
   const normalizedName = (name || '').trim()
   if (!normalizedName || amount <= 0) {
@@ -240,7 +225,6 @@ function topExposure(bucket: Map<string, number>) {
 function primaryStyleLabel(
   aggregate: HoldingAggregateEntry,
   snapshot?: HoldingExposureSnapshot,
-  analysis?: FundAnalysis | null,
 ) {
   const fund = aggregate.fund
   const text = [
@@ -249,7 +233,6 @@ function primaryStyleLabel(
     fund?.category_name,
     snapshot?.sectorSnapshot?.primary_sector_name,
     snapshot?.themeSnapshot?.primary_theme_name,
-    analysis?.analysis_type,
   ].filter(Boolean).join(' ').toLowerCase()
 
   if (/qdii|海外|纳斯达克|标普|恒生|港股|美股|全球/.test(text)) {
@@ -276,31 +259,9 @@ function primaryStyleLabel(
   return '宽基 / 均衡'
 }
 
-function analysisRelatedSymbols(analysis?: FundAnalysis | null) {
-  const symbols = new Set<string>()
-  for (const event of analysis?.event_impacts ?? []) {
-    for (const symbol of event.related_symbols ?? []) {
-      const normalized = symbol.trim()
-      if (normalized) {
-        symbols.add(normalized)
-      }
-    }
-  }
-  for (const evidence of analysis?.primary_evidence ?? []) {
-    for (const symbol of evidence.related_symbols ?? []) {
-      const normalized = symbol.trim()
-      if (normalized) {
-        symbols.add(normalized)
-      }
-    }
-  }
-  return Array.from(symbols)
-}
-
 export function buildPortfolioHealthSummary(params: {
   aggregates: HoldingAggregateEntry[]
   holdings: HoldingEntry[]
-  analysesByFundID: Record<string, FundAnalysis | null>
   aggregateMetrics: Record<string, HoldingEstimateAggregateMetrics>
   metricScope: HoldingMetricScope
   exposureSnapshots?: Record<string, HoldingExposureSnapshot>
@@ -309,7 +270,6 @@ export function buildPortfolioHealthSummary(params: {
   const {
     aggregates,
     holdings,
-    analysesByFundID,
     aggregateMetrics,
     metricScope,
     exposureSnapshots = {},
@@ -317,7 +277,7 @@ export function buildPortfolioHealthSummary(params: {
   } = params
   if (holdings.length === 0 || aggregates.length === 0) {
     return {
-      score: 0,
+      reviewCount: 0,
       tone: 'info',
       title: '等待第一笔持仓',
       description: '记录持仓后会自动生成组合体检。',
@@ -337,11 +297,6 @@ export function buildPortfolioHealthSummary(params: {
   const incompleteCount = holdings.filter((holding) => !holding.shares || !holding.confirmed_nav_date || !holding.real_metrics_ready).length
   const manualCount = holdings.filter((holding) => holding.manual_confirmation).length
   const multiLotCount = aggregates.filter((aggregate) => aggregate.holding_count > 1).length
-  const highRiskAggregates = aggregates.filter((aggregate) => analysesByFundID[aggregate.fund_id]?.risk_level === 'high')
-  const decreaseAggregates = aggregates.filter((aggregate) => {
-    const analysis = analysesByFundID[aggregate.fund_id]
-    return analysis ? dominantAnalysisRecommendation(analysis) === 'decrease' : false
-  })
   const profitEntries = aggregates
     .map((aggregate) => ({
       aggregate,
@@ -353,7 +308,6 @@ export function buildPortfolioHealthSummary(params: {
   const themeExposure = new Map<string, number>()
   const styleExposure = new Map<string, number>()
   const primaryThemeGroups = new Map<string, { amount: number; count: number }>()
-  const relatedSymbolOwners = new Map<string, Set<string>>()
   const topStockOwners = new Map<string, { name: string; owners: Set<string>; weightedExposure: number }>()
 
   for (const aggregate of aggregates) {
@@ -378,7 +332,7 @@ export function buildPortfolioHealthSummary(params: {
       addExposure(themeExposure, snapshot?.themeSnapshot?.primary_theme_name, principal)
     }
 
-    const styleLabel = primaryStyleLabel(aggregate, snapshot, analysesByFundID[aggregate.fund_id])
+    const styleLabel = primaryStyleLabel(aggregate, snapshot)
     addExposure(styleExposure, styleLabel, principal)
 
     const primaryTheme = snapshot?.themeSnapshot?.primary_theme_name || snapshot?.sectorSnapshot?.primary_sector_name
@@ -388,13 +342,6 @@ export function buildPortfolioHealthSummary(params: {
         amount: current.amount + principal,
         count: current.count + 1,
       })
-    }
-
-    for (const symbol of analysisRelatedSymbols(analysesByFundID[aggregate.fund_id])) {
-      if (!relatedSymbolOwners.has(symbol)) {
-        relatedSymbolOwners.set(symbol, new Set())
-      }
-      relatedSymbolOwners.get(symbol)?.add(aggregate.fund_id)
     }
 
     for (const holding of (topHoldingsByFundID[aggregate.fund_id] ?? []).slice(0, 10)) {
@@ -425,7 +372,7 @@ export function buildPortfolioHealthSummary(params: {
       description: `${fundNameFromAggregate(largest)} 占总本金约 ${formatPercentMetric(largestShare)}，单一基金波动会明显影响组合。`,
       tone: 'danger',
       metric: formatPercentMetric(largestShare),
-      action: '可优先复核这只基金的量化风险和行业暴露。',
+      action: '可优先复核这只基金的持仓占比和行业暴露。',
     })
   } else if (largest && largestShare >= 30) {
     signals.push({
@@ -453,26 +400,6 @@ export function buildPortfolioHealthSummary(params: {
       tone: topThreeShare >= 90 ? 'danger' : 'warning',
       metric: formatPercentMetric(topThreeShare),
       action: '后续可结合行业 / 主题暴露看是否重复。',
-    })
-  }
-
-  if (highRiskAggregates.length > 0) {
-    signals.push({
-      id: 'high-risk-analysis',
-      title: '存在高风险量化标签',
-      description: `${highRiskAggregates.length} 只基金当前量化风险为高，建议优先查看事件和反方证据。`,
-      tone: 'danger',
-      metric: `${highRiskAggregates.length} 只`,
-      action: '可切换“风险等级优先”排序。',
-    })
-  } else if (decreaseAggregates.length > 0) {
-    signals.push({
-      id: 'decrease-analysis',
-      title: '存在风险偏高信号',
-      description: `${decreaseAggregates.length} 只基金当前结构更偏谨慎。`,
-      tone: 'warning',
-      metric: `${decreaseAggregates.length} 只`,
-      action: '可切换“风险等级优先”排序。',
     })
   }
 
@@ -597,21 +524,7 @@ export function buildPortfolioHealthSummary(params: {
       description: `基金持仓明细显示 ${leadingNames} 同时出现在多只基金 Top10 中，说明组合可能在底层股票上重复暴露。`,
       tone: totalWeightedExposure / Math.max(totalPrincipal, 1) >= 0.12 ? 'warning' : 'info',
       metric: formatMoneyMetric(totalWeightedExposure),
-      action: '这是基于基金持仓明细的穿透结果，比单纯事件标的提示更可信；可结合仓位决定是否需要分散。',
-    })
-  }
-
-  const overlappedSymbols = Array.from(relatedSymbolOwners.entries())
-    .filter(([, owners]) => owners.size >= 2)
-    .slice(0, 3)
-  if (overlappedTopStocks.length === 0 && overlappedSymbols.length > 0) {
-    signals.push({
-      id: 'related-symbol-overlap',
-      title: '重仓 / 事件标的有重叠',
-      description: `量化事件中重复出现 ${overlappedSymbols.map(([symbol]) => symbol).join('、')}，说明多只基金可能受同一批股票事件影响。`,
-      tone: 'info',
-      metric: `${overlappedSymbols.length} 个`,
-      action: '这是缺少完整 Top10 重叠时的补充信号，优先级低于基金持仓明细穿透。',
+      action: '这是基于已披露基金持仓明细的穿透结果，可结合披露日期和仓位一起复核。',
     })
   }
 
@@ -626,35 +539,28 @@ export function buildPortfolioHealthSummary(params: {
     })
   }
 
-  const penalty = signals.reduce((sum, signal) => sum + signalWeight(signal.tone), 0)
-  const score = Math.max(0, Math.min(100, Math.round(88 - penalty)))
-  const tone: InsightTone = score >= 80 ? 'good' : score >= 65 ? 'info' : score >= 45 ? 'warning' : 'danger'
-  const title = tone === 'good'
-    ? '组合状态较稳'
-    : tone === 'info'
-      ? '组合可继续观察'
-      : tone === 'warning'
-        ? '组合有需要复核的地方'
-        : '组合需要优先复核'
+  const reviewCount = signals.filter((signal) => signal.tone === 'danger' || signal.tone === 'warning').length
+  const tone: InsightTone = signals.some((signal) => signal.tone === 'danger')
+    ? 'danger'
+    : reviewCount > 0 ? 'warning' : 'info'
+  const title = reviewCount > 0 ? '持仓有待复核事项' : '持仓核对摘要'
 
   return {
-    score,
+    reviewCount,
     tone,
     title,
-    description: `基于 ${holdings.length} 笔持仓、${aggregates.length} 只基金的仓位、量化风险、数据就绪度和今日波动生成。`,
-    signals: signals.slice(0, 8),
+    description: `基于 ${holdings.length} 笔持仓、${aggregates.length} 只基金的仓位、已披露暴露、数据就绪度和今日波动生成。`,
+    signals,
   }
 }
 
 export function buildHoldingReminderSummary(params: {
   holdings: HoldingEntry[]
   aggregates: HoldingAggregateEntry[]
-  analysesByFundID: Record<string, FundAnalysis | null>
   aggregateMetrics: Record<string, HoldingEstimateAggregateMetrics>
   metricScope: HoldingMetricScope
-  exposureSnapshots?: Record<string, HoldingExposureSnapshot>
 }): HoldingReminderSummary {
-  const { holdings, aggregates, analysesByFundID, aggregateMetrics, metricScope, exposureSnapshots = {} } = params
+  const { holdings, aggregates, aggregateMetrics, metricScope } = params
   const reminders: HoldingReminderItem[] = []
   const incompleteCount = holdings.filter((holding) => !holding.real_metrics_ready || !holding.shares || !holding.confirmed_nav_date).length
   if (incompleteCount > 0) {
@@ -682,22 +588,7 @@ export function buildHoldingReminderSummary(params: {
       description: `${fundNameFromAggregate(dropEntry.aggregate)} 当前${metricScope === 'official' ? '官方' : '盘中预估'}涨跌幅约 ${dropEntry.change.toFixed(2)}%。`,
       tone: dropEntry.change <= -5 ? 'danger' : 'warning',
       metric: `${dropEntry.change.toFixed(2)}%`,
-      action: '建议结合量化风险、事件和持仓仓位决定是否复核。',
-    })
-  }
-
-  const riskFunds = aggregates.filter((aggregate) => {
-    const analysis = analysesByFundID[aggregate.fund_id]
-    return analysis?.risk_level === 'high' || (analysis ? dominantAnalysisRecommendation(analysis) === 'decrease' : false)
-  })
-  if (riskFunds.length > 0) {
-    reminders.push({
-      id: 'analysis-risk',
-      title: '量化风险信号需要复核',
-      description: `${riskFunds.length} 只基金存在高风险或风险偏高结论，优先查看反方证据和最近事件。`,
-      tone: 'warning',
-      metric: `${riskFunds.length} 只`,
-      action: '可切换“风险等级优先”排序。',
+      action: '建议结合持仓占比、最新公告和确认净值复核。',
     })
   }
 
@@ -719,39 +610,6 @@ export function buildHoldingReminderSummary(params: {
       tone: 'info',
       metric: `${staleManual.length} 笔`,
       action: '可在对账面板切到“已校正”查看。',
-    })
-  }
-
-  const totalPrincipal = aggregates.reduce((sum, aggregate) => sum + (parseOptionalNumber(aggregate.total_principal) ?? 0), 0)
-  const themeExposure = new Map<string, number>()
-  for (const aggregate of aggregates) {
-    const principal = parseOptionalNumber(aggregate.total_principal) ?? 0
-    const snapshot = exposureSnapshots[aggregate.fund_id]
-    const themeBreakdown = snapshot?.themeSnapshot?.breakdown ?? []
-    if (themeBreakdown.length > 0) {
-      for (const item of themeBreakdown) {
-        addExposure(themeExposure, item.theme_name, principal * ((parseOptionalNumber(item.weight_percent) ?? 0) / 100))
-      }
-    } else {
-      addExposure(themeExposure, snapshot?.themeSnapshot?.primary_theme_name || snapshot?.sectorSnapshot?.primary_sector_name, principal)
-    }
-  }
-  const largestTheme = topExposure(themeExposure)
-  const hasHeavyEvent = aggregates.some((aggregate) => {
-    const analysis = analysesByFundID[aggregate.fund_id]
-    return (analysis?.event_impacts ?? []).some((event) => (
-      (event.target_scope === 'exposure' || event.target_scope === 'macro' || event.target_scope === 'holding') &&
-      event.strength !== 'low'
-    ))
-  })
-  if (largestTheme && totalPrincipal > 0 && (largestTheme[1] / totalPrincipal) * 100 >= 35 && hasHeavyEvent) {
-    reminders.push({
-      id: 'heavy-theme-event',
-      title: '重仓主题存在事件信号',
-      description: `${largestTheme[0]} 是当前主要暴露之一，且相关基金已有中高强度事件信号。`,
-      tone: 'warning',
-      metric: formatPercentMetric((largestTheme[1] / totalPrincipal) * 100),
-      action: '建议优先查看该主题下基金的量化详情页。',
     })
   }
 

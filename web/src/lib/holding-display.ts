@@ -1,13 +1,11 @@
-import type { FundAnalysis } from '@/hooks/use-fund-data'
 import type { FundEstimate } from '@/hooks/use-fund-data'
 import type { HoldingAggregateEntry, HoldingEntry, HoldingEstimateAggregateMetrics } from '@/hooks/use-user-portfolio'
-import { dominantAnalysisRecommendation, parseAnalysisNumber } from '@/lib/fund-analysis-display'
 
 export const BEIJING_OFFSET = '+08:00'
 
 export type TradeTiming = 'before_close' | 'after_close'
 export type HoldingMetricScope = 'official' | 'estimate'
-export type HoldingSortMode = 'default' | 'analysis_recommendation' | 'analysis_risk' | 'principal_desc' | 'profit_asc' | 'profit_desc' | 'change_asc' | 'change_desc' | 'count_desc' | 'recent_desc'
+export type HoldingSortMode = 'default' | 'principal_desc' | 'profit_asc' | 'profit_desc' | 'change_asc' | 'change_desc' | 'count_desc' | 'recent_desc'
 export type HoldingFilterMode = 'all' | 'profit' | 'loss' | 'ready' | 'partial' | 'single' | 'multiple'
 
 export function buildTradeAtValue(date: string, tradeTiming: TradeTiming) {
@@ -106,43 +104,6 @@ export function compareOptionalNumbers(left: number | null, right: number | null
   }
 
   return direction === 'asc' ? left - right : right - left
-}
-
-export function analysisRecommendationWeight(analysis?: Pick<FundAnalysis, 'increase_percent' | 'hold_percent' | 'decrease_percent'> | null) {
-  if (!analysis) {
-    return -1
-  }
-
-  const increase = parseAnalysisNumber(analysis.increase_percent)
-  const hold = parseAnalysisNumber(analysis.hold_percent)
-  const decrease = parseAnalysisNumber(analysis.decrease_percent)
-  const dominant = dominantAnalysisRecommendation(analysis)
-
-  if (dominant === 'increase') {
-    return 3_000 + increase
-  }
-  if (dominant === 'hold') {
-    return 2_000 + hold
-  }
-  return 1_000 + decrease
-}
-
-export function analysisRiskWeight(analysis?: Pick<FundAnalysis, 'risk_level' | 'total_score'> | null) {
-  if (!analysis) {
-    return -1
-  }
-
-  const score = parseAnalysisNumber(analysis.total_score)
-  switch (analysis.risk_level) {
-    case 'high':
-      return 3_000 + (100 - score)
-    case 'medium':
-      return 2_000 + (100 - score)
-    case 'low':
-      return 1_000 + (100 - score)
-    default:
-      return score
-  }
 }
 
 export function aggregateProfitValue(

@@ -4,19 +4,16 @@ import Link from 'next/link'
 import { ArrowUpRight, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useMarketTradingState } from '@/hooks/use-market-status'
-import { useFundDashboard, type FundAnalysis } from '@/hooks/use-fund-data'
-import { FundAnalysisBadge } from '@/components/fund-analysis-badge'
-import { FundAnalysisEventHint } from '@/components/fund-analysis-event-hint'
+import { useFundDashboard } from '@/hooks/use-fund-data'
 import { FundMiniTrend } from '@/components/fund-mini-trend'
 import { cn, formatPercent } from '@/lib/utils'
 
 interface WatchlistFundCardProps {
   fundId: string
-  analysis?: FundAnalysis | null
   onRemove: () => Promise<void> | void
 }
 
-export function WatchlistFundCard({ fundId, analysis, onRemove }: WatchlistFundCardProps) {
+export function WatchlistFundCard({ fundId, onRemove }: WatchlistFundCardProps) {
   const [isRemoving, setIsRemoving] = useState(false)
   const { session } = useMarketTradingState()
   const isCallAuction = session === 'call_auction'
@@ -55,12 +52,9 @@ export function WatchlistFundCard({ fundId, analysis, onRemove }: WatchlistFundC
         <div className="min-w-0">
           <div className="truncate text-base font-semibold text-theme-primary">{fundName}</div>
           <div className="mt-1 text-xs text-theme-muted">{fundId}</div>
-          {analysis && (
-            <div className="mt-2 space-y-1.5">
-              <FundAnalysisBadge analysis={analysis} compact />
-              <FundAnalysisEventHint analysis={analysis} compact />
-            </div>
-          )}
+          <Link href={`/observations/${fundId}`} className="mt-2 inline-block text-xs text-theme-secondary hover:text-theme-primary">
+            公告与资料
+          </Link>
         </div>
 
         <button

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -248,4 +249,58 @@ func dedupeFundNoticeEvents(events []domain.FundAnalysisEventImpact) []domain.Fu
 		result = append(result, event)
 	}
 	return result
+}
+
+// LoadFundObservationNotices reads complete titles without polarity or strength rules.
+// Each category's latest page is bounded independently; failed pages stay explicit.
+func (s *FundNoticeSource) LoadFundObservationNotices(ctx context.Context, fundCode, scope string, _ time.Time) ObservationNoticeBatch {
+	batch := ObservationNoticeBatch{}
+	if !isObservationFundCode(fundCode) {
+		batch.recordRequest(errors.New("invalid observation fund code"))
+		return batch
+	}
+	source := &FundNoticeSource{client: observationHTTPClient(s.client)}
+	for _, category := range []string{"3", "4", "5", "6"} {
+		if err := ctx.Err(); err != nil {
+			batch.recordRequest(err)
+			break
+		}
+		items, err := source.fetchNoticePage(ctx, fundCode, category)
+		batch.recordRequest(err)
+		if err != nil {
+			continue
+		}
+		for _, item := range items {
+			noticeID := ""
+			if strings.TrimSpace(item.ID) != "" {
+				noticeID = scope + ":" + fundCode + ":" + item.ID
+			}
+			sourceURL := "https://fundf10.eastmoney.com/jjgg_" + fundCode + ".html"
+			if strings.HasPrefix(item.ID, "AN") && observationDigits(item.ID[2:]) {
+				sourceURL = "https://fund.eastmoney.com/gonggao/" + fundCode + "," + item.ID + ".html"
+			}
+			notice := domain.FundObservationNotice{
+				ID: noticeID, Title: item.Title,
+				Scope: scope, PublishedAt: item.PublishDate,
+				SourceName: "东方财富基金公告", SourceURL: sourceURL,
+			}
+			if scope == "target_etf" {
+				notice.RelatedSymbol = fundCode
+			}
+			batch.Notices = append(batch.Notices, notice)
+		}
+	}
+	return batch
+}
+
+func observationDigits(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, character := range value {
+		if character < '0' || character > '9' {
+			return false
+		}
+	}
+	return true
 }

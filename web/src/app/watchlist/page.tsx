@@ -25,7 +25,7 @@ import { FloatingListbox } from "@/components/floating-listbox";
 import { ScrollReveal, ScrollRevealStack } from "@/components/scroll-reveal";
 import { WatchlistFundCard } from "@/components/watchlist-fund-card";
 import { useCurrentUser } from "@/hooks/use-auth";
-import { useFundAnalyses, useFundSearch } from "@/hooks/use-fund-data";
+import { useFundSearch } from "@/hooks/use-fund-data";
 import {
   useUserPortfolio,
   type WatchlistGroup,
@@ -103,18 +103,6 @@ export default function WatchlistPage() {
   const visibleFundResults = useMemo(() => results.slice(0, 5), [results]);
   const shouldShowFundSearchMenu =
     isFundSearchMenuOpen && fundQuery.trim().length >= 2;
-  const watchlistFundIDs = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          watchlistGroups
-            .flatMap((group) => group.funds.map((item) => item.fund_id))
-            .filter(Boolean),
-        ),
-      ),
-    [watchlistGroups],
-  );
-  const { analysesByFundID } = useFundAnalyses(watchlistFundIDs);
 
   const orderedWatchlistGroups = useMemo(() => {
     if (
@@ -1153,7 +1141,6 @@ export default function WatchlistPage() {
                             >
                               <WatchlistFundCard
                                 fundId={item.fund_id}
-                                analysis={analysesByFundID[item.fund_id]}
                                 onRemove={() =>
                                   void removeFundFromGroup(
                                     group.id,
