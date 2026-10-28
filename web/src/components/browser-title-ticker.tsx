@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 
 const SCROLL_THRESHOLD = 14
 const SCROLL_GAP = '\u00a0\u00a0\u00a0·\u00a0\u00a0\u00a0'
@@ -24,7 +25,13 @@ function buildTitleFrames(title: string) {
 }
 
 export function BrowserTitleTicker({ title }: BrowserTitleTickerProps) {
+  const pathname = usePathname()
+
   useEffect(() => {
+    if (pathname !== '/') {
+      return
+    }
+
     document.title = title
 
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -41,12 +48,14 @@ export function BrowserTitleTicker({ title }: BrowserTitleTickerProps) {
       frame += 1
     }
 
-    const stop = () => {
+    const stop = (restoreTitle = true) => {
       if (intervalId !== undefined) {
         window.clearInterval(intervalId)
         intervalId = undefined
       }
-      document.title = title
+      if (restoreTitle) {
+        document.title = title
+      }
       frame = 0
     }
 
@@ -71,10 +80,10 @@ export function BrowserTitleTicker({ title }: BrowserTitleTickerProps) {
 
     return () => {
       window.clearTimeout(startDelayId)
-      stop()
+      stop(false)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [title])
+  }, [pathname, title])
 
   return null
 }

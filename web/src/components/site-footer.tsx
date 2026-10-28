@@ -17,6 +17,9 @@ export function SiteFooter({ className, compact = false }: SiteFooterProps) {
 
           <div className="flex flex-col gap-3 text-sm text-theme-muted md:items-end">
             <nav className="flex flex-wrap gap-x-4 gap-y-2" aria-label="页脚导航">
+              <Link className="transition-colors hover:text-theme-primary focus-visible:text-theme-primary" href="/methodology">
+                方法与来源
+              </Link>
               <Link className="transition-colors hover:text-theme-primary focus-visible:text-theme-primary" href="/privacy">
                 隐私政策
               </Link>

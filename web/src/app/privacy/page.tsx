@@ -1,12 +1,10 @@
 import type { Metadata } from 'next'
+import { publicPageMetadata } from '@/lib/site-metadata'
 import { Database, LockKeyhole, ShieldCheck } from 'lucide-react'
 
 import { StaticInfoCardGrid, StaticInfoHero, StaticInfoShell } from '@/components/static-info-page'
 
-export const metadata: Metadata = {
-  title: '隐私政策 | FundLive',
-  description: '了解 FundLive 为提供基金观察、自选、持仓和账号安全能力而保存和使用的信息。',
-}
+export const metadata: Metadata = publicPageMetadata('隐私政策', '了解 FundLive 为提供基金观察、自选、持仓和账号安全能力而保存和使用的信息。', '/privacy')
 
 const sections = [
   {

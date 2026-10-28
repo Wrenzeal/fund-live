@@ -70,6 +70,10 @@ curl -i https://fund.wrenzeal.top/api/v1/market/status
 
 Google 登录按钮会请求 `/api/v1/auth/config`。如果该接口 500/502，通常不是 Google 配置本身坏了，而是 Vercel 前端没有连上 Go 后端。
 
+## 搜索发现与 AI 引用
+
+前端包含 `/robots.txt`、`/sitemap.xml`、公开方法页和分区索引规则。发布后还需分别验证搜索平台站点所有权、提交同一个 sitemap 并检查实际索引；部署不等于收录。所有权验证环境变量、上线验收及下一阶段正文 SSR 见 [SEO / GEO 运行说明](seo-geo.md)。此项不需要重新建库或更新 Go 包。
+
 ## 图表 width(-1)/height(-1) 警告
 
 当 dashboard/timeseries 接口失败时，图表容器可能在错误态或空数据态下短暂测量到非法尺寸，Recharts 会输出 `width(-1) and height(-1)`。优先修复 API 代理；若 API 正常后仍出现，再单独处理图表容器最小高度。

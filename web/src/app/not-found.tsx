@@ -1,7 +1,14 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { SearchX } from 'lucide-react'
 
 import { StaticInfoHero, StaticInfoShell } from '@/components/static-info-page'
+
+export const metadata: Metadata = {
+  title: '页面未找到',
+  alternates: { canonical: null },
+  robots: { index: false, follow: true },
+}
 
 export default function NotFound() {
   return (

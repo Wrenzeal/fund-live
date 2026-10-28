@@ -159,6 +159,7 @@ go run ./cmd/run-quant-experiment --preset risk-v1
 
 - [`CHANGELOG.md`](CHANGELOG.md)：版本与功能变更记录
 - [`DESIGN.md`](DESIGN.md)：产品和设计决策
+- [`docs/seo-geo.md`](docs/seo-geo.md)：搜索索引边界、站点验证、公开方法页及 AI 引用建设
 - [`todo_list.md`](todo_list.md)：当前任务边界与后续计划
 - [`docs/overseas-data-source-selection.md`](docs/overseas-data-source-selection.md)：海外行情数据源评估
 - [`docs/email-code-login.md`](docs/email-code-login.md)：邮箱验证码、DragonFly 与 Resend 部署说明

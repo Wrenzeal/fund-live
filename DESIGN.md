@@ -166,5 +166,11 @@
 - Classification constraints: Manual classification labels are an overlay; never present manual tags as automatic holdings weights, and keep automatic sector/theme breakdown visible.
 - Test/screenshot expectations: At minimum run `npm run lint` and `npm run build`; for high-risk visual changes, capture browser screenshots or run visual QA when available.
 
+## Search and AI discovery
+- Public search metadata uses the production domain, distinct route titles and canonical URLs. The home title ticker must stop after leaving `/` and must not override inner-page titles.
+- `/methodology` is a server-rendered explanation of estimation, source dates, coverage and limitations, reachable from the footer. Reuse the static information-page components and existing theme tokens.
+- Private account and utility areas remain noindex. Client-only fund observation and announcement details remain noindex until anonymous entity validation and useful initial HTML exist. Robots and metadata do not replace authentication.
+- `robots.txt` and sitemap are shared discovery infrastructure; platform ownership verification and index reports remain separate. See `docs/seo-geo.md`. Neither structured data nor an AI-specific file guarantees citations or financial authority.
+
 ## Open questions
 - [ ] Whether strict empirical validation will justify any future scoring product. No unvalidated score may be reintroduced through observation or portfolio labels.
