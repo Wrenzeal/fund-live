@@ -8,7 +8,6 @@ import {
   HoldingFeedbackBanner,
   type HoldingFeedbackMessage,
 } from "@/components/holding-feedback-banner";
-import { ScrollRevealStack } from "@/components/scroll-reveal";
 import { HoldingActivityTimeline } from "@/components/holding-activity-timeline";
 import { HoldingImportPanel } from "@/components/holding-import-panel";
 import { HoldingPortfolioHealthPanel } from "@/components/holding-portfolio-health-panel";
@@ -50,14 +49,11 @@ import {
   compareOptionalNumbers,
   detailChangeValue,
   detailProfitValue,
-  formatSummaryMoney,
-  formatTradeDateLabel,
-  formatTradeTimingLabel,
-  isAggregateIncomplete,
-  isHoldingIncomplete,
   matchesAggregateFilter,
   matchesHoldingFilter,
   parseOptionalNumber,
+  resolveAggregateMetrics,
+  resolveHoldingMetrics,
   resolveTradeTimingFromServerClock,
   timestampValue,
   type HoldingFilterMode,
@@ -89,8 +85,9 @@ export default function HoldingsPage() {
     holdings,
     holdingAggregates,
     holdingTransactions,
-    holdingSummary,
-    seedDemoData,
+    isHoldingsLoading,
+    holdingsError,
+    refreshHoldings,
     addHolding,
     updateHolding,
     sellHolding,
@@ -128,7 +125,6 @@ export default function HoldingsPage() {
   const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
   const [note, setNote] = useState("");
   const [feedback, setFeedback] = useState<HoldingFeedbackMessage | null>(null);
-  const [isSeedingDemo, setIsSeedingDemo] = useState(false);
   const [isAddingHolding, setIsAddingHolding] = useState(false);
   const defaultsInitializedRef = useRef(false);
   const { results } = useFundSearch(query);
@@ -199,8 +195,6 @@ export default function HoldingsPage() {
     error: pricingPreviewError,
   } = usePricingDatePreview(tradeAtPayload || null);
   const pricingDatePreview = preview?.pricingDate || "";
-  const tradeDateLabel = formatTradeDateLabel(tradeDate);
-  const tradeTimingLabel = formatTradeTimingLabel(tradeTiming);
   const todayTradeDate = marketStatus.currentDate || tradeDate;
   const previousTradeDate = marketStatus.previousTradingDay || "";
   const nextTradeDate = marketStatus.nextTradingDay || "";
@@ -211,23 +205,10 @@ export default function HoldingsPage() {
       : isPricingPreviewLoading
         ? "正在按交易日历校验确认净值日..."
         : preview?.message || "正在按交易日历校验确认净值日...";
-  const hasOfficialSummaryMetrics = holdingSummary.real_metrics_ready_count > 0;
-  const officialSummaryCoverage = hasOfficialSummaryMetrics
-    ? `${holdingSummary.real_metrics_ready_count}/${holdingSummary.total_holdings} 条`
-    : "";
-  const officialReadyPrincipalText = hasOfficialSummaryMetrics
-    ? formatSummaryMoney(holdingSummary.ready_principal)
-    : "--";
-  const totalPrincipalText = formatSummaryMoney(holdingSummary.total_principal);
   const {
     estimatesByFundID,
     aggregateMetrics,
-    summary: previewSummary,
   } = useHoldingEstimateMetrics(holdingAggregates);
-  const hasPreviewSummaryMetrics = previewSummary.ready_count > 0;
-  const previewReadyPrincipalText = hasPreviewSummaryMetrics
-    ? formatSummaryMoney(previewSummary.ready_principal)
-    : "--";
   const holdingsByFundID = useMemo(() => {
     return holdings.reduce<Record<string, typeof holdings>>(
       (groups, holding) => {
@@ -261,17 +242,18 @@ export default function HoldingsPage() {
       );
   }, [holdingAggregates, holdingsByFundID]);
   const incompleteHoldingCount = useMemo(
-    () => holdings.filter(isHoldingIncomplete).length,
-    [holdings],
+    () => holdings.filter(holding => !resolveHoldingMetrics(holding, estimatesByFundID[holding.fund_id], metricScope).ready).length,
+    [holdings, estimatesByFundID, metricScope],
   );
   const incompleteAggregateCount = useMemo(
-    () => holdingAggregates.filter(isAggregateIncomplete).length,
-    [holdingAggregates],
+    () => holdingAggregates.filter(aggregate => { const metrics = resolveAggregateMetrics(aggregate, aggregateMetrics[aggregate.fund_id], metricScope); return !metrics.ready || metrics.partial; }).length,
+    [holdingAggregates, aggregateMetrics, metricScope],
   );
   const filteredHoldingAggregates = useMemo(
     () =>
       holdingAggregates.filter((aggregate) => {
-        if (showIncompleteOnly && !isAggregateIncomplete(aggregate)) {
+        const metrics = resolveAggregateMetrics(aggregate, aggregateMetrics[aggregate.fund_id], metricScope);
+        if (showIncompleteOnly && metrics.ready && !metrics.partial) {
           return false;
         }
         return matchesAggregateFilter(
@@ -292,7 +274,7 @@ export default function HoldingsPage() {
   const filteredHoldings = useMemo(
     () =>
       holdings.filter((holding) => {
-        if (showIncompleteOnly && !isHoldingIncomplete(holding)) {
+        if (showIncompleteOnly && resolveHoldingMetrics(holding, estimatesByFundID[holding.fund_id], metricScope).ready) {
           return false;
         }
         return matchesHoldingFilter(
@@ -454,8 +436,6 @@ export default function HoldingsPage() {
     metricScope,
     sortMode,
   ]);
-  const shouldUseOfficialSummary =
-    metricScope === "official" && hasOfficialSummaryMetrics;
   const activeDisplayCount =
     viewMode === "aggregate"
       ? sortedHoldingAggregates.length
@@ -472,30 +452,7 @@ export default function HoldingsPage() {
     viewMode === "aggregate"
       ? `当前仅显示部分就绪或完全未就绪的基金，共 ${activeDisplayCount}/${holdingAggregates.length} 只。`
       : `当前仅显示待确认份额、待同步官方净值或真实口径未就绪的记录，共 ${activeDisplayCount}/${holdings.length} 条。`;
-  const activeWorkspaceTab = holdings.length === 0 ? "record" : workspaceTab;
-  const handleSeedDemo = async () => {
-    setFeedback(null);
-    setIsSeedingDemo(true);
-
-    try {
-      await seedDemoData();
-      setFeedback({
-        type: "success",
-        message:
-          "已为你填入一组参考持仓；如果还没有自选分组，也会一并创建默认分组。",
-      });
-    } catch (error) {
-      setFeedback({
-        type: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "初始化参考持仓失败，请稍后重试。",
-      });
-    } finally {
-      setIsSeedingDemo(false);
-    }
-  };
+  const activeWorkspaceTab = workspaceTab;
 
   const handleAddHolding = async () => {
     setFeedback(null);
@@ -545,6 +502,7 @@ export default function HoldingsPage() {
           : resolveTradeTimingFromServerClock(marketStatus.currentTime),
       );
       setNote("");
+      setWorkspaceTab("summary");
       setFeedback({
         type: "success",
         message: pricingDatePreview
@@ -601,29 +559,40 @@ export default function HoldingsPage() {
   return (
     <AccountAreaShell
       title="我的持仓"
-      description="记录仓位，查看净值确认、盈亏和风险提醒。"
+      description="看清还持有多少钱，记下每一次买入与调整。"
     >
-      <ScrollRevealStack className="space-y-8">
+      <div className="holdings-workspace space-y-4">
         {feedback && <HoldingFeedbackBanner feedback={feedback} />}
 
         <HoldingsWorkspaceNav
           holdingCount={holdings.length}
           activeTab={activeWorkspaceTab}
-          detailText={
-            holdings.length === 0
-              ? "先记录一笔持仓，再查看净值、份额和盈亏。"
-              : `${metricScope === "official" ? "官方口径" : "盘中预估"} · ${viewMode === "aggregate" ? "按基金" : "分笔明细"}`
-          }
-          isSeedingDemo={isSeedingDemo}
           onTabChange={setWorkspaceTab}
-          onSeedDemo={() => void handleSeedDemo()}
         />
+
+        {isHoldingsLoading ? (
+          <div role="status" className="rounded-2xl border border-[var(--card-border)] p-8 text-theme-secondary">正在读取持仓…</div>
+        ) : holdingsError ? (
+          <div role="alert" className="rounded-2xl border border-[var(--card-border)] p-6 text-theme-primary">
+            <p>持仓暂时无法加载</p>
+            <p className="mt-2 text-sm text-theme-secondary">{holdingsError.message}</p>
+            <ActionButton className="mt-4" onClick={() => void refreshHoldings()}>重新加载</ActionButton>
+          </div>
+        ) : <>
+
+        {holdings.length > 0 && activeWorkspaceTab !== "record" && activeWorkspaceTab !== "ledger" && activeWorkspaceTab !== "tools" && (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex rounded-xl border border-[var(--card-border)] p-1" aria-label="净值口径">
+              {([['official', '官方净值'], ['estimate', '盘中预估']] as const).map(([scope, label]) => (
+                <button key={scope} type="button" aria-pressed={metricScope === scope} onClick={() => setMetricScope(scope)} className={`min-h-11 rounded-lg px-4 text-sm transition-colors ${metricScope === scope ? 'bg-[var(--input-bg)] font-semibold text-theme-primary' : 'text-theme-secondary hover:text-theme-primary'}`}>{label}</button>
+              ))}
+            </div>
+            <span className="text-xs text-theme-secondary">预估仅供参考，实际以基金公告净值为准</span>
+          </div>
+        )}
 
         {activeWorkspaceTab === "record" && (
           <HoldingRecordComposer
-            compact={holdings.length > 0}
-            holdingsCount={holdings.length}
-            totalPrincipalText={totalPrincipalText}
             query={query}
             results={results}
             recentAggregates={recentHoldingAggregates}
@@ -633,8 +602,6 @@ export default function HoldingsPage() {
             note={note}
             tradeDate={tradeDate}
             tradeTiming={tradeTiming}
-            tradeDateLabel={tradeDateLabel}
-            tradeTimingLabel={tradeTimingLabel}
             todayTradeDate={todayTradeDate}
             previousTradeDate={previousTradeDate}
             nextTradeDate={nextTradeDate}
@@ -666,45 +633,24 @@ export default function HoldingsPage() {
           />
         )}
 
-        {holdings.length === 0 && activeWorkspaceTab === "record" && (
+        {holdings.length === 0 && activeWorkspaceTab === "summary" && (
           <EmptyState
             icon={<Wallet className="h-10 w-10" />}
-            title="还没有持仓记录"
-            features={[
-              { title: "自动补齐", description: "净值、份额、市值" },
-              { title: "核对持仓", description: "仓位占比、公开资料" },
-              { title: "形成组合", description: "组合分析入口" },
-            ]}
+            title="从第一笔记录开始"
+            description="记录买入金额与日期，确认份额后就能查看当前市值和持有盈亏。已有持仓请导入原始买入记录，再核对份额。"
+            action={<div className="flex flex-wrap justify-center gap-3"><ActionButton className="holding-primary-action min-h-11" variant="primary" onClick={() => setWorkspaceTab('record')}>记录第一笔</ActionButton><ActionButton variant="subtle" onClick={() => setWorkspaceTab('tools')}>导入历史记录</ActionButton></div>}
           />
         )}
 
-        {holdings.length > 0 && activeWorkspaceTab === "summary" && (
+        {holdings.length > 0 && (activeWorkspaceTab === "summary" || activeWorkspaceTab === "list") && (
           <>
             <HoldingsSummaryMetrics
-              holdingSummary={holdingSummary}
-              previewSummary={previewSummary}
-              metricScope={metricScope}
-              shouldUseOfficialSummary={shouldUseOfficialSummary}
-              hasOfficialSummaryMetrics={hasOfficialSummaryMetrics}
-              hasPreviewSummaryMetrics={hasPreviewSummaryMetrics}
-              officialReadyPrincipalText={officialReadyPrincipalText}
-              previewReadyPrincipalText={previewReadyPrincipalText}
-              totalPrincipalText={totalPrincipalText}
-              officialSummaryCoverage={officialSummaryCoverage}
-            />
-            <HoldingReconciliationPanel
-              compact
               holdings={holdings}
-              transactions={holdingTransactions}
+              estimatesByFundID={estimatesByFundID}
+              metricScope={metricScope}
             />
-          </>
-        )}
-
-        {holdings.length > 0 && activeWorkspaceTab === "list" && (
-          <>
             <HoldingsViewControls
               viewMode={viewMode}
-              metricScope={metricScope}
               sortMode={sortMode}
               filterMode={filterMode}
               showIncompleteOnly={showIncompleteOnly}
@@ -714,7 +660,6 @@ export default function HoldingsPage() {
                   : incompleteHoldingCount
               }
               onViewModeChange={setViewMode}
-              onMetricScopeChange={setMetricScope}
               onSortModeChange={setSortMode}
               onFilterModeChange={setFilterMode}
               onToggleIncompleteOnly={() =>
@@ -809,7 +754,7 @@ export default function HoldingsPage() {
           </>
         )}
 
-        {holdings.length > 0 && activeWorkspaceTab === "ledger" && (
+        {activeWorkspaceTab === "ledger" && (
           <HoldingActivityTimeline
             compact
             transactions={holdingTransactions}
@@ -847,8 +792,10 @@ export default function HoldingsPage() {
           />
         )}
 
-        {holdings.length > 0 && activeWorkspaceTab === "tools" && (
+        {activeWorkspaceTab === "tools" && (
           <>
+            <p className="text-sm leading-6 text-theme-secondary">导入金额是买入成本，不是当前市值。请使用真实交易日期，导入后在基金明细中校正确认份额；当前接口不记录赎回到账金额。</p>
+            {holdings.length > 0 && <HoldingReconciliationPanel compact holdings={holdings} transactions={holdingTransactions} />}
             <HoldingImportPanel
               compact
               recentAggregates={recentHoldingAggregates}
@@ -893,7 +840,8 @@ export default function HoldingsPage() {
             />
           </>
         )}
-      </ScrollRevealStack>
+        </>}
+      </div>
     </AccountAreaShell>
   );
 }

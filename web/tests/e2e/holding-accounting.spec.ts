@@ -16,15 +16,15 @@ function metrics(overrides: Partial<HoldingEstimateAggregateMetrics> = {}): Hold
   return { fund_id: '000001', preview_ready: true, fallback_ready: true, preview_today_profit: '30', preview_today_change_percent: '3', fallback_today_profit: '10', ...overrides }
 }
 
-test('holdings keep official, share-based preview and principal fallback accounting separate', () => {
+test('holdings keep official, share-based preview accounting explicit without principal fallback', () => {
   expect(aggregateProfitValue(aggregate(), metrics(), 'official')).toBe(-20)
   expect(aggregateProfitValue(aggregate(), metrics(), 'estimate')).toBe(30)
-  expect(aggregateProfitValue(aggregate(), metrics({ preview_ready: false }), 'estimate')).toBe(10)
+  expect(aggregateProfitValue(aggregate(), metrics({ preview_ready: false }), 'estimate')).toBeNull()
   expect(aggregateProfitValue(aggregate(), undefined, 'estimate')).toBeNull()
   expect(aggregateChangeValue(aggregate(), metrics(), 'official')).toBe(-2)
   expect(aggregateChangeValue(aggregate(), metrics(), 'estimate')).toBe(3)
   expect(detailProfitValue(holding({ today_profit: '-20' }), { change_percent: '3' }, 'official')).toBe(-20)
-  expect(detailProfitValue(holding(), { change_percent: '3' }, 'estimate')).toBe(30)
+  expect(detailProfitValue(holding(), { change_percent: '3', estimate_nav: '2.06', prev_nav: '2' }, 'estimate')).toBe(30)
 })
 
 test('holdings filters use selected accounting scope and retain missing values last', () => {

@@ -94,6 +94,13 @@
 
 html {
   scroll-behavior: smooth;
+  background-color: var(--background);
+}
+
+/* Holdings primary actions must retain readable text across theme overrides. */
+[data-theme] .holdings-workspace .holding-primary-action {
+  color: white;
+  background-color: #256f8f;
 }
 
 body::before {

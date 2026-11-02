@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Gift, MinusCircle, Pencil, Save, SlidersHorizontal, Trash2, X } from 'lucide-react'
-import { useMarketTradingState } from '@/hooks/use-market-status'
 import { useFund, type FundEstimate } from '@/hooks/use-fund-data'
 import {
   HOLDING_SOURCE_OPTIONS,
@@ -11,6 +10,8 @@ import {
   type HoldingSourcePlatform,
 } from '@/lib/holding-sources'
 import { cn } from '@/lib/utils'
+import { resolveHoldingMetrics } from '@/lib/holding-display'
+import { holdingMoney, holdingTone } from '@/components/holdings-summary-metrics'
 
 import {
   buildAdjustmentFormState,
@@ -19,14 +20,8 @@ import {
   buildDividendFormState,
   buildSellFormState,
   formatAmount,
-  formatEstimatedDelta,
-  formatMetricCurrency,
-  formatNumberCurrency,
-  formatNumberPercent,
-  formatPercentValue,
   formatTradeAt,
   normalizeDecimalInput,
-  parseMetricNumber,
   validateNonZeroDecimal,
   validatePositiveDecimal,
   type AdjustmentFormState,
@@ -80,91 +75,16 @@ export function HoldingFundRow({
   const [sellError, setSellError] = useState('')
   const [dividendError, setDividendError] = useState('')
   const [adjustmentError, setAdjustmentError] = useState('')
-  const { session } = useMarketTradingState()
-  const isCallAuction = session === 'call_auction'
   const { fund } = useFund(holding.fund_id)
   const estimate = providedEstimate ?? null
   const fundName = holding.fund?.name || fund?.name || estimate?.fund_name || holding.fund_id
   const tradeAtLabel = formatTradeAt(holding.trade_at)
   const sourceLabel = resolveHoldingSourceLabel(holding.source_platform, holding.source_label)
-  const estimateDelta = isCallAuction ? { text: '-', isPositive: false } : formatEstimatedDelta(holding.amount, estimate?.change_percent)
-  const confirmedDateLabel = holding.confirmed_nav_date || holding.as_of_date
-  const sharesNumber = parseMetricNumber(holding.shares)
-  const estimateNavNumber = parseMetricNumber(estimate?.estimate_nav)
-  const prevNavNumber = parseMetricNumber(estimate?.prev_nav)
-  const estimateChangePercentNumber = parseMetricNumber(estimate?.change_percent)
-  const hasEstimatedHoldingMetrics = !isCallAuction &&
-    typeof sharesNumber === 'number' &&
-    sharesNumber > 0 &&
-    typeof estimateNavNumber === 'number' &&
-    typeof prevNavNumber === 'number' &&
-    prevNavNumber > 0
-  const estimatedCurrentMarketValue = hasEstimatedHoldingMetrics ? sharesNumber * estimateNavNumber : null
-  const estimatedTodayProfit = hasEstimatedHoldingMetrics ? sharesNumber * (estimateNavNumber - prevNavNumber) : null
-  const isOfficialScope = metricScope === 'official'
-  const shouldUseOfficialValues = isOfficialScope && holding.real_metrics_ready
-  const currentMarketValueLabel = shouldUseOfficialValues ? '最新官方市值' : '盘中预估市值'
-  const profitLabel = shouldUseOfficialValues ? '今日官方盈亏' : '实时盈亏预估'
-  const changeLabel = shouldUseOfficialValues ? '今日官方涨跌幅' : '实时涨跌预估'
-  const currentMarketValueText = isOfficialScope
-    ? (holding.real_metrics_ready ? formatMetricCurrency(holding.current_market_value) : formatNumberCurrency(estimatedCurrentMarketValue ?? undefined))
-    : formatNumberCurrency(estimatedCurrentMarketValue ?? undefined)
-  const todayProfitText = isOfficialScope
-    ? (holding.real_metrics_ready ? formatMetricCurrency(holding.today_profit) : hasEstimatedHoldingMetrics
-      ? formatNumberCurrency(estimatedTodayProfit ?? undefined)
-      : (!isCallAuction && estimate?.change_percent ? estimateDelta.text : '--'))
-    : hasEstimatedHoldingMetrics
-      ? formatNumberCurrency(estimatedTodayProfit ?? undefined)
-      : (!isCallAuction && estimate?.change_percent ? estimateDelta.text : '--')
-  const todayChangePercentText = isOfficialScope
-    ? (holding.real_metrics_ready ? formatPercentValue(holding.today_change_percent) : formatNumberPercent(estimateChangePercentNumber ?? undefined))
-    : formatNumberPercent(estimateChangePercentNumber ?? undefined)
-  const realMetricTone = (() => {
-    if (shouldUseOfficialValues) {
-      const profit = Number.parseFloat(holding.today_profit || '0')
-      return profit >= 0 ? 'text-up' : 'text-down'
-    }
-    if (hasEstimatedHoldingMetrics && typeof estimatedTodayProfit === 'number') {
-      return estimatedTodayProfit >= 0 ? 'text-up' : 'text-down'
-    }
-    if (!isCallAuction && estimate?.change_percent) {
-      return estimateDelta.isPositive ? 'text-up' : 'text-down'
-    }
-    return 'text-theme-primary'
-  })()
-  const changeTone = (() => {
-    if (shouldUseOfficialValues) {
-      const change = Number.parseFloat(holding.today_change_percent || '0')
-      return change >= 0 ? 'text-up' : 'text-down'
-    }
-    if (typeof estimateChangePercentNumber === 'number') {
-      return estimateChangePercentNumber >= 0 ? 'text-up' : 'text-down'
-    }
-    return 'text-theme-primary'
-  })()
-  const marketValueNote = shouldUseOfficialValues
-    ? holding.real_metrics_ready
-      ? `${holding.actual_date || '最新'} 官方净值口径`
-      : ''
-    : hasEstimatedHoldingMetrics
-      ? `按 ${holding.shares || '--'} 份与盘中预估净值估算`
-      : '待确认净值补齐后展示'
-  const profitNote = shouldUseOfficialValues
-    ? `${holding.actual_date || '最新'} 官方净值口径`
-    : hasEstimatedHoldingMetrics
-      ? '盘中预估，夜间官方净值同步后会自动覆盖'
-      : !isCallAuction && estimate?.change_percent
-        ? `按预估涨跌幅折算，夜间官方净值同步后会自动覆盖`
-        : '待确认份额补齐后展示'
-  const officialProfitNote = holding.real_metrics_ready
-    ? `已按 ${holding.actual_date || '最新'} 官方净值结算`
-    : holding.real_metrics_message || '待官方净值同步后展示'
-  const displayedProfitNote = shouldUseOfficialValues ? officialProfitNote : profitNote
-  const changeNote = shouldUseOfficialValues
-    ? '按最新官方涨跌幅展示'
-    : estimate?.change_percent
-      ? '根据基金预估涨跌幅计算，夜间真实涨跌幅会自动覆盖'
-      : '待确认份额补齐后展示'
+  const metrics = resolveHoldingMetrics(holding, estimate, metricScope)
+  const confirmedDateLabel = holding.confirmed_nav_date || holding.as_of_date || '待确认'
+  const metricNote = metrics.ready
+    ? metricScope === 'official' ? '官方净值日 ' + (holding.actual_date || '待更新') : '按确认份额与盘中预估净值计算'
+    : metricScope === 'official' ? '等待净值更新' : '确认份额或预估净值不足'
   const actionDisabled = isRemoving || isSaving || isSellSaving || isDividendSaving || isAdjustmentSaving
 
   useEffect(() => {
@@ -294,12 +214,12 @@ export function HoldingFundRow({
     const currentShares = Number.parseFloat(holding.shares || '')
 
     if (!sellForm.sellAll && !normalizedAmount && !normalizedShares) {
-      setSellError('请输入本次卖出金额，或在已确认份额后输入卖出份额；如果是全部赎回，请开启“全部清仓”。')
+      setSellError('请输入卖出份额或减少的成本本金；如果是全部赎回，请开启“全部清仓”。')
       return
     }
 
     if (normalizedAmount && !validatePositiveDecimal(normalizedAmount)) {
-      setSellError('请输入有效的卖出金额。')
+      setSellError('请输入有效的减少成本本金。')
       return
     }
 
@@ -309,13 +229,13 @@ export function HoldingFundRow({
     }
 
     if (!sellForm.sellAll && amountValue !== null && Number.isFinite(currentAmount) && amountValue >= currentAmount) {
-      setSellError('部分减仓金额需要小于当前持仓；如果是全部赎回，请开启“全部清仓”。')
+      setSellError('减少的成本本金需要小于当前剩余成本；如果是全部赎回，请开启“全部清仓”。')
       return
     }
 
     if (sharesValue !== null) {
       if (!Number.isFinite(currentShares) || currentShares <= 0) {
-        setSellError('当前持仓还没有确认份额，暂时只能按金额减仓。')
+        setSellError('当前持仓还没有确认份额，暂时只能按减少成本本金记录。')
         return
       }
       if (!sellForm.sellAll && sharesValue >= currentShares) {
@@ -440,70 +360,24 @@ export function HoldingFundRow({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="grid gap-4 rounded-[28px] border border-[var(--card-border)] p-5 glass lg:grid-cols-[minmax(0,1.25fr)_0.8fr_0.85fr_0.85fr_0.7fr_0.7fr_auto] lg:items-center">
-        <div className="min-w-0">
-          <div className="truncate text-base font-semibold text-theme-primary">{fundName}</div>
-          <div className="mt-1 text-xs text-theme-muted">{holding.fund_id}</div>
-          <Link href={`/observations/${holding.fund_id}`} className="mt-2 inline-block text-xs text-theme-secondary hover:text-theme-primary">
-            公告与资料
-          </Link>
-          {holding.note && <div className="mt-2 text-xs text-theme-secondary">{holding.note}</div>}
-          {holding.manual_confirmation && (
-            <div className="mt-2 inline-flex items-center rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-200">
-              已按{sourceLabel || '外部平台'}校正
-            </div>
-          )}
-          {!holding.manual_confirmation && sourceLabel && (
-            <div className="mt-2 inline-flex items-center rounded-full border border-slate-400/20 bg-slate-400/8 px-2.5 py-1 text-[11px] font-medium text-theme-secondary">
-              来源：{sourceLabel}
-            </div>
-          )}
-          {!holding.real_metrics_ready && (
-            <div className="mt-2 text-xs text-theme-muted">
-              {holding.real_metrics_message || '待真实净值同步后展示真实市值与盈亏。'}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <div className="text-xs text-theme-muted">持仓本金</div>
-          <div className="mt-1 text-lg font-semibold text-theme-primary">{formatAmount(holding.amount)}</div>
-        </div>
-
-        <div>
-          <div className="text-xs text-theme-muted">{currentMarketValueLabel}</div>
-          <div className="mt-1 text-lg font-semibold text-theme-primary">
-            {currentMarketValueText}
+    <div data-testid="holding-detail-row" className="space-y-3">
+      <div className="space-y-4 rounded-xl border border-[var(--card-border)] p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="break-words text-base font-semibold text-theme-primary">{fundName}</div>
+            <div className="mt-1 text-xs text-theme-secondary">{holding.fund_id} · 买入于 {tradeAtLabel || '日期待补充'}</div>
           </div>
-          <div className="mt-1 text-xs text-theme-muted">{marketValueNote}</div>
+          <Link href={'/observations/' + holding.fund_id} className="inline-flex min-h-11 items-center text-sm text-theme-secondary hover:text-theme-primary">公告与资料</Link>
         </div>
+        <dl className="grid grid-cols-3 gap-3">
+          <div><dt className="text-xs text-theme-secondary">持仓市值{metricScope === 'estimate' ? '（预估）' : ''}</dt><dd className="mt-2 break-words text-base font-semibold tabular-nums text-theme-primary sm:text-xl">{holdingMoney(metrics.marketValue)}</dd></div>
+          <div><dt className="text-xs text-theme-secondary">持有盈亏</dt><dd className={cn('mt-2 break-words text-base font-semibold tabular-nums sm:text-xl', holdingTone(metrics.holdingProfit))}>{holdingMoney(metrics.holdingProfit, true)}</dd></div>
+          <div><dt className="text-xs text-theme-secondary">当日变动{metricScope === 'estimate' ? '预估' : ''}</dt><dd className={cn('mt-2 break-words text-base font-semibold tabular-nums sm:text-xl', holdingTone(metrics.todayProfit))}>{holdingMoney(metrics.todayProfit, true)}</dd></div>
+        </dl>
+        <p className="text-xs leading-6 text-theme-secondary">{metricNote} · 剩余成本 {holdingMoney(metrics.principal)} · 确认份额 {holding.shares || '待确认'} · 确认净值日 {confirmedDateLabel}{sourceLabel ? ' · ' + sourceLabel : ''}{holding.manual_confirmation ? ' · 手动校正' : ''}</p>
+        {holding.note && <p className="break-words text-sm text-theme-secondary">{holding.note}</p>}
+        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--card-border)] pt-3">
 
-        <div>
-          <div className="text-xs text-theme-muted">{profitLabel}</div>
-          <div className={cn('mt-1 text-lg font-semibold', realMetricTone)}>
-            {todayProfitText}
-          </div>
-          <div className={cn('mt-1 text-xs', shouldUseOfficialValues || !estimate?.change_percent ? 'text-theme-muted' : estimateDelta.isPositive ? 'text-up' : 'text-down')}>
-            {displayedProfitNote}
-          </div>
-        </div>
-
-        <div>
-          <div className="text-xs text-theme-muted">{changeLabel}</div>
-          <div className={cn('mt-1 text-lg font-semibold', changeTone)}>
-            {todayChangePercentText}
-          </div>
-          <div className="mt-1 text-xs text-theme-muted">{changeNote}</div>
-        </div>
-
-        <div>
-          <div className="text-xs text-theme-muted">确认净值日</div>
-          <div className="mt-1 text-sm font-medium text-theme-primary">{confirmedDateLabel}</div>
-          {tradeAtLabel && <div className="mt-1 text-xs text-theme-muted">提交于 {tradeAtLabel}</div>}
-        </div>
-
-        <div className="flex items-center gap-2 lg:flex-col">
           <button
             type="button"
             onClick={() => {
@@ -516,14 +390,14 @@ export function HoldingFundRow({
             }}
             disabled={actionDisabled}
             className={cn(
-              'group relative inline-flex items-center justify-center overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] p-2 text-theme-muted transition-all duration-200',
-              'hover:-translate-y-0.5 hover:border-cyan-400/50 hover:bg-cyan-500/12 hover:text-cyan-200',
+              'group relative inline-flex items-center justify-center overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] min-h-11 min-w-11 gap-2 px-3 text-theme-secondary focus-visible:outline-2 focus-visible:outline-offset-2 transition-all duration-200',
+              'hover:-translate-y-0.5 hover:border-cyan-400/50 hover:bg-cyan-500/12 hover:text-theme-primary',
               'active:scale-95 disabled:cursor-not-allowed',
-              isEditing && 'border-cyan-400/45 bg-cyan-500/14 text-cyan-200'
+              isEditing && 'border-cyan-400/45 bg-cyan-500/14 text-theme-primary'
             )}
             aria-label={`校正 ${fundName} 持仓`}
           >
-            {isEditing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+            {isEditing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}<span className="text-xs">校正</span>
           </button>
           <button
             type="button"
@@ -537,14 +411,14 @@ export function HoldingFundRow({
             }}
             disabled={actionDisabled}
             className={cn(
-              'group relative inline-flex items-center justify-center overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] p-2 text-theme-muted transition-all duration-200',
-              'hover:-translate-y-0.5 hover:border-amber-400/50 hover:bg-amber-500/12 hover:text-amber-200',
+              'group relative inline-flex items-center justify-center overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] min-h-11 min-w-11 gap-2 px-3 text-theme-secondary focus-visible:outline-2 focus-visible:outline-offset-2 transition-all duration-200',
+              'hover:-translate-y-0.5 hover:border-amber-400/50 hover:bg-amber-500/12 hover:text-theme-primary',
               'active:scale-95 disabled:cursor-not-allowed',
-              isSelling && 'border-amber-400/45 bg-amber-500/14 text-amber-200'
+              isSelling && 'border-amber-400/45 bg-amber-500/14 text-theme-primary'
             )}
             aria-label={`卖出/减仓 ${fundName} 持仓`}
           >
-            {isSelling ? <X className="h-4 w-4" /> : <MinusCircle className="h-4 w-4" />}
+            {isSelling ? <X className="h-4 w-4" /> : <MinusCircle className="h-4 w-4" />}<span className="text-xs">减仓</span>
           </button>
           <button
             type="button"
@@ -558,14 +432,14 @@ export function HoldingFundRow({
             }}
             disabled={actionDisabled}
             className={cn(
-              'group relative inline-flex items-center justify-center overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] p-2 text-theme-muted transition-all duration-200',
-              'hover:-translate-y-0.5 hover:border-violet-400/50 hover:bg-violet-500/12 hover:text-violet-200',
+              'group relative inline-flex items-center justify-center overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] min-h-11 min-w-11 gap-2 px-3 text-theme-secondary focus-visible:outline-2 focus-visible:outline-offset-2 transition-all duration-200',
+              'hover:-translate-y-0.5 hover:border-violet-400/50 hover:bg-violet-500/12 hover:text-theme-primary',
               'active:scale-95 disabled:cursor-not-allowed',
-              isDividendOpen && 'border-violet-400/45 bg-violet-500/14 text-violet-200'
+              isDividendOpen && 'border-violet-400/45 bg-violet-500/14 text-theme-primary'
             )}
             aria-label={`记录 ${fundName} 分红`}
           >
-            {isDividendOpen ? <X className="h-4 w-4" /> : <Gift className="h-4 w-4" />}
+            {isDividendOpen ? <X className="h-4 w-4" /> : <Gift className="h-4 w-4" />}<span className="text-xs">分红</span>
           </button>
           <button
             type="button"
@@ -579,21 +453,21 @@ export function HoldingFundRow({
             }}
             disabled={actionDisabled}
             className={cn(
-              'group relative inline-flex items-center justify-center overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] p-2 text-theme-muted transition-all duration-200',
-              'hover:-translate-y-0.5 hover:border-sky-400/50 hover:bg-sky-500/12 hover:text-sky-200',
+              'group relative inline-flex items-center justify-center overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] min-h-11 min-w-11 gap-2 px-3 text-theme-secondary focus-visible:outline-2 focus-visible:outline-offset-2 transition-all duration-200',
+              'hover:-translate-y-0.5 hover:border-sky-400/50 hover:bg-sky-500/12 hover:text-theme-primary',
               'active:scale-95 disabled:cursor-not-allowed',
-              isAdjustmentOpen && 'border-sky-400/45 bg-sky-500/14 text-sky-200'
+              isAdjustmentOpen && 'border-sky-400/45 bg-sky-500/14 text-theme-primary'
             )}
             aria-label={`调整 ${fundName} 份额`}
           >
-            {isAdjustmentOpen ? <X className="h-4 w-4" /> : <SlidersHorizontal className="h-4 w-4" />}
+            {isAdjustmentOpen ? <X className="h-4 w-4" /> : <SlidersHorizontal className="h-4 w-4" />}<span className="text-xs">份额调整</span>
           </button>
           <button
             type="button"
             onClick={() => void handleRemove()}
             disabled={actionDisabled}
             className={cn(
-              'group relative inline-flex items-center justify-center overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] p-2 text-theme-muted transition-all duration-200',
+              'group relative inline-flex items-center justify-center overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] min-h-11 min-w-11 gap-2 px-3 text-theme-secondary focus-visible:outline-2 focus-visible:outline-offset-2 transition-all duration-200',
               'hover:-translate-y-0.5 hover:border-rose-400/50 hover:bg-rose-500/12 hover:text-rose-300',
               'active:scale-95 disabled:cursor-not-allowed',
               isRemoving && 'holding-delete-button border-rose-400/50 bg-rose-500/16 text-rose-200'
@@ -628,7 +502,7 @@ export function HoldingFundRow({
                 用于对齐支付宝、微信等外部平台显示差异；这不是买入/卖出记录，不会改变基金代码，只修正当前这笔持仓的金额、确认份额、确认净值和备注。
               </p>
             </div>
-            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">
+            <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-xs text-theme-primary">
               留空份额/净值/日期会回到系统自动确认口径
             </div>
           </div>
@@ -639,7 +513,7 @@ export function HoldingFundRow({
               <input
                 value={form.amount}
                 onChange={(event) => updateForm({ amount: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-cyan-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-cyan-400/60"
                 inputMode="decimal"
                 placeholder="例如 50000"
               />
@@ -649,7 +523,7 @@ export function HoldingFundRow({
               <input
                 value={form.shares}
                 onChange={(event) => updateForm({ shares: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-cyan-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-cyan-400/60"
                 inputMode="decimal"
                 placeholder="外部平台显示份额"
               />
@@ -659,7 +533,7 @@ export function HoldingFundRow({
               <input
                 value={form.confirmedNav}
                 onChange={(event) => updateForm({ confirmedNav: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-cyan-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-cyan-400/60"
                 inputMode="decimal"
                 placeholder="例如 1.2345"
               />
@@ -670,7 +544,7 @@ export function HoldingFundRow({
                 type="date"
                 value={form.confirmedNavDate}
                 onChange={(event) => updateForm({ confirmedNavDate: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-cyan-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-cyan-400/60"
               />
             </label>
             <label className="space-y-2 text-xs text-theme-secondary">
@@ -679,7 +553,7 @@ export function HoldingFundRow({
                 type="date"
                 value={form.tradeDate}
                 onChange={(event) => updateForm({ tradeDate: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-cyan-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-cyan-400/60"
               />
             </label>
             <label className="space-y-2 text-xs text-theme-secondary">
@@ -687,7 +561,7 @@ export function HoldingFundRow({
               <select
                 value={form.sourcePlatform}
                 onChange={(event) => updateForm({ sourcePlatform: event.target.value as HoldingSourcePlatform | '' })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-cyan-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-cyan-400/60"
               >
                 <option value="">未记录来源</option>
                 {HOLDING_SOURCE_OPTIONS.map((option) => (
@@ -711,7 +585,7 @@ export function HoldingFundRow({
             <input
               value={form.note}
               onChange={(event) => updateForm({ note: event.target.value })}
-              className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-cyan-400/60"
+              className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-cyan-400/60"
               placeholder="例如：按支付宝份额校正 / 微信显示净值差异"
             />
           </label>
@@ -723,7 +597,7 @@ export function HoldingFundRow({
               type="button"
               onClick={() => void handleSaveCorrection()}
               disabled={isSaving}
-              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_14px_35px_rgba(14,165,233,0.22)] transition-transform hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex items-center gap-2 rounded-2xl bg-[var(--input-bg)] border border-[var(--input-border)] px-4 py-2.5 text-sm font-semibold text-theme-primary shadow-[0_14px_35px_rgba(14,165,233,0.22)] transition-transform hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
             >
               <Save className={cn('h-4 w-4', isSaving && 'animate-pulse')} />
               {isSaving ? '保存中...' : '保存校正'}
@@ -742,7 +616,7 @@ export function HoldingFundRow({
             <button
               type="button"
               onClick={() => updateForm({ shares: '', confirmedNav: '', confirmedNavDate: '', sourcePlatform: '' })}
-              className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2.5 text-sm text-theme-muted transition-colors hover:border-amber-400/35 hover:text-amber-200"
+              className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2.5 text-sm text-theme-muted transition-colors hover:border-amber-400/35 hover:text-theme-primary"
             >
               回到自动确认
             </button>
@@ -758,7 +632,7 @@ export function HoldingFundRow({
                 现金分红只写入流水，不改变当前持仓份额；红利再投会把新增份额合并到当前持仓，并保留分红流水痕迹。
               </p>
             </div>
-            <div className="rounded-2xl border border-violet-400/20 bg-violet-400/10 px-3 py-2 text-xs text-violet-100">
+            <div className="rounded-2xl border border-violet-400/20 bg-violet-400/10 px-3 py-2 text-xs text-theme-primary">
               当前份额：{holding.shares || '待确认'}
             </div>
           </div>
@@ -769,7 +643,7 @@ export function HoldingFundRow({
               <input
                 value={dividendForm.amount}
                 onChange={(event) => updateDividendForm({ amount: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-violet-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-violet-400/60"
                 inputMode="decimal"
                 placeholder="例如 125.00"
               />
@@ -779,7 +653,7 @@ export function HoldingFundRow({
               <input
                 value={dividendForm.shares}
                 onChange={(event) => updateDividendForm({ shares: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-violet-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-violet-400/60"
                 inputMode="decimal"
                 placeholder="红利再投时填写"
               />
@@ -790,7 +664,7 @@ export function HoldingFundRow({
                 type="date"
                 value={dividendForm.tradeDate}
                 onChange={(event) => updateDividendForm({ tradeDate: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-violet-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-violet-400/60"
               />
             </label>
             <label className="space-y-2 text-xs text-theme-secondary">
@@ -798,7 +672,7 @@ export function HoldingFundRow({
               <select
                 value={dividendForm.sourcePlatform}
                 onChange={(event) => updateDividendForm({ sourcePlatform: event.target.value as HoldingSourcePlatform | '' })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-violet-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-violet-400/60"
               >
                 <option value="">未记录来源</option>
                 {HOLDING_SOURCE_OPTIONS.map((option) => (
@@ -813,7 +687,7 @@ export function HoldingFundRow({
               <input
                 value={dividendForm.note}
                 onChange={(event) => updateDividendForm({ note: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-violet-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-violet-400/60"
                 placeholder="例如：现金分红 / 红利再投"
               />
             </label>
@@ -839,7 +713,7 @@ export function HoldingFundRow({
               type="button"
               onClick={() => void handleSaveDividend()}
               disabled={isDividendSaving}
-              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-violet-500 via-fuchsia-500 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_14px_35px_rgba(139,92,246,0.22)] transition-transform hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex items-center gap-2 rounded-2xl bg-[var(--input-bg)] border border-[var(--input-border)] px-4 py-2.5 text-sm font-semibold text-theme-primary shadow-[0_14px_35px_rgba(139,92,246,0.22)] transition-transform hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
             >
               <Gift className={cn('h-4 w-4', isDividendSaving && 'animate-pulse')} />
               {isDividendSaving ? '记录中...' : dividendForm.reinvest ? '确认红利再投' : '确认现金分红'}
@@ -867,7 +741,7 @@ export function HoldingFundRow({
                 适合平台迁移、拆分合并、手续费或历史口径修正；不会作为买卖交易处理，但会更新当前持仓快照并写入调整流水。
               </p>
             </div>
-            <div className="rounded-2xl border border-sky-400/20 bg-sky-400/10 px-3 py-2 text-xs text-sky-100">
+            <div className="rounded-2xl border border-sky-400/20 bg-sky-400/10 px-3 py-2 text-xs text-theme-primary">
               当前份额：{holding.shares || '待确认'}
             </div>
           </div>
@@ -878,7 +752,7 @@ export function HoldingFundRow({
               <input
                 value={adjustmentForm.targetShares}
                 onChange={(event) => updateAdjustmentForm({ targetShares: event.target.value, sharesDelta: '' })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-sky-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-sky-400/60"
                 inputMode="decimal"
                 placeholder="调整后的总份额"
               />
@@ -888,7 +762,7 @@ export function HoldingFundRow({
               <input
                 value={adjustmentForm.sharesDelta}
                 onChange={(event) => updateAdjustmentForm({ sharesDelta: event.target.value, targetShares: '' })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-sky-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-sky-400/60"
                 inputMode="decimal"
                 placeholder="例如 100 或 -50"
               />
@@ -898,7 +772,7 @@ export function HoldingFundRow({
               <input
                 value={adjustmentForm.confirmedNav}
                 onChange={(event) => updateAdjustmentForm({ confirmedNav: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-sky-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-sky-400/60"
                 inputMode="decimal"
                 placeholder="可选"
               />
@@ -909,7 +783,7 @@ export function HoldingFundRow({
                 type="date"
                 value={adjustmentForm.confirmedNavDate}
                 onChange={(event) => updateAdjustmentForm({ confirmedNavDate: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-sky-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-sky-400/60"
               />
             </label>
             <label className="space-y-2 text-xs text-theme-secondary">
@@ -918,7 +792,7 @@ export function HoldingFundRow({
                 type="date"
                 value={adjustmentForm.tradeDate}
                 onChange={(event) => updateAdjustmentForm({ tradeDate: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-sky-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-sky-400/60"
               />
             </label>
             <label className="space-y-2 text-xs text-theme-secondary">
@@ -926,7 +800,7 @@ export function HoldingFundRow({
               <select
                 value={adjustmentForm.sourcePlatform}
                 onChange={(event) => updateAdjustmentForm({ sourcePlatform: event.target.value as HoldingSourcePlatform | '' })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-sky-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-sky-400/60"
               >
                 <option value="">未记录来源</option>
                 {HOLDING_SOURCE_OPTIONS.map((option) => (
@@ -943,7 +817,7 @@ export function HoldingFundRow({
             <input
               value={adjustmentForm.note}
               onChange={(event) => updateAdjustmentForm({ note: event.target.value })}
-              className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-sky-400/60"
+              className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-sky-400/60"
               placeholder="例如：平台迁移 / 手续费份额修正"
             />
           </label>
@@ -955,7 +829,7 @@ export function HoldingFundRow({
               type="button"
               onClick={() => void handleSaveAdjustment()}
               disabled={isAdjustmentSaving}
-              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 via-cyan-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_14px_35px_rgba(56,189,248,0.22)] transition-transform hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex items-center gap-2 rounded-2xl bg-[var(--input-bg)] border border-[var(--input-border)] px-4 py-2.5 text-sm font-semibold text-theme-primary shadow-[0_14px_35px_rgba(56,189,248,0.22)] transition-transform hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
             >
               <SlidersHorizontal className={cn('h-4 w-4', isAdjustmentSaving && 'animate-pulse')} />
               {isAdjustmentSaving ? '保存中...' : '保存份额调整'}
@@ -980,31 +854,31 @@ export function HoldingFundRow({
             <div>
               <div className="text-sm font-semibold text-theme-primary">记录卖出 / 减仓</div>
               <p className="mt-1 max-w-2xl text-xs leading-5 text-theme-muted">
-                用于记录部分赎回或全部清仓，并同步调整当前这笔持仓快照。清仓会写入卖出流水并从当前持仓中移除，不再和“删除错误记录”混用。
+                优先按卖出份额记录，系统按比例减少成本。若按金额记录，请填写减少的成本本金，不是赎回到账金额；当前不计算实际卖出盈亏。
               </p>
             </div>
-            <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+            <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-theme-primary">
               当前持仓：{formatAmount(holding.amount)}{holding.shares ? ` · ${holding.shares} 份` : ''}
             </div>
           </div>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <label className="space-y-2 text-xs text-theme-secondary">
-              <span>卖出金额</span>
+              <span>减少成本本金（非到账金额）</span>
               <input
                 value={sellForm.amount}
-                onChange={(event) => updateSellForm({ amount: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-amber-400/60"
+                onChange={(event) => updateSellForm({ amount: event.target.value, shares: '' })}
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-amber-400/60"
                 inputMode="decimal"
                 placeholder="例如 10000"
               />
             </label>
             <label className="space-y-2 text-xs text-theme-secondary">
-              <span>卖出份额（可选）</span>
+              <span>卖出份额（优先填写）</span>
               <input
                 value={sellForm.shares}
-                onChange={(event) => updateSellForm({ shares: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-amber-400/60"
+                onChange={(event) => updateSellForm({ shares: event.target.value, amount: '' })}
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-amber-400/60"
                 inputMode="decimal"
                 placeholder="已确认份额后可填"
               />
@@ -1015,7 +889,7 @@ export function HoldingFundRow({
                 type="date"
                 value={sellForm.tradeDate}
                 onChange={(event) => updateSellForm({ tradeDate: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-amber-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-amber-400/60"
               />
             </label>
             <label className="space-y-2 text-xs text-theme-secondary">
@@ -1023,7 +897,7 @@ export function HoldingFundRow({
               <input
                 value={sellForm.note}
                 onChange={(event) => updateSellForm({ note: event.target.value })}
-                className="w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-amber-400/60"
+                className="min-h-11 w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-amber-400/60"
                 placeholder="例如：止盈减仓 / 调整仓位"
               />
             </label>
@@ -1049,7 +923,7 @@ export function HoldingFundRow({
               type="button"
               onClick={() => void handleSaveSell()}
               disabled={isSellSaving}
-              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_14px_35px_rgba(245,158,11,0.22)] transition-transform hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex items-center gap-2 rounded-2xl bg-[var(--input-bg)] border border-[var(--input-border)] px-4 py-2.5 text-sm font-semibold text-theme-primary shadow-[0_14px_35px_rgba(245,158,11,0.22)] transition-transform hover:-translate-y-0.5 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
             >
               <MinusCircle className={cn('h-4 w-4', isSellSaving && 'animate-pulse')} />
               {isSellSaving ? '记录中...' : sellForm.sellAll ? '确认清仓' : '确认减仓'}

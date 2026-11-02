@@ -2,7 +2,6 @@
 
 import { HoldingAggregateRow } from '@/components/holding-aggregate-row'
 import { HoldingFundRow } from '@/components/holding-fund-row'
-import { ScrollReveal } from '@/components/scroll-reveal'
 import type { FundEstimate, FundHistorySeries } from '@/hooks/use-fund-data'
 import type {
   AdjustHoldingSharesPayload,
@@ -13,7 +12,7 @@ import type {
   SellHoldingPayload,
   UpdateHoldingPayload,
 } from '@/hooks/use-user-portfolio'
-import { incompleteAggregateChildren, type HoldingMetricScope } from '@/lib/holding-display'
+import { resolveHoldingMetrics, type HoldingMetricScope } from '@/lib/holding-display'
 
 type HoldingViewMode = 'aggregate' | 'detail'
 
@@ -55,16 +54,16 @@ export function HoldingsList({
   return (
     <div className="space-y-4">
       {viewMode === 'aggregate'
-        ? sortedHoldingAggregates.map((aggregate, index) => (
-            <ScrollReveal key={aggregate.fund_id} delay={Math.min(index * 70, 280)}>
+        ? sortedHoldingAggregates.map((aggregate) => (
               <HoldingAggregateRow
+                key={aggregate.fund_id}
                 aggregate={aggregate}
                 metricScope={metricScope}
                 estimateMetrics={aggregateMetrics[aggregate.fund_id]}
                 history={historiesByFundID[aggregate.fund_id]}
                 isHistoryLoading={isHistoryLoading}
               >
-                {incompleteAggregateChildren(holdingsByFundID[aggregate.fund_id] ?? [], showIncompleteOnly).map((holding) => (
+                {(holdingsByFundID[aggregate.fund_id] ?? []).filter(holding => !showIncompleteOnly || !resolveHoldingMetrics(holding, estimatesByFundID[holding.fund_id], metricScope).ready).map((holding) => (
                   <HoldingFundRow
                     key={holding.id}
                     holding={holding}
@@ -78,11 +77,10 @@ export function HoldingsList({
                   />
                 ))}
               </HoldingAggregateRow>
-            </ScrollReveal>
           ))
-        : sortedHoldings.map((holding, index) => (
-            <ScrollReveal key={holding.id} delay={Math.min(index * 70, 280)}>
+        : sortedHoldings.map((holding) => (
               <HoldingFundRow
+                key={holding.id}
                 holding={holding}
                 metricScope={metricScope}
                 estimate={estimatesByFundID[holding.fund_id]}
@@ -92,7 +90,6 @@ export function HoldingsList({
                 onRecordDividend={(payload) => onRecordHoldingDividend(holding.id, payload)}
                 onAdjustShares={(payload) => onAdjustHoldingShares(holding.id, payload)}
               />
-            </ScrollReveal>
           ))}
     </div>
   )

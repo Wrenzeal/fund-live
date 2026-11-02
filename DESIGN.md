@@ -24,7 +24,7 @@
 ## Product goals
 - Goals:
   - Help users understand real-time valuation, disclosed holdings exposure, dated source documents, and data gaps quickly.
-  - Let holding users see portfolio-level total value and cumulative return before drilling into per-fund details.
+  - Let holding users see current held-fund market value and holding P/L on the same priced positions before drilling into per-fund details.
   - Give fund observations a distinct role: source announcements and disclosure availability, with links to existing fund valuation and research surfaces.
   - Display facts and source dates without unvalidated scores, probabilities, sentiment or fund investment rankings.
   - Let administrators correct inaccurate fund classification labels without hiding the automatic holdings-derived exposure.
@@ -67,7 +67,7 @@
   - Observation entry order: concise module purpose and shared search → recently viewed funds → existing valuation/research links.
   - Holding classification card order: effective category/manual tags → manual correction note → automatic sector/theme exposure modules → confidence hints.
   - Holdings overview order: principal → total value → total return → today P/L → today change; total return must state whether it is official-ready or intraday-confirmed scope.
-  - Holdings page workspace order: global header/quick actions → one active workspace tab at a time. Tabs are Summary, Record, Holdings, Risk, Ledger, Tools; do not show all long modules simultaneously.
+  - Holdings page: summary and grouped fund rows share the default view. Current market value leads, followed by holding P/L and dated daily movement; remaining cost is secondary. One primary “记一笔” opens the buy form. Ledger, review/reminders and import/reconciliation stay secondary. Expand fund details for correction, sale, dividends and share adjustment.
 
 ## Design principles
 - Principle 1: Facts, source dates and explicit data gaps first; no inferred investment conclusion.
@@ -175,4 +175,5 @@
 - `robots.txt` and sitemap are shared discovery infrastructure; platform ownership verification and index reports remain separate. See `docs/seo-geo.md`. Neither structured data nor an AI-specific file guarantees citations or financial authority.
 
 ## Open questions
+- Holdings refactor (2026-11-02): `docs/holdings-ux-redesign.md`. Current held-fund market value is the primary amount. Keep official and preview modes explicit; missing data stays unavailable. Partial coverage must use matching priced cost for P/L. Never label cost reduction as redemption proceeds or current holding P/L as lifetime profit. Preserve the three themes, 44px controls, and a first-record flow without demo writes.
 - [ ] Whether strict empirical validation will justify any future scoring product. No unvalidated score may be reintroduced through observation or portfolio labels.

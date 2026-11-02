@@ -86,7 +86,7 @@ export function parseOptionalNumber(value?: string) {
   }
 
   const parsed = Number.parseFloat(value)
-  return Number.isNaN(parsed) ? null : parsed
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 export function compareOptionalNumbers(left: number | null, right: number | null, direction: 'asc' | 'desc') {
@@ -106,66 +106,75 @@ export function compareOptionalNumbers(left: number | null, right: number | null
   return direction === 'asc' ? left - right : right - left
 }
 
-export function aggregateProfitValue(
-  aggregate: Pick<HoldingAggregateEntry, 'official_today_profit'>,
-  estimateMetrics: Pick<HoldingEstimateAggregateMetrics, 'preview_ready' | 'fallback_ready' | 'preview_today_profit' | 'fallback_today_profit'> | undefined,
-  metricScope: HoldingMetricScope
-) {
-  if (metricScope === 'official') {
-    return parseOptionalNumber(aggregate.official_today_profit)
-  }
-
-  if (estimateMetrics?.preview_ready) {
-    return parseOptionalNumber(estimateMetrics.preview_today_profit)
-  }
-  if (estimateMetrics?.fallback_ready) {
-    return parseOptionalNumber(estimateMetrics.fallback_today_profit)
-  }
-  return null
+export interface HoldingDisplayMetrics {
+  marketValue: number | null
+  principal: number | null
+  holdingProfit: number | null
+  todayProfit: number | null
+  change: number | null
+  ready: boolean
+  partial: boolean
 }
 
-export function aggregateChangeValue(
-  aggregate: Pick<HoldingAggregateEntry, 'official_today_change_percent'>,
-  estimateMetrics: Pick<HoldingEstimateAggregateMetrics, 'preview_ready' | 'preview_today_change_percent' | 'estimate'> | undefined,
-  metricScope: HoldingMetricScope
-) {
-  if (metricScope === 'official') {
-    return parseOptionalNumber(aggregate.official_today_change_percent)
-  }
+type HoldingMetricInput = Pick<HoldingEntry, 'amount'> & Partial<HoldingEntry>
+type AggregateMetricInput = Partial<HoldingAggregateEntry>
+type EstimateInput = Partial<FundEstimate> | null | undefined
 
-  if (estimateMetrics?.preview_ready) {
-    return parseOptionalNumber(estimateMetrics.preview_today_change_percent)
+export function resolveHoldingMetrics(holding: HoldingMetricInput, estimate: EstimateInput, scope: HoldingMetricScope): HoldingDisplayMetrics {
+  const principal = parseOptionalNumber(holding.amount)
+  let marketValue: number | null = null
+  let todayProfit: number | null = null
+  let change: number | null = null
+  if (scope === 'official' && holding.real_metrics_ready) {
+    marketValue = parseOptionalNumber(holding.current_market_value)
+    todayProfit = parseOptionalNumber(holding.today_profit)
+    change = parseOptionalNumber(holding.today_change_percent)
+  } else if (scope === 'estimate') {
+    const shares = parseOptionalNumber(holding.shares)
+    const nav = parseOptionalNumber(estimate?.estimate_nav)
+    const previous = parseOptionalNumber(estimate?.prev_nav)
+    if (holding.confirmed_nav_date && shares !== null && shares > 0 && nav !== null && nav > 0) {
+      marketValue = shares * nav
+      if (previous !== null && previous > 0) {
+        todayProfit = Number((shares * (nav - previous)).toFixed(8))
+        change = Number(((nav / previous - 1) * 100).toFixed(8))
+      }
+    }
   }
-  return parseOptionalNumber(estimateMetrics?.estimate?.change_percent)
+  return { marketValue, principal, todayProfit, change,
+    holdingProfit: marketValue !== null && principal !== null ? marketValue - principal : null,
+    ready: marketValue !== null && principal !== null, partial: false }
 }
 
-export function detailProfitValue(
-  holding: Pick<HoldingEntry, 'today_profit' | 'amount'>,
-  estimate: Pick<FundEstimate, 'change_percent'> | null | undefined,
-  metricScope: HoldingMetricScope
-) {
-  if (metricScope === 'official') {
-    return parseOptionalNumber(holding.today_profit)
-  }
-
-  const changePercent = parseOptionalNumber(estimate?.change_percent)
-  const amount = parseOptionalNumber(holding.amount)
-  if (changePercent === null || amount === null) {
-    return null
-  }
-
-  return amount * changePercent / 100
+export function resolveAggregateMetrics(aggregate: AggregateMetricInput, estimate: Partial<HoldingEstimateAggregateMetrics> | undefined, scope: HoldingMetricScope): HoldingDisplayMetrics {
+  const available = scope === 'official'
+    ? (aggregate.real_metrics_ready_count ?? 0) > 0 || aggregate.real_metrics_ready === true || aggregate.metrics_scope === 'full'
+    : estimate?.preview_ready === true
+  const partial = scope === 'official'
+    ? available && (aggregate.metrics_scope === 'partial' || (aggregate.real_metrics_ready_count ?? aggregate.holding_count ?? 0) < (aggregate.holding_count ?? 0))
+    : available && (aggregate.confirmed_holding_count ?? 0) < (aggregate.holding_count ?? 0)
+  const marketValue = !available ? null : parseOptionalNumber(scope === 'official' ? aggregate.official_current_market_value : estimate?.preview_current_market_value)
+  const principal = scope === 'official'
+    ? parseOptionalNumber(partial ? aggregate.ready_principal : aggregate.ready_principal ?? aggregate.total_principal)
+    : parseOptionalNumber(estimate?.confirmed_principal ?? aggregate.confirmed_principal)
+  const todayProfit = !available ? null : parseOptionalNumber(scope === 'official' ? aggregate.official_today_profit : estimate?.preview_today_profit)
+  const change = !available ? null : parseOptionalNumber(scope === 'official' ? aggregate.official_today_change_percent : estimate?.preview_today_change_percent)
+  return { marketValue, principal, todayProfit, change, partial,
+    holdingProfit: marketValue !== null && principal !== null ? marketValue - principal : null,
+    ready: marketValue !== null && principal !== null }
 }
 
-export function detailChangeValue(
-  holding: Pick<HoldingEntry, 'today_change_percent'>,
-  estimate: Pick<FundEstimate, 'change_percent'> | null | undefined,
-  metricScope: HoldingMetricScope
-) {
-  if (metricScope === 'official') {
-    return parseOptionalNumber(holding.today_change_percent)
-  }
-  return parseOptionalNumber(estimate?.change_percent)
+export function aggregateProfitValue(aggregate: AggregateMetricInput, estimate: Partial<HoldingEstimateAggregateMetrics> | undefined, scope: HoldingMetricScope) {
+  return resolveAggregateMetrics(aggregate, estimate, scope).todayProfit
+}
+export function aggregateChangeValue(aggregate: AggregateMetricInput, estimate: Partial<HoldingEstimateAggregateMetrics> | undefined, scope: HoldingMetricScope) {
+  return resolveAggregateMetrics(aggregate, estimate, scope).change
+}
+export function detailProfitValue(holding: HoldingMetricInput, estimate: EstimateInput, scope: HoldingMetricScope) {
+  return resolveHoldingMetrics(holding, estimate, scope).todayProfit
+}
+export function detailChangeValue(holding: HoldingMetricInput, estimate: EstimateInput, scope: HoldingMetricScope) {
+  return resolveHoldingMetrics(holding, estimate, scope).change
 }
 
 export function timestampValue(value?: string) {
@@ -174,7 +183,7 @@ export function timestampValue(value?: string) {
   }
 
   const parsed = new Date(value).getTime()
-  return Number.isNaN(parsed) ? null : parsed
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 export function aggregateLatestUpdatedAt(holdings: Array<Pick<HoldingEntry, 'updated_at' | 'created_at'>>) {
@@ -203,70 +212,32 @@ export function incompleteAggregateChildren<T extends Pick<HoldingEntry, 'shares
 }
 
 export function matchesAggregateFilter(
-  aggregate: Pick<HoldingAggregateEntry, 'real_metrics_ready' | 'metrics_scope' | 'holding_count' | 'official_today_profit' | 'incomplete_holdings_count'>,
-  estimateMetrics: Pick<HoldingEstimateAggregateMetrics, 'preview_ready' | 'fallback_ready' | 'preview_today_profit' | 'fallback_today_profit'> | undefined,
-  metricScope: HoldingMetricScope,
-  filterMode: HoldingFilterMode
+  aggregate: AggregateMetricInput,
+  estimate: Partial<HoldingEstimateAggregateMetrics> | undefined,
+  scope: HoldingMetricScope,
+  filter: HoldingFilterMode,
 ) {
-  if (filterMode === 'all') {
-    return true
-  }
-
-  if (filterMode === 'ready') {
-    return metricScope === 'official'
-      ? aggregate.real_metrics_ready === true || aggregate.metrics_scope === 'full'
-      : estimateMetrics?.preview_ready === true
-  }
-  if (filterMode === 'partial') {
-    return metricScope === 'official'
-      ? isAggregateIncomplete(aggregate)
-      : estimateMetrics?.preview_ready !== true
-  }
-  if (filterMode === 'single') {
-    return (aggregate.holding_count ?? 0) <= 1
-  }
-  if (filterMode === 'multiple') {
-    return (aggregate.holding_count ?? 0) > 1
-  }
-
-  const profit = aggregateProfitValue(aggregate, estimateMetrics, metricScope)
-  if (profit === null) {
-    return false
-  }
-  return filterMode === 'profit' ? profit > 0 : profit < 0
+  const metrics = resolveAggregateMetrics(aggregate, estimate, scope)
+  if (filter === 'all') return true
+  if (filter === 'ready') return metrics.ready && !metrics.partial
+  if (filter === 'partial') return !metrics.ready || metrics.partial
+  if (filter === 'single') return (aggregate.holding_count ?? 0) <= 1
+  if (filter === 'multiple') return (aggregate.holding_count ?? 0) > 1
+  return metrics.todayProfit !== null && (filter === 'profit' ? metrics.todayProfit > 0 : metrics.todayProfit < 0)
 }
 
 export function matchesHoldingFilter(
-  holding: Pick<HoldingEntry, 'real_metrics_ready' | 'today_profit' | 'amount' | 'shares' | 'confirmed_nav_date'>,
-  estimate: Pick<FundEstimate, 'change_percent'> | null | undefined,
-  metricScope: HoldingMetricScope,
-  filterMode: HoldingFilterMode,
-  sameFundHoldingCount = 1
+  holding: HoldingMetricInput,
+  estimate: EstimateInput,
+  scope: HoldingMetricScope,
+  filter: HoldingFilterMode,
+  sameFundHoldingCount = 1,
 ) {
-  if (filterMode === 'all') {
-    return true
-  }
-
-  if (filterMode === 'ready') {
-    return metricScope === 'official'
-      ? holding.real_metrics_ready === true
-      : detailProfitValue(holding, estimate, metricScope) !== null
-  }
-  if (filterMode === 'partial') {
-    return metricScope === 'official'
-      ? isHoldingIncomplete(holding)
-      : detailProfitValue(holding, estimate, metricScope) === null
-  }
-  if (filterMode === 'single') {
-    return sameFundHoldingCount <= 1
-  }
-  if (filterMode === 'multiple') {
-    return sameFundHoldingCount > 1
-  }
-
-  const profit = detailProfitValue(holding, estimate, metricScope)
-  if (profit === null) {
-    return false
-  }
-  return filterMode === 'profit' ? profit > 0 : profit < 0
+  const metrics = resolveHoldingMetrics(holding, estimate, scope)
+  if (filter === 'all') return true
+  if (filter === 'ready') return metrics.ready
+  if (filter === 'partial') return !metrics.ready
+  if (filter === 'single') return sameFundHoldingCount <= 1
+  if (filter === 'multiple') return sameFundHoldingCount > 1
+  return metrics.todayProfit !== null && (filter === 'profit' ? metrics.todayProfit > 0 : metrics.todayProfit < 0)
 }

@@ -303,7 +303,7 @@ function parseDecimal(value?: string) {
   }
 
   const parsed = Number.parseFloat(value)
-  return Number.isNaN(parsed) ? null : parsed
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 async function fetchHoldingEstimates(fundIDs: string[]): Promise<Record<string, FundEstimate | null>> {
@@ -377,39 +377,33 @@ export function useHoldingEstimateMetrics(aggregates: HoldingAggregateEntry[]) {
       const estimate = estimatesByFundID[aggregate.fund_id] ?? null
       const confirmedShares = parseDecimal(aggregate.confirmed_shares)
       const confirmedPrincipal = parseDecimal(aggregate.confirmed_principal)
-      const totalPrincipal = parseDecimal(aggregate.total_principal) ?? 0
       const estimateNav = parseDecimal(estimate?.estimate_nav)
       const prevNav = parseDecimal(estimate?.prev_nav)
-      const changePercent = parseDecimal(estimate?.change_percent)
 
       const previewReady =
         typeof confirmedShares === 'number' &&
         confirmedShares > 0 &&
-        typeof estimateNav === 'number' &&
-        typeof prevNav === 'number' &&
-        prevNav > 0
+        typeof confirmedPrincipal === 'number' &&
+        typeof estimateNav === 'number' && estimateNav > 0
 
       const previewCurrentMarketValue = previewReady ? confirmedShares * estimateNav : null
-      const previewTodayProfit = previewReady ? confirmedShares * (estimateNav - prevNav) : null
-      const previewPreviousMarketValue = previewReady ? confirmedShares * prevNav : null
+      const previewTodayProfit = previewReady && prevNav !== null && prevNav > 0 ? confirmedShares * (estimateNav - prevNav) : null
+      const previewPreviousMarketValue = previewReady && prevNav !== null && prevNav > 0 ? confirmedShares * prevNav : null
       const previewTodayChangePercent =
-        previewReady && prevNav > 0
+        previewTodayProfit !== null && previewPreviousMarketValue !== null && previewPreviousMarketValue > 0
           ? ((previewTodayProfit ?? 0) / (previewPreviousMarketValue ?? 1)) * 100
-          : changePercent
+          : null
 
-      const fallbackTodayProfit =
-        !previewReady && typeof changePercent === 'number' ? (totalPrincipal * changePercent) / 100 : null
 
       result[aggregate.fund_id] = {
         fund_id: aggregate.fund_id,
         estimate,
         preview_ready: previewReady,
-        fallback_ready: fallbackTodayProfit !== null,
+        fallback_ready: false,
         preview_current_market_value: previewCurrentMarketValue?.toFixed(2),
         preview_today_profit: previewTodayProfit?.toFixed(2),
         preview_today_change_percent:
           typeof previewTodayChangePercent === 'number' ? previewTodayChangePercent.toFixed(4) : undefined,
-        fallback_today_profit: fallbackTodayProfit?.toFixed(2),
         confirmed_principal: confirmedPrincipal?.toFixed(2),
         confirmed_shares: confirmedShares?.toFixed(6),
       }
@@ -432,6 +426,7 @@ export function useHoldingEstimateMetrics(aggregates: HoldingAggregateEntry[]) {
     let readyPrincipal = 0
     let totalCurrentMarketValue = 0
     let totalTodayProfit = 0
+    let dailyReadyCount = 0
     let totalPreviousMarketValue = 0
 
     for (const aggregate of aggregates) {
@@ -444,7 +439,11 @@ export function useHoldingEstimateMetrics(aggregates: HoldingAggregateEntry[]) {
       readyCount++
       readyPrincipal += confirmedPrincipal
       totalCurrentMarketValue += parseDecimal(metrics.preview_current_market_value) ?? 0
-      totalTodayProfit += parseDecimal(metrics.preview_today_profit) ?? 0
+      const dailyProfit = parseDecimal(metrics.preview_today_profit)
+      if (dailyProfit !== null) {
+        totalTodayProfit += dailyProfit
+        dailyReadyCount++
+      }
 
       const estimate = metrics.estimate
       const confirmedShares = parseDecimal(aggregate.confirmed_shares) ?? 0
@@ -452,7 +451,8 @@ export function useHoldingEstimateMetrics(aggregates: HoldingAggregateEntry[]) {
       totalPreviousMarketValue += confirmedShares * prevNav
     }
 
-    const metricsScope = readyCount === 0 ? 'none' : readyCount === aggregates.length ? 'full' : 'partial'
+    const fullyCovered = readyCount === aggregates.length && aggregates.every(item => item.confirmed_holding_count === item.holding_count)
+    const metricsScope = readyCount === 0 ? 'none' : fullyCovered ? 'full' : 'partial'
 
     return {
       metrics_scope: metricsScope,
@@ -460,7 +460,7 @@ export function useHoldingEstimateMetrics(aggregates: HoldingAggregateEntry[]) {
       total_count: aggregates.length,
       ready_principal: readyPrincipal.toFixed(2),
       total_current_market_value: readyCount > 0 ? totalCurrentMarketValue.toFixed(2) : undefined,
-      total_today_profit: readyCount > 0 ? totalTodayProfit.toFixed(2) : undefined,
+      total_today_profit: dailyReadyCount > 0 ? totalTodayProfit.toFixed(2) : undefined,
       total_today_change_percent:
         readyCount > 0 && totalPreviousMarketValue > 0
           ? ((totalTodayProfit / totalPreviousMarketValue) * 100).toFixed(4)
@@ -468,8 +468,8 @@ export function useHoldingEstimateMetrics(aggregates: HoldingAggregateEntry[]) {
       message:
         readyCount === 0
           ? '待确认份额补齐后展示盘中预估总览。'
-          : readyCount < aggregates.length
-            ? `当前已按确认份额汇总 ${readyCount}/${aggregates.length} 只基金的盘中预估，剩余基金待补齐份额。`
+          : !fullyCovered
+            ? `当前已按确认份额汇总 ${readyCount}/${aggregates.length} 只基金的盘中预估，仍有分笔待补齐份额。`
             : '盘中预估总览已按全部已确认份额汇总。',
     }
   }, [aggregateMetrics, aggregates])
@@ -527,7 +527,7 @@ export function useUserPortfolio(userID: string | null, transactionFilters: Hold
 
   const { watchlistGroups, isWatchlistLoading, mutateWatchlistGroups } = useUserWatchlistGroups(userID)
 
-  const { data: holdingsPayload, mutate: mutateHoldings } = useSWR<HoldingsResponse>(
+  const { data: holdingsPayload, isLoading: isHoldingsLoading, error: holdingsError, mutate: mutateHoldings } = useSWR<HoldingsResponse>(
     userID ? `${API_BASE_URL}/api/v1/user/holdings` : null,
     fetcher,
     {
@@ -562,6 +562,9 @@ export function useUserPortfolio(userID: string | null, transactionFilters: Hold
     watchlistGroups,
     isWatchlistLoading,
     holdings,
+    isHoldingsLoading,
+    holdingsError: holdingsError as Error | undefined,
+    refreshHoldings: mutateHoldings,
     holdingAggregates,
     holdingTransactions,
     holdingSummary,

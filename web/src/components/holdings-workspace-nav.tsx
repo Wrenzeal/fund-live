@@ -1,161 +1,23 @@
-import {
-  BarChart4,
-  BellRing,
-  ClipboardList,
-  HeartPulse,
-  History,
-  LoaderCircle,
-  Wallet,
-  type LucideIcon,
-} from "lucide-react";
+import { ArrowLeft, Plus } from 'lucide-react'
+import { ActionButton } from '@/components/ui/action-button'
+import { cn } from '@/lib/utils'
 
-import { Surface } from "@/components/ui/surface";
-import { cn } from "@/lib/utils";
+export type HoldingWorkspaceTab = 'summary' | 'record' | 'list' | 'risk' | 'ledger' | 'tools'
 
-export type HoldingWorkspaceTab =
-  | "summary"
-  | "record"
-  | "list"
-  | "risk"
-  | "ledger"
-  | "tools";
+const destinations = [
+  { id: 'summary', label: '持仓' }, { id: 'ledger', label: '交易记录' },
+  { id: 'risk', label: '复核与提醒' }, { id: 'tools', label: '导入与对账' },
+] as const
 
-interface WorkspaceTabConfig {
-  id: HoldingWorkspaceTab;
-  label: string;
-  icon: LucideIcon;
-}
-
-interface QuickActionConfig {
-  label: string;
-  tab: HoldingWorkspaceTab;
-  primary?: boolean;
-}
-
-interface HoldingsWorkspaceNavProps {
-  holdingCount: number;
-  activeTab: HoldingWorkspaceTab;
-  detailText: string;
-  isSeedingDemo: boolean;
-  onTabChange: (tab: HoldingWorkspaceTab) => void;
-  onSeedDemo: () => void;
-}
-
-const workspaceTabs: WorkspaceTabConfig[] = [
-  {
-    id: "summary",
-    label: "总览",
-    icon: Wallet,
-  },
-  {
-    id: "record",
-    label: "记录",
-    icon: ClipboardList,
-  },
-  {
-    id: "list",
-    label: "持仓",
-    icon: BarChart4,
-  },
-  { id: "risk", label: "风险", icon: HeartPulse },
-  {
-    id: "ledger",
-    label: "流水",
-    icon: History,
-  },
-  { id: "tools", label: "工具", icon: BellRing },
-];
-
-const quickActions: QuickActionConfig[] = [
-  { label: "记一笔", tab: "record", primary: true },
-  { label: "看持仓", tab: "list" },
-  { label: "查风险", tab: "risk" },
-  { label: "看流水", tab: "ledger" },
-];
-
-export function HoldingsWorkspaceNav({
-  holdingCount,
-  activeTab,
-  detailText,
-  isSeedingDemo,
-  onTabChange,
-  onSeedDemo,
-}: HoldingsWorkspaceNavProps) {
-  return (
-    <Surface as="section" radius="xl" padding="md">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="text-sm font-medium text-theme-muted">持仓</div>
-          <div className="mt-1 text-3xl font-black text-theme-primary">
-            {holdingCount} 条记录
-          </div>
-          <div className="mt-2 text-xs text-theme-muted">{detailText}</div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {quickActions.map((action) => (
-            <button
-              key={action.tab}
-              type="button"
-              onClick={() => onTabChange(action.tab)}
-              className={cn(
-                "rounded-2xl border px-4 py-2 text-sm font-medium transition-colors",
-                activeTab === action.tab
-                  ? "border-cyan-300/45 bg-cyan-400/14 text-cyan-100 shadow-[0_12px_26px_rgba(34,211,238,0.12)]"
-                  : action.primary
-                    ? "border-cyan-300/30 bg-cyan-400/10 text-cyan-100 hover:border-cyan-200/45"
-                    : "border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-300/35 hover:text-theme-primary",
-              )}
-            >
-              {action.label}
-            </button>
-          ))}
-          {holdingCount === 0 && (
-            <button
-              type="button"
-              onClick={onSeedDemo}
-              disabled={isSeedingDemo}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition-colors disabled:pointer-events-none disabled:opacity-60",
-                "hover:border-[var(--accent-primary)] hover:text-theme-primary",
-              )}
-            >
-              {isSeedingDemo ? (
-                <LoaderCircle className="h-4 w-4 animate-spin" />
-              ) : (
-                <BarChart4 className="h-4 w-4" />
-              )}
-              <span>{isSeedingDemo ? "准备中…" : "快速开始"}</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {holdingCount > 0 && (
-        <div className="mt-5 flex flex-wrap gap-2">
-          {workspaceTabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => onTabChange(tab.id)}
-                className={cn(
-                  "rounded-xl border px-3 py-2 text-left transition-colors",
-                  activeTab === tab.id
-                    ? "border-cyan-300/45 bg-cyan-400/14 text-cyan-100 shadow-[0_14px_30px_rgba(34,211,238,0.12)]"
-                    : "border-[var(--card-border)] bg-[var(--card-bg)]/56 text-theme-secondary hover:border-cyan-300/30 hover:text-theme-primary",
-                )}
-              >
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </Surface>
-  );
+export function HoldingsWorkspaceNav({ activeTab, onTabChange, holdingCount }: {
+  activeTab: HoldingWorkspaceTab
+  onTabChange: (tab: HoldingWorkspaceTab) => void
+  holdingCount: number
+}) {
+  return <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <nav aria-label="持仓工作区" className="flex min-w-0 gap-1 overflow-x-auto whitespace-nowrap">
+      {destinations.map(tab => <button key={tab.id} type="button" aria-current={activeTab === tab.id || activeTab === 'list' && tab.id === 'summary' ? 'page' : undefined} onClick={() => onTabChange(tab.id)} className={cn('min-h-11 rounded-lg px-3 text-sm transition-colors', activeTab === tab.id || activeTab === 'list' && tab.id === 'summary' ? 'bg-[var(--input-bg)] font-semibold text-theme-primary' : 'text-theme-secondary hover:bg-[var(--input-bg)]')}>{tab.label}</button>)}
+    </nav>
+    {activeTab === 'record' ? <ActionButton className="min-h-11" onClick={() => onTabChange('summary')}><ArrowLeft className="h-4 w-4" />返回持仓</ActionButton> : holdingCount > 0 && <ActionButton className="holding-primary-action min-h-11" variant="primary" onClick={() => onTabChange('record')}><Plus className="h-4 w-4" />记一笔</ActionButton>}
+  </div>
 }

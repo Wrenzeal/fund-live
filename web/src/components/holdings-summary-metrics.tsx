@@ -1,162 +1,54 @@
 'use client'
 
-import type { HoldingEstimateSummary, HoldingSummary } from '@/hooks/use-user-portfolio'
+import type { FundEstimate } from '@/hooks/use-fund-data'
+import type { HoldingEntry } from '@/hooks/use-user-portfolio'
+import { resolveHoldingMetrics, type HoldingMetricScope } from '@/lib/holding-display'
 import { cn } from '@/lib/utils'
-import { formatSummaryMoney, formatSummaryPercent, type HoldingMetricScope } from '@/lib/holding-display'
 
-interface HoldingsSummaryMetricsProps {
-  holdingSummary: HoldingSummary
-  previewSummary: HoldingEstimateSummary
+export function holdingMoney(value: number | null, signed = false) {
+  if (value === null || !Number.isFinite(value)) return '--'
+  const formatted = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
+  return signed && value > 0 ? `+${formatted}` : formatted
+}
+
+export function holdingTone(value: number | null) {
+  return value === null || value === 0 ? 'text-theme-primary' : value > 0 ? 'text-up' : 'text-down'
+}
+
+export function HoldingsSummaryMetrics({ holdings, estimatesByFundID, metricScope }: {
+  holdings: HoldingEntry[]
+  estimatesByFundID: Record<string, FundEstimate | null>
   metricScope: HoldingMetricScope
-  shouldUseOfficialSummary: boolean
-  hasOfficialSummaryMetrics: boolean
-  hasPreviewSummaryMetrics: boolean
-  officialReadyPrincipalText: string
-  previewReadyPrincipalText: string
-  totalPrincipalText: string
-  officialSummaryCoverage: string
-}
+}) {
+  const entries = holdings.map(holding => ({ holding, metrics: resolveHoldingMetrics(holding, estimatesByFundID[holding.fund_id], metricScope) }))
+  const priced = entries.filter(({ metrics }) => metrics.marketValue !== null && metrics.principal !== null)
+  const ready = priced.length > 0
+  const partial = priced.length < holdings.length
+  const totalValue = ready ? priced.reduce((sum, entry) => sum + entry.metrics.marketValue!, 0) : null
+  const principal = ready ? priced.reduce((sum, entry) => sum + entry.metrics.principal!, 0) : null
+  const profit = totalValue !== null && principal !== null ? totalValue - principal : null
+  const dailyEntries = priced.filter(entry => entry.metrics.todayProfit !== null)
+  const dailyProfit = dailyEntries.length > 0 ? dailyEntries.reduce((sum, entry) => sum + entry.metrics.todayProfit!, 0) : null
+  const returnPercent = profit !== null && principal !== null && principal > 0 ? `${profit > 0 ? '+' : ''}${(profit / principal * 100).toFixed(2)}%` : '--'
+  const dates = [...new Set(priced.map(({ holding }) => metricScope === 'official' ? holding.actual_date : estimatesByFundID[holding.fund_id]?.calculated_at?.slice(0, 10)).filter(Boolean))].sort()
+  const dateLabel = dates.length === 1 ? `截至 ${dates[0]}` : dates.length > 1 ? `净值日 ${dates[0]} 至 ${dates.at(-1)}，日期不一致` : '等待净值更新'
+  const totalCost = holdings.reduce((sum, holding) => sum + (Number.isFinite(Number(holding.amount)) ? Number(holding.amount) : 0), 0)
 
-function metricTone(isReady: boolean, value?: string) {
-  if (!isReady) {
-    return 'text-theme-primary'
-  }
-  return Number.parseFloat(value || '0') >= 0 ? 'text-up' : 'text-down'
-}
-
-function metricToneFromNumber(isReady: boolean, value: number | null) {
-  if (!isReady || value === null) {
-    return 'text-theme-primary'
-  }
-  return value >= 0 ? 'text-up' : 'text-down'
-}
-
-function parseSummaryNumber(value?: string) {
-  if (!value) {
-    return null
-  }
-
-  const parsed = Number.parseFloat(value)
-  return Number.isNaN(parsed) ? null : parsed
-}
-
-function formatSignedSummaryMoney(value: number | null) {
-  if (value === null) {
-    return '--'
-  }
-
-  const formatted = formatSummaryMoney(value.toFixed(2))
-  if (formatted === '--' || value < 0) {
-    return formatted
-  }
-  return `+${formatted}`
-}
-
-function formatReturnPercent(returnValue: number | null, principal?: string) {
-  const principalValue = parseSummaryNumber(principal)
-  if (returnValue === null || principalValue === null || principalValue <= 0) {
-    return '--'
-  }
-  return formatSummaryPercent(((returnValue / principalValue) * 100).toFixed(4))
-}
-
-export function HoldingsSummaryMetrics({
-  holdingSummary,
-  previewSummary,
-  metricScope,
-  shouldUseOfficialSummary,
-  hasOfficialSummaryMetrics,
-  hasPreviewSummaryMetrics,
-  officialReadyPrincipalText,
-  previewReadyPrincipalText,
-  totalPrincipalText,
-  officialSummaryCoverage,
-}: HoldingsSummaryMetricsProps) {
-  const activeReady = shouldUseOfficialSummary ? hasOfficialSummaryMetrics : hasPreviewSummaryMetrics
-  const activeTodayProfit = shouldUseOfficialSummary ? holdingSummary.total_today_profit : previewSummary.total_today_profit
-  const activeChange = shouldUseOfficialSummary ? holdingSummary.total_today_change_percent : previewSummary.total_today_change_percent
-  const activeValue = shouldUseOfficialSummary ? holdingSummary.total_current_market_value : previewSummary.total_current_market_value
-  const activePrincipal = shouldUseOfficialSummary ? holdingSummary.ready_principal : previewSummary.ready_principal
-  const activeValueNumber = parseSummaryNumber(activeValue)
-  const activePrincipalNumber = parseSummaryNumber(activePrincipal)
-  const totalReturn = activeReady && activeValueNumber !== null && activePrincipalNumber !== null
-    ? activeValueNumber - activePrincipalNumber
-    : null
-  const totalReturnPercent = formatReturnPercent(totalReturn, activePrincipal)
-  const metrics = [
-    {
-      label: '总本金',
-      value: totalPrincipalText,
-      tone: 'text-theme-primary',
-      note: '按录入持仓本金汇总',
-    },
-    {
-      label: shouldUseOfficialSummary ? '总价值（官方）' : '总价值（盘中）',
-      value: shouldUseOfficialSummary
-        ? (hasOfficialSummaryMetrics ? formatSummaryMoney(holdingSummary.total_current_market_value) : '--')
-        : (hasPreviewSummaryMetrics ? formatSummaryMoney(previewSummary.total_current_market_value) : '--'),
-      tone: 'text-theme-primary',
-      note: shouldUseOfficialSummary
-        ? (hasOfficialSummaryMetrics
-          ? `已就绪本金 ${officialReadyPrincipalText} / ${totalPrincipalText}`
-          : '待真实净值与份额齐备')
-        : (hasPreviewSummaryMetrics
-          ? `已确认本金 ${previewReadyPrincipalText} / ${totalPrincipalText}`
-          : '待确认份额齐备'),
-    },
-    {
-      label: '总收益',
-      value: activeReady ? formatSignedSummaryMoney(totalReturn) : '--',
-      tone: metricToneFromNumber(activeReady, totalReturn),
-      note: activeReady
-        ? (shouldUseOfficialSummary
-          ? `总价值 - 已就绪本金，收益率 ${totalReturnPercent}`
-          : `盘中总价值 - 已确认本金，收益率 ${totalReturnPercent}`)
-        : (shouldUseOfficialSummary ? '待真实净值与份额齐备' : '待确认份额齐备'),
-    },
-    {
-      label: shouldUseOfficialSummary ? '总官方盈亏' : '总实时盈亏预估',
-      value: shouldUseOfficialSummary
-        ? (hasOfficialSummaryMetrics ? formatSummaryMoney(holdingSummary.total_today_profit) : '--')
-        : (hasPreviewSummaryMetrics ? formatSummaryMoney(previewSummary.total_today_profit) : '--'),
-      tone: metricTone(activeReady, activeTodayProfit),
-      note: shouldUseOfficialSummary
-        ? (hasOfficialSummaryMetrics
-          ? `官方口径：已就绪 ${officialSummaryCoverage}`
-          : '暂不混入盘中预估')
-        : (hasPreviewSummaryMetrics
-          ? '根据基金预估涨跌幅估算，夜间真实值会自动覆盖'
-          : '仅在确认份额后纳入预估'),
-    },
-    {
-      label: shouldUseOfficialSummary ? '总官方涨跌幅' : '总实时涨跌预估',
-      value: shouldUseOfficialSummary
-        ? (hasOfficialSummaryMetrics ? formatSummaryPercent(holdingSummary.total_today_change_percent) : '--')
-        : (hasPreviewSummaryMetrics ? formatSummaryPercent(previewSummary.total_today_change_percent) : '--'),
-      tone: metricTone(activeReady, activeChange),
-      note: shouldUseOfficialSummary
-        ? (hasOfficialSummaryMetrics
-          ? (holdingSummary.metrics_scope === 'partial'
-            ? `按已就绪部分加权（剩余 ${holdingSummary.incomplete_holdings_count ?? 0} 条待补齐）`
-            : '按总仓位加权计算')
-          : `已就绪 ${holdingSummary.real_metrics_ready_count}/${holdingSummary.total_holdings} 条`)
-        : (hasPreviewSummaryMetrics
-          ? (previewSummary.metrics_scope === 'partial'
-            ? `按确认份额部分加权（剩余 ${previewSummary.total_count - previewSummary.ready_count} 只基金待补齐）`
-            : '夜间真实涨跌幅同步后会自动覆盖')
-          : `已就绪 ${previewSummary.ready_count}/${previewSummary.total_count} 只基金`),
-    },
-  ]
-
-  return (
-    <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5" data-metric-scope={metricScope}>
-      {metrics.map((metric) => (
-        <div key={metric.label} className="rounded-[24px] border border-[var(--card-border)] bg-[var(--card-bg)]/76 p-4">
-          <div className="text-xs text-theme-muted">{metric.label}</div>
-          <div className={cn('mt-3 text-2xl font-black', metric.tone)}>{metric.value}</div>
-          <div className="mt-2 text-xs text-theme-secondary">{metric.note}</div>
-        </div>
-      ))}
+  return <section data-testid="holdings-summary" aria-label="持仓金额总览" className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 sm:p-6">
+    <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-theme-secondary">
+      <span>{partial && ready ? '已计价持仓市值' : '持仓市值'}{metricScope === 'estimate' && '（预估）'}</span>
+      <span>{metricScope === 'official' ? '官方净值' : '盘中预估'} · {dateLabel}</span>
     </div>
-  )
+    <div className="mt-4 grid gap-5 lg:grid-cols-[1.1fr_1.4fr] lg:items-center">
+    <div><div className="break-words text-4xl font-semibold tracking-tight tabular-nums text-theme-primary sm:text-5xl">{holdingMoney(totalValue)}</div>
+    <div className="mt-3 text-sm text-theme-secondary">{ready ? `已计价 ${priced.length}/${holdings.length} 笔` : '尚无可计价持仓'}{partial && ` · ${holdings.length - priced.length} 笔待确认或待更新`}</div>
+    </div>
+    <dl className="grid grid-cols-2 gap-4 border-t border-[var(--card-border)] pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+      <div><dt className="text-sm text-theme-secondary">持有盈亏{partial && ready ? '（已计价部分）' : ''}</dt><dd className={cn('mt-2 text-2xl font-semibold tabular-nums', holdingTone(profit))}>{holdingMoney(profit, true)}</dd><dd className="mt-1 text-sm tabular-nums text-theme-secondary">{returnPercent}</dd></div>
+      <div><dt className="text-sm text-theme-secondary">{metricScope === 'estimate' ? '当日变动预估' : '当日变动'}{dailyEntries.length < priced.length && ready ? '（部分）' : ''}</dt><dd className={cn('mt-2 text-2xl font-semibold tabular-nums', holdingTone(dailyProfit))}>{holdingMoney(dailyProfit, true)}</dd><dd className="mt-1 text-sm text-theme-secondary">当前持仓在对应净值日的变动</dd></div>
+    </dl>
+    </div>
+    <div className="mt-5 flex flex-wrap justify-between gap-2 text-sm text-theme-secondary"><span>剩余成本 {holdingMoney(totalCost)}</span><span>{new Set(holdings.map(item => item.fund_id)).size} 只基金 · {holdings.length} 笔记录</span></div>
+    <details className="mt-2 text-sm text-theme-secondary"><summary className="min-h-11 cursor-pointer py-3">金额怎么算？</summary><p className="max-w-3xl leading-7">持仓市值按确认份额与所选净值计算；持有盈亏只用同一已计价范围的市值减剩余成本，不包含已卖出盈亏和现金分红。未确认的资金没有混入市值。{partial && ready && `当前已计价成本 ${holdingMoney(principal)}，其余成本不参与盈亏计算。`}当日变动不是按实际成交时点结算的账户损益。</p></details>
+  </section>
 }
