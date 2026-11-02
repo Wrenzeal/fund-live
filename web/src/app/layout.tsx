@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Noto_Sans_SC, JetBrains_Mono } from "next/font/google";
-import { BrowserTitleTicker } from "@/components/browser-title-ticker";
 import { GlobalAnnouncementDialog } from "@/components/global-announcement-dialog";
 import { UIPreferencesSync } from "@/components/ui-preferences-sync";
-import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site-metadata";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL, SOCIAL_IMAGE, isSearchIndexingEnabled } from "@/lib/site-metadata";
 import "./globals.css";
 
 const geist = Geist({
@@ -22,15 +21,15 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
-const browserTitle = "FundLive - 你的基金估值系统";
+const browserTitle = "涨了多少 FundLive｜基金估值、公告与持仓观察";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: { default: browserTitle, template: "%s | 涨了多少 FundLive" },
   description: SITE_DESCRIPTION,
   alternates: { canonical: "/" },
-  robots: { index: true, follow: true },
-  authors: [{ name: "涨了多少团队" }],
+  robots: { index: isSearchIndexingEnabled(), follow: true },
+  authors: [{ name: "FundLive 项目", url: `${SITE_URL}/about` }],
   verification: {
     google: process.env.GOOGLE_SITE_VERIFICATION,
     other: {
@@ -53,7 +52,9 @@ export const metadata: Metadata = {
     url: SITE_URL,
     siteName: SITE_NAME,
     locale: "zh_CN",
+    images: [SOCIAL_IMAGE],
   },
+  twitter: { card: "summary_large_image", title: browserTitle, description: SITE_DESCRIPTION, images: [SOCIAL_IMAGE.url] },
 };
 
 export default function RootLayout({
@@ -72,7 +73,6 @@ export default function RootLayout({
         className={`${geist.variable} ${notoSansSC.variable} ${jetbrainsMono.variable} antialiased`}
       >
         <UIPreferencesSync />
-        <BrowserTitleTicker title={browserTitle} />
         <script
           id="website-structured-data"
           type="application/ld+json"

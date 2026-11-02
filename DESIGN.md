@@ -2,7 +2,7 @@
 
 ## Source of truth
 - Status: Active
-- Last refreshed: 2026-10-16
+- Last refreshed: 2026-11-02
 - Primary product surfaces: Fund home `/`, fund observations `/observations` and `/observations/[fundId]`, holdings `/holdings`, watchlist `/watchlist`, market research `/research`, issues, and product announcements.
 - Current scope: `.omx/plans/fund-observation-simplification.md`. Old fund analysis detail/rankings URLs redirect to observations; scoring and Lean remain compatibility/research internals, not production decision UI.
 - Evidence reviewed:
@@ -91,7 +91,7 @@
 - Spacing/layout rhythm: Max width around `max-w-7xl`; use 5–6 unit vertical section rhythm; avoid too many four-column grids on content-heavy panels.
 - Shape/radius/elevation: Rounded cards (`rounded-2xl` / `rounded-3xl`) with glass surfaces; avoid stacking heavy shadows on every nested card.
 - Motion: Keep only functional CSS transitions for menus, loading, submission, and state changes; decorative sweeps, universal hover lifts, and infinite background animations are not part of the default language. Respect `motion-reduce` utilities.
-- Imagery/iconography: Lucide icons for section identity; icons should clarify semantics, not decorate every line. Browser favicon should use the blue line-only activity mark on transparent background, with SVG preferred and ICO as fallback. Browser tab title should read `FundLive - 你的基金估值系统`; if it is too long, use a lightweight document-title ticker that respects reduced motion, avoids low-frame jumps with sub-second character steps, and pauses briefly when the full title is visible. The visible home wordmark stays “涨了多少”, and its subtitle should read `FundLive - 实时基金估值`.
+- Imagery/iconography: Lucide icons for section identity; icons should clarify semantics, not decorate every line. Keep the current activity favicon and wordmark. Browser titles use stable, route-specific metadata; do not animate or rewrite document.title after hydration. Social previews use the generated 1200×630 FundLive image and shared OG/Twitter metadata.
 
 ## Components
 - Existing components to reuse:
@@ -167,9 +167,11 @@
 - Test/screenshot expectations: At minimum run `npm run lint` and `npm run build`; for high-risk visual changes, capture browser screenshots or run visual QA when available.
 
 ## Search and AI discovery
-- Public search metadata uses the production domain, distinct route titles and canonical URLs. The home title ticker must stop after leaving `/` and must not override inner-page titles.
+- Public search metadata uses the production domain, stable distinct route titles and canonical URLs. The previous home title ticker is removed because search identity now takes priority.
 - `/methodology` is a server-rendered explanation of estimation, source dates, coverage and limitations, reachable from the footer. Reuse the static information-page components and existing theme tokens.
-- Private account and utility areas remain noindex. Client-only fund observation and announcement details remain noindex until anonymous entity validation and useful initial HTML exist. Robots and metadata do not replace authentication.
+- Private account and utility areas remain noindex. Fund observation and product announcements reuse anonymous validated server data for metadata and visible initial HTML; only source-complete, fresh observation snapshots open indexing. A bounded public directory exposes existing sample funds, not rankings. Partial, unavailable or wrong-entity responses remain recoverable/noindex; only confirmed absence is 404.
+- `/about` documents the real open-source project, maintenance and correction process without invented corporate credentials. Match schema to visible body, maintain source dates, and escape JSON-LD.
+- Non-production Vercel environments and explicit `SEO_NOINDEX=true` remain noindex in page metadata and response headers, without blocking bots from reading that directive. User cookies are never forwarded to anonymous snapshot caches.
 - `robots.txt` and sitemap are shared discovery infrastructure; platform ownership verification and index reports remain separate. See `docs/seo-geo.md`. Neither structured data nor an AI-specific file guarantees citations or financial authority.
 
 ## Open questions

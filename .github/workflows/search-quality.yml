@@ -1,0 +1,54 @@
+name: Search quality
+
+on:
+  pull_request:
+    paths: ['web/**', '.github/workflows/search-quality.yml']
+  push:
+    branches: [main]
+    paths: ['web/**', '.github/workflows/search-quality.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    env:
+      BACKEND_URL: http://127.0.0.1:18084
+      NEXT_TELEMETRY_DISABLED: '1'
+      SEO_FIXTURE_RUNNING: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npx playwright install --with-deps chromium
+      - name: Start deterministic anonymous backend
+        run: |
+          node tests/fixtures/seo-backend.mjs > /tmp/fundlive-seo-fixture.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18084/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - run: npm run build -- --webpack
+      - run: npx playwright test --config=playwright.seo.config.ts
+      - name: Build preview indexing policy
+        run: npm run build -- --webpack
+        env:
+          SEO_NOINDEX: 'true'
+      - run: node scripts/verify-search-preview.mjs
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: search-quality-failure
+          path: web/test-results/

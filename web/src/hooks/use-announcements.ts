@@ -2,22 +2,10 @@
 
 import useSWR, { mutate as globalMutate } from 'swr'
 import { API_BASE_URL } from '@/lib/api-base-url'
+import type { Announcement } from '@/lib/announcement'
 
 
-export type AnnouncementSourceType = 'manual' | 'changelog'
-
-export interface Announcement {
-  id: string
-  title: string
-  summary: string
-  content: string
-  source_type: AnnouncementSourceType
-  source_ref: string
-  published_at: string
-  created_at: string
-  updated_at: string
-  read?: boolean
-}
+export type { AnnouncementSourceType, Announcement } from '@/lib/announcement'
 
 interface ApiEnvelope<T> {
   success: boolean
@@ -66,13 +54,14 @@ async function requestAnnouncements<T>(path: string, init?: RequestInit): Promis
   return json.data ?? null
 }
 
-export function useAnnouncements() {
+export function useAnnouncements(initialData?: Announcement[]) {
   const { data, error, isLoading, mutate } = useSWR<Announcement[]>(
     `${API_BASE_URL}/api/v1/announcements`,
     fetchAnnouncements,
     {
       revalidateOnFocus: false,
       dedupingInterval: 1000,
+      fallbackData: initialData,
     }
   )
 
@@ -84,13 +73,14 @@ export function useAnnouncements() {
   }
 }
 
-export function useAnnouncement(announcementID: string | null) {
+export function useAnnouncement(announcementID: string | null, initialData?: Announcement) {
   const { data, error, isLoading, mutate } = useSWR<Announcement>(
     announcementID ? `${API_BASE_URL}/api/v1/announcements/${announcementID}` : null,
     fetchAnnouncements,
     {
       revalidateOnFocus: false,
       dedupingInterval: 1000,
+      fallbackData: initialData?.id === announcementID ? initialData : undefined,
     }
   )
 

@@ -9,38 +9,15 @@ import { SiteFooter } from '@/components/site-footer'
 import { ActionButton } from '@/components/ui/action-button'
 import { Surface } from '@/components/ui/surface'
 import { useFundObservation, type FundNotice, type ObservationSource } from '@/hooks/use-fund-observation'
+import { formatObservationDate as formatDate, formatReportPeriod, observationSourceUrl as noticeUrl, type ObservationPayload } from '@/lib/fund-observation'
 import { cn } from '@/lib/utils'
 
 type NoticeFilter = 'all' | 'fund' | 'holding'
-
-function formatDate(value: string, withTime = false) {
-  if (!value) return '未提供'
-  const parsed = new Date(value)
-  if (!Number.isFinite(parsed.getTime())) return '未提供'
-  const date = parsed.toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' })
-  return withTime ? `${date} ${parsed.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false })}` : date
-}
-
-function formatReportPeriod(value: string) {
-  const quarter = value.match(/^(\d{4})-?Q([1-4])$/i)
-  if (quarter) return `${quarter[1]} 年第 ${quarter[2]} 季度`
-  const date = formatDate(value)
-  return date === '未提供' ? value || date : date
-}
 
 function holdingsSourceLabel(value: string) {
   if (value === 'direct_holdings') return '基金公开持仓'
   if (value === 'target_etf_fallback') return '目标 ETF 公开持仓'
   return value || '未提供'
-}
-
-function noticeUrl(value: string) {
-  try {
-    const url = new URL(value)
-    return ['https:', 'http:'].includes(url.protocol) ? url.href : undefined
-  } catch {
-    return undefined
-  }
 }
 
 function SourceStatus({ source }: { source: ObservationSource }) {
@@ -73,10 +50,10 @@ function NoticeItem({ notice }: { notice: FundNotice }) {
   )
 }
 
-export function FundObservationPageClient({ fundId }: { fundId: string }) {
+export function FundObservationPageClient({ fundId, initialData, serverUnavailable = false }: { fundId: string; initialData?: ObservationPayload; serverUnavailable?: boolean }) {
   const router = useRouter()
   const [filter, setFilter] = useState<NoticeFilter>('all')
-  const { data, error, isLoading, isValidating, mutate } = useFundObservation(fundId)
+  const { data, error, isLoading, isValidating, mutate } = useFundObservation(fundId, initialData)
   const observation = data?.observation
   const notices = (observation?.notices ?? []).filter((notice) => filter === 'all' || (filter === 'fund' ? notice.scope !== 'holding' : notice.scope === 'holding'))
   const sources = observation?.sources ?? []
@@ -94,7 +71,8 @@ export function FundObservationPageClient({ fundId }: { fundId: string }) {
           <Link href={`/?fund=${encodeURIComponent(fundId)}`} className="inline-flex min-h-11 items-center text-[var(--accent-primary)] hover:underline">返回基金详情</Link>
         </div>
 
-        {isLoading && !data && <div role="status" className="flex min-h-48 items-center justify-center gap-3 text-sm text-theme-secondary"><Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" />正在读取 {fundId} 的公告与披露资料</div>}
+        {serverUnavailable && !data && !error && <div role="status" className="rounded-2xl border border-[var(--card-border)] p-5 text-sm leading-7 text-theme-secondary"><h1 className="font-semibold text-theme-primary">基金 {fundId} 资料暂不可用</h1><p>未能读取公告与披露快照，这不表示基金不存在或没有公告。页面会尝试重新读取。</p><ActionButton onClick={refresh} disabled={isValidating}>重试</ActionButton></div>}
+        {isLoading && !data && !serverUnavailable && <div role="status" className="flex min-h-48 items-center justify-center gap-3 text-sm text-theme-secondary"><Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" />正在读取 {fundId} 的公告与披露资料</div>}
 
         {error && <div role="alert" className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[var(--card-border)] bg-[var(--input-bg)] px-5 py-4"><div className="min-w-0"><p className="text-sm font-semibold text-theme-primary">{data ? '本次刷新未完成，以下保留上次读取结果' : '观察资料读取失败'}</p><p className="mt-1 break-words text-sm leading-6 text-theme-secondary">{error.message}</p></div><ActionButton onClick={refresh} disabled={isValidating}>重试</ActionButton></div>}
 
@@ -103,7 +81,7 @@ export function FundObservationPageClient({ fundId }: { fundId: string }) {
             <div className="min-w-0">
               <p className="mb-2 flex items-center gap-2 text-sm text-[var(--accent-primary)]"><FileText className="h-4 w-4" />公告与披露资料</p>
               <h1 className="break-words text-2xl font-bold leading-tight text-theme-primary sm:text-3xl">{data.fund.name}</h1>
-              <p className="mt-3 text-xs leading-6 text-theme-muted">{[fundId, data.fund.type, data.fund.company].filter(Boolean).join(' · ')}</p>
+              <p className="mt-3 text-xs leading-6 text-theme-muted">{[fundId, data.fund.company].filter(Boolean).join(' · ')}</p>
               <p className="mt-1 text-xs leading-6 text-theme-muted">最近读取 {formatDate(observation.checked_at, true)}（北京时间）</p>
             </div>
             <ActionButton onClick={refresh} disabled={isValidating} className="min-h-11"><RefreshCw className={cn('h-4 w-4', isValidating && 'animate-spin motion-reduce:animate-none')} />刷新公告</ActionButton>
@@ -121,6 +99,11 @@ export function FundObservationPageClient({ fundId }: { fundId: string }) {
             </> : <p className="mt-3 text-sm leading-6 text-theme-secondary">{observation.holdings_status === 'unavailable' ? '持仓披露资料暂时无法读取，仍可查看可用的基金公告。' : '尚无公开持仓披露，仍可查看基金公告。'}</p>}
           </Surface>
 
+          <section aria-labelledby="source-status-heading" className="border-y border-[var(--card-border)] py-4">
+            <h2 id="source-status-heading" className="text-base font-semibold text-theme-primary">来源读取状态</h2>
+            <ul className="mt-2 divide-y divide-[var(--card-border)]">{sources.map(source => <SourceStatus key={source.code} source={source} />)}</ul>
+          </section>
+
           <section aria-labelledby="notices-heading" className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div><h2 id="notices-heading" className="text-lg font-semibold text-theme-primary">近期公告</h2><p className="mt-1 text-xs leading-6 text-theme-muted">近 {observation.window_days} 天 · 按发布日期排列 · 点击标题查看来源页面</p></div>
@@ -133,8 +116,8 @@ export function FundObservationPageClient({ fundId }: { fundId: string }) {
           </section>
 
           <section aria-labelledby="sources-heading" className="border-t border-[var(--card-border)] pt-5">
-            <h2 id="sources-heading" className="text-base font-semibold text-theme-primary">来源与资料说明</h2>
-            <ul className="mt-2 divide-y divide-[var(--card-border)]">{sources.map((source) => <SourceStatus key={source.code} source={source} />)}</ul>
+            <h2 id="sources-heading" className="text-base font-semibold text-theme-primary">资料范围与方法说明</h2>
+            <p className="mt-3 text-sm leading-7 text-theme-secondary">维护方：FundLive 项目。公告来源和发布日期见各条记录；读取时间不代表发布日期。<Link href="/methodology" className="ml-1 text-[var(--accent-primary)] underline underline-offset-4">查看估值方法与数据来源</Link>，或<Link href="/about" className="ml-1 text-[var(--accent-primary)] underline underline-offset-4">了解维护与更正机制</Link>。</p>
             {(observation.notes ?? []).length > 0 && <ul className="mt-3 list-disc space-y-1 pl-4 text-xs leading-6 text-theme-muted">{observation.notes.map((note) => <li key={note}>{note}</li>)}</ul>}
           </section>
         </>}

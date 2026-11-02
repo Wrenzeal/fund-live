@@ -7,6 +7,15 @@ const allowedDevOrigins = (process.env.ALLOWED_DEV_ORIGINS || "127.0.0.1,localho
 
 const nextConfig: NextConfig = {
   allowedDevOrigins,
+  async headers() {
+    const noindex = { key: 'X-Robots-Tag', value: 'noindex, nofollow' }
+    const preview = process.env.SEO_NOINDEX === 'true' || Boolean(process.env.VERCEL_ENV && process.env.VERCEL_ENV !== 'production')
+    return [
+      ...(preview ? [{ source: '/:path*', headers: [noindex] }] : []),
+      { source: '/api/:path*', headers: [noindex] },
+      { source: '/health', headers: [noindex] },
+    ]
+  },
 };
 
 export default nextConfig;

@@ -17,11 +17,15 @@ test.describe('search metadata without JavaScript', () => {
     expect(sitemap.headers()['content-type']).toContain('xml')
     const xml = await sitemap.text()
     const urls = [...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((match) => match[1])
-    expect(urls).toEqual([
+    expect(urls).toEqual(expect.arrayContaining([
       origin, `${origin}/observations`, `${origin}/research`, `${origin}/methodology`,
-      `${origin}/announcements`, `${origin}/privacy`, `${origin}/terms`,
-    ])
-    expect(xml).not.toContain('<lastmod>')
+      `${origin}/about`, `${origin}/announcements`, `${origin}/privacy`, `${origin}/terms`,
+    ]))
+    expect(urls.some(url => /\/(auth|holdings|watchlist|issues|analysis)(\/|$)/.test(new URL(url).pathname))).toBe(false)
+    // Live page check time must never be used as a fake content-modified date.
+    for (const urlBlock of xml.matchAll(/<url>([\s\S]*?)<\/url>/g)) {
+      if (!urlBlock[1].includes('/announcements/')) expect(urlBlock[1]).not.toContain('<lastmod>')
+    }
   })
 
   for (const [path, title] of [
@@ -58,7 +62,7 @@ test.describe('search metadata without JavaScript', () => {
     for (const path of ['/observations/005827', '/observations/999999']) {
       await page.goto(path)
       const id = path.split('/').at(-1)
-      await expect(page).toHaveTitle(`${id} 基金公告与持仓披露 | 涨了多少 FundLive`)
+      await expect(page).toHaveTitle(`基金 ${id}（${id}）公告与持仓披露 | 涨了多少 FundLive`)
       await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex, follow')
       await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `${origin}${path}`)
     }
@@ -100,7 +104,7 @@ test('invalid fund pages offer a recovery path after hydration', async ({ page }
   await expect(page.getByRole('link', { name: '返回基金观察' })).toHaveAttribute('href', '/observations')
 })
 
-test('home title animation cannot overwrite destination titles after client navigation', async ({ page }) => {
+test('page titles remain stable before and after client navigation', async ({ page }) => {
   await page.clock.install()
   await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname
@@ -112,6 +116,7 @@ test('home title animation cannot overwrite destination titles after client navi
   })
   await page.goto('/')
   await page.clock.fastForward(7_000)
+  await expect(page).toHaveTitle('涨了多少 FundLive｜基金估值、公告与持仓观察')
   await page.getByRole('navigation', { name: '页脚导航' }).getByRole('link', { name: '方法与来源' }).click()
   await expect(page).toHaveURL('/methodology')
   await expect(page).toHaveTitle('基金估值方法与数据来源 | 涨了多少 FundLive')

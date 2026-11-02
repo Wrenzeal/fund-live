@@ -313,6 +313,10 @@ function HomeContent({
 
       {/* Main Content */}
       <main id="main-content" className="container mx-auto px-4 py-8">
+        <header className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div><h1 className="text-xl font-semibold text-theme-primary">基金估值与公开披露观察</h1><p className="mt-2 max-w-3xl text-sm leading-7 text-theme-secondary">盘中预估与官方净值分开查看，结合持仓披露范围和公告来源核对基金资料。公开持仓不是实时全量仓位，预估不代表最终净值。</p></div>
+          <Link href="/methodology" className="inline-flex min-h-11 shrink-0 items-center text-sm text-[var(--accent-primary)] underline underline-offset-4">方法与数据来源</Link>
+        </header>
         {selectionError && (
           <StatusBanner className="mb-6" tone="warning" onDismiss={() => setSelectionError(null)}>
             {selectionError}
@@ -679,7 +683,7 @@ function MinimalWatchlistGrid({
       <ScrollReveal className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="text-xs font-semibold tracking-[0.22em] text-theme-muted">自选</div>
-          <h1 className="mt-2 text-2xl font-black text-theme-primary sm:text-3xl">自选基金</h1>
+          <h2 className="mt-2 text-2xl font-black text-theme-primary sm:text-3xl">自选基金</h2>
         </div>
         <div className="text-sm tabular-nums text-theme-secondary">
           {visibleFunds.length}/{funds.length}
