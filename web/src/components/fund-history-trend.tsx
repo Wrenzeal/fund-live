@@ -83,7 +83,7 @@ function HistoryTrendTooltip({ active, payload }: HistoryTrendTooltipProps) {
   const isUp = point.dailyReturn >= 0
 
   return (
-    <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/95 px-3 py-2 text-xs shadow-[0_18px_40px_rgba(2,8,23,0.26)] backdrop-blur-xl">
+    <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/95 px-3 py-2 text-xs shadow-none backdrop-blur-xl">
       <div className="font-semibold text-theme-primary">{point.date}</div>
       <div className="mt-1 text-theme-secondary">净值 {formatNav(point.nav)}</div>
       <div className={cn('mt-1 font-semibold', isUp ? 'text-up' : 'text-down')}>
@@ -118,7 +118,7 @@ export function FundHistoryTrend({
 
   if (data.length === 0) {
     return (
-      <div className={cn('relative overflow-hidden rounded-3xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/35', compact ? 'h-20' : 'min-h-[16rem] p-5', className)}>
+      <div className={cn('relative overflow-hidden rounded-xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/35', compact ? 'h-20' : 'min-h-[16rem] p-5', className)}>
         <div className="pointer-events-none absolute inset-0 opacity-60 [background-image:linear-gradient(rgba(148,163,184,0.10)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.10)_1px,transparent_1px)] [background-size:18px_18px]" />
         <div role={error ? 'alert' : 'status'} className="relative flex h-full min-h-[inherit] items-center justify-center px-4 text-center text-sm text-theme-secondary">
           <div>
@@ -133,7 +133,7 @@ export function FundHistoryTrend({
   }
 
   return (
-    <section className={cn('relative overflow-hidden rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/40', compact ? 'h-20 p-0' : 'p-5 md:p-6', className)}>
+    <section className={cn('relative overflow-hidden rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/40', compact ? 'h-20 p-0' : 'p-5 md:p-6', className)}>
       {!compact && (
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -143,9 +143,9 @@ export function FundHistoryTrend({
             </div>
             <div className="mt-1 text-xs text-theme-secondary">{first.date} 至 {last.date} · {data.length} 条已公布记录</div>
           </div>
-          <div className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-right">
+          <div className="rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-right">
             <div className="text-[10px] tracking-[0.18em] text-theme-muted">区间变化</div>
-            <div className={cn('mt-1 text-lg font-black', isPositive ? 'text-up' : 'text-down')}>{formatPercent(change)}</div>
+            <div className={cn('mt-1 text-lg font-semibold', isPositive ? 'text-up' : 'text-down')}>{formatPercent(change)}</div>
           </div>
         </div>
       )}
@@ -209,15 +209,15 @@ export function FundHistoryTrend({
 
       {!compact && (
         <div className="mt-4 grid gap-3 text-xs text-theme-secondary sm:grid-cols-3">
-          <div className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2">
+          <div className="rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2">
             <div className="text-theme-muted">起点净值</div>
             <div className="mt-1 font-semibold text-theme-primary">{formatNav(first?.nav)}</div>
           </div>
-          <div className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2">
+          <div className="rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2">
             <div className="text-theme-muted">最新净值</div>
             <div className="mt-1 font-semibold text-theme-primary">{formatNav(last?.nav)}</div>
           </div>
-          <div className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2">
+          <div className="rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2">
             <div className="text-theme-muted">最新日期</div>
             <div className="mt-1 font-semibold text-theme-primary">{last?.date || '--'}</div>
           </div>

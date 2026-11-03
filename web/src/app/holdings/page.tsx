@@ -526,7 +526,7 @@ export default function HoldingsPage() {
         title="持仓明细"
         description="记录本金、确认份额和盈亏。"
       >
-        <div className="glass h-64 animate-pulse rounded-[32px] border border-[var(--card-border)]" />
+        <div className="glass h-64 animate-pulse rounded-xl border border-[var(--card-border)]" />
       </AccountAreaShell>
     );
   }
@@ -571,9 +571,9 @@ export default function HoldingsPage() {
         />
 
         {isHoldingsLoading ? (
-          <div role="status" className="rounded-2xl border border-[var(--card-border)] p-8 text-theme-secondary">正在读取持仓…</div>
+          <div role="status" className="rounded-xl border border-[var(--card-border)] p-8 text-theme-secondary">正在读取持仓…</div>
         ) : holdingsError ? (
-          <div role="alert" className="rounded-2xl border border-[var(--card-border)] p-6 text-theme-primary">
+          <div role="alert" className="rounded-xl border border-[var(--card-border)] p-6 text-theme-primary">
             <p>持仓暂时无法加载</p>
             <p className="mt-2 text-sm text-theme-secondary">{holdingsError.message}</p>
             <ActionButton className="mt-4" onClick={() => void refreshHoldings()}>重新加载</ActionButton>
@@ -678,7 +678,7 @@ export default function HoldingsPage() {
                       setShowIncompleteOnly(false);
                       setFilterMode("all");
                     }}
-                    className="shrink-0 text-left text-xs font-medium text-amber-50 underline-offset-4 hover:underline sm:text-right"
+                    className="shrink-0 text-left text-xs font-medium text-warning underline-offset-4 hover:underline sm:text-right"
                   >
                     取消筛选
                   </button>

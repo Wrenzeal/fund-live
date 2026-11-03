@@ -7,11 +7,11 @@ type ActionButtonVariant = 'primary' | 'secondary' | 'ghost' | 'subtle'
 type ActionButtonSize = 'sm' | 'md'
 
 const baseClass =
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-2xl font-medium transition-colors duration-160 active:opacity-80 disabled:pointer-events-none disabled:opacity-60'
+  'inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium transition-colors duration-160 active:opacity-80 disabled:pointer-events-none disabled:opacity-60'
 
 const variantClass: Record<ActionButtonVariant, string> = {
   primary:
-    'bg-[var(--accent-primary)] text-white shadow-[0_10px_24px_color-mix(in_srgb,var(--accent-primary)_24%,transparent)] hover:brightness-105',
+    'bg-[var(--accent-primary)] text-[var(--on-accent)] hover:brightness-95',
   secondary:
     'border border-[var(--input-border)] bg-[var(--input-bg)] text-theme-primary hover:border-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/10',
   ghost:

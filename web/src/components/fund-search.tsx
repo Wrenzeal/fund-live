@@ -138,7 +138,7 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
                 type="button"
                 onClick={openSearch}
                 className={cn(
-                    'fund-search-trigger group inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border',
+                    'fund-search-trigger group inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border',
                     'transition-colors duration-160',
                     overlayVisible && 'ring-2 ring-[var(--input-focus)]/35'
                 )}
@@ -163,8 +163,8 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
                         aria-modal="true"
                         aria-labelledby={searchTitleId}
                         className={cn(
-                            'fixed left-3 right-3 top-4 z-[90] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-[28px] border border-[var(--card-border)]',
-                            'search-expanded-panel shadow-[0_32px_90px_rgba(2,8,23,0.42)] transition-all duration-300 ease-[cubic-bezier(.2,.8,.2,1)]',
+                            'fixed left-3 right-3 top-4 z-[90] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-xl border border-[var(--card-border)]',
+                            'search-expanded-panel shadow-none transition-all duration-300 ease-[cubic-bezier(.2,.8,.2,1)]',
                             'sm:left-1/2 sm:right-auto sm:top-20 sm:w-[min(48rem,calc(100vw-2rem))] sm:-translate-x-1/2',
                             overlayVisible ? 'translate-y-0 scale-100 opacity-100 blur-0' : 'translate-y-4 scale-[0.975] opacity-0 blur-[2px]'
                         )}
@@ -198,7 +198,7 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
                                     onChange={(event) => setInputValue(event.target.value)}
                                     placeholder="例如 005827、蓝、易方达"
                                     className={cn(
-                                        'w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] py-4 pl-12 pr-12 text-base font-medium',
+                                        'w-full rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] py-4 pl-12 pr-12 text-base font-medium',
                                         'text-theme-primary placeholder:text-theme-muted focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[var(--input-focus)]'
                                     )}
                                 />
@@ -213,14 +213,14 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
                                     </button>
                                 )}
                                 {isLoading && (
-                                    <Loader2 className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-cyan-400" />
+                                    <Loader2 className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-accent" />
                                 )}
                             </div>
                         </div>
 
                         <div className="max-h-[calc(100dvh-12rem)] overflow-y-auto px-4 py-4 sm:max-h-[30rem] sm:px-5">
                             {showQueryHint && (
-                                <div className="rounded-3xl border border-[var(--card-border)] bg-[var(--input-bg)]/45 px-4 py-6 text-center text-sm leading-6 text-theme-secondary">
+                                <div className="rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/45 px-4 py-6 text-center text-sm leading-6 text-theme-secondary">
                                     中文名称可输入 1 个字；基金代码或英文至少输入 2 个字符。
                                 </div>
                             )}
@@ -240,7 +240,7 @@ export function FundSearch({ onSelect, currentFundId, className }: FundSearchPro
                             )}
 
                             {showEmpty && (
-                                <div className="rounded-3xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/45 px-4 py-8 text-center">
+                                <div className="rounded-xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/45 px-4 py-8 text-center">
                                     <div className="text-sm font-semibold text-theme-primary">没有找到匹配基金</div>
                                     <p className="mt-2 text-xs leading-5 text-theme-muted">
                                         尝试输入 6 位基金代码、基金简称或基金公司。
@@ -282,10 +282,10 @@ function FundSearchOption({
             type="button"
             onClick={() => onSelect(fund)}
             className={cn(
-                'group w-full rounded-2xl border px-4 py-3 text-left transition-all duration-200',
+                'group w-full rounded-xl border px-4 py-3 text-left transition-all duration-200',
                 'border-[var(--card-border)] bg-[var(--input-bg)]/62 hover:-translate-y-0.5 hover:border-[var(--accent-primary)]',
-                'hover:shadow-[0_18px_36px_rgba(34,211,238,0.12)]',
-                currentFundId === fund.id && 'border-cyan-500 bg-cyan-500/10'
+                'hover:shadow-none',
+                currentFundId === fund.id && 'border-accent/30 bg-accent/10'
             )}
         >
             <div className="flex items-start justify-between gap-4">
@@ -299,7 +299,7 @@ function FundSearchOption({
                 </div>
                 <div className="shrink-0 text-right">
                     {fund.type && (
-                        <div className="rounded-full border border-cyan-500/22 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-semibold text-theme-primary">
+                        <div className="rounded-full border border-accent/22 bg-accent/10 px-2.5 py-1 text-[11px] font-semibold text-theme-primary">
                             {fund.type}
                         </div>
                     )}
@@ -392,9 +392,9 @@ function CompactFundButton({
             type="button"
             onClick={() => onSelect(fund)}
             className={cn(
-                'rounded-2xl border border-[var(--card-border)] bg-[var(--input-bg)]/55 px-3 py-3 text-left transition-all duration-200',
+                'rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/55 px-3 py-3 text-left transition-all duration-200',
                 'hover:-translate-y-0.5 hover:border-[var(--accent-primary)] hover:text-theme-primary',
-                currentFundId === fund.id && 'border-cyan-500 bg-cyan-500/10'
+                currentFundId === fund.id && 'border-accent/30 bg-accent/10'
             )}
         >
             <div className="truncate text-sm font-semibold text-theme-primary">{fund.name}</div>

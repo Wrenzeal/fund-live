@@ -48,7 +48,7 @@ export function WatchlistFundCard({ fundId, onRemove }: WatchlistFundCardProps) 
   }
 
   return (
-    <div className="rounded-[28px] border border-[var(--card-border)] p-5 glass">
+    <div className="rounded-xl border border-[var(--card-border)] p-5 glass">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="truncate text-base font-semibold text-theme-primary">{fundName}</div>
@@ -64,9 +64,9 @@ export function WatchlistFundCard({ fundId, onRemove }: WatchlistFundCardProps) 
           disabled={isRemoving}
           className={cn(
             'group relative overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] p-2 text-theme-muted transition-all duration-200',
-            'hover:-translate-y-0.5 hover:border-rose-400/45 hover:bg-rose-500/12 hover:text-down active:scale-[0.95]',
+            'hover:-translate-y-0.5 hover:border-danger/45 hover:bg-danger/12 hover:text-down active:scale-[0.95]',
             'disabled:cursor-not-allowed disabled:opacity-80',
-            isRemoving && 'danger-button-pop border-rose-400/45 bg-rose-500/14 text-down'
+            isRemoving && 'danger-button-pop border-danger/45 bg-danger/14 text-down'
           )}
           aria-label={`从自选中移除 ${fundName}`}
         >
@@ -92,7 +92,7 @@ export function WatchlistFundCard({ fundId, onRemove }: WatchlistFundCardProps) 
       <div className="mt-4 flex items-end justify-between gap-4">
         <div>
           <div className="text-xs text-theme-muted">实时预估涨跌幅</div>
-          <div className={cn('mt-1 text-2xl font-black', percent.isPositive ? 'text-up' : 'text-down')}>
+          <div className={cn('mt-1 text-2xl font-semibold', percent.isPositive ? 'text-up' : 'text-down')}>
             {isCallAuction ? '-' : isLoading ? '--' : percent.text}
           </div>
         </div>
@@ -101,7 +101,7 @@ export function WatchlistFundCard({ fundId, onRemove }: WatchlistFundCardProps) 
           href={`/?fund=${fundId}`}
           className={cn(
             'group relative inline-flex items-center gap-1.5 overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-xs text-theme-secondary transition-all duration-200',
-            'hover:-translate-y-0.5 hover:border-cyan-400/40 hover:bg-cyan-400/10 hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)] active:scale-[0.97]'
+            'hover:-translate-y-0.5 hover:border-accent/40 hover:bg-accent/10 hover:text-theme-primary hover:shadow-none active:scale-[0.97]'
           )}
         >
           <span className="action-button-shine" />

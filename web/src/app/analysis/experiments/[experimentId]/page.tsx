@@ -24,16 +24,16 @@ export default function QuantExperimentPage() {
     <div className="min-h-[100dvh]">
       <AppTopBar />
       <main id="main-content" className="container mx-auto max-w-7xl px-4 py-4 md:py-8">
-        <header className="overflow-hidden rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/45 p-5 md:rounded-[2rem] md:p-7">
+        <header className="overflow-hidden rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/45 p-5 md:rounded-[2rem] md:p-7">
           <Link href="/observations" className="inline-flex items-center gap-2 text-sm text-theme-secondary transition-colors hover:text-theme-primary">
             <ArrowLeft className="h-4 w-4" />返回基金观察
           </Link>
           <div className="mt-5 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
-              <div className="flex items-center gap-2 text-xs font-semibold text-cyan-100">
+              <div className="flex items-center gap-2 text-xs font-semibold text-accent">
                 <FlaskConical className="h-4 w-4" />RISK‑V1 · 研究验证
               </div>
-              <h1 className="mt-3 text-2xl font-black tracking-tight text-theme-primary md:text-3xl">A–D 风险收益对照</h1>
+              <h1 className="mt-3 text-2xl font-semibold tracking-tight text-theme-primary md:text-3xl">A–D 风险收益对照</h1>
               <p className="mt-2 text-sm leading-6 text-theme-secondary">
                 历史实验档案：在同一信号、区间、费用和成交规则下，比较排名缓冲、低换手与风险控制。结果不用于生成当前基金的买卖结论。
               </p>
@@ -49,9 +49,9 @@ export default function QuantExperimentPage() {
 
         <div className="mt-5 space-y-5">
           {isLoading && !experiment ? (
-            <div className="rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 py-20"><LoadingSpinner text="正在读取策略实验…" /></div>
+            <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 py-20"><LoadingSpinner text="正在读取策略实验…" /></div>
           ) : error ? (
-            <div className="flex items-start gap-3 rounded-3xl border border-amber-500/25 bg-amber-500/10 p-5 text-sm text-amber-100">
+            <div className="flex items-start gap-3 rounded-xl border border-warning/25 bg-warning/10 p-5 text-sm text-warning">
               <CircleAlert className="mt-0.5 h-4 w-4" />实验结果暂时不可用。
             </div>
           ) : experiment ? (
@@ -60,10 +60,10 @@ export default function QuantExperimentPage() {
                 {experiment.variants.map((variant) => <VariantCard key={variant.key} variant={variant} />)}
               </section>
 
-              <section className="rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-5 md:p-6">
+              <section className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-5 md:p-6">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <h2 className="text-lg font-black text-theme-primary">组合与沪深300</h2>
+                    <h2 className="text-lg font-semibold text-theme-primary">组合与沪深300</h2>
                     <p className="mt-1 text-xs leading-5 text-theme-muted">所有曲线以实验开始日归一为100，费用和滑点已计入策略净值。</p>
                   </div>
                   <span className="text-xs text-theme-muted">下一交易日开盘成交</span>
@@ -87,24 +87,24 @@ export default function QuantExperimentPage() {
                 </div>
               </section>
 
-              <section className="overflow-hidden rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/35">
+              <section className="overflow-hidden rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/35">
                 <div className="p-5 md:p-6">
-                  <h2 className="text-lg font-black text-theme-primary">核心指标</h2>
+                  <h2 className="text-lg font-semibold text-theme-primary">核心指标</h2>
                   <p className="mt-1 text-xs text-theme-muted">风险收益改善需同时通过Sharpe、回撤、CAGR和年度稳定性门槛。</p>
                 </div>
                 <MetricComparison experiment={experiment} />
               </section>
 
-              <section className="overflow-hidden rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/35">
+              <section className="overflow-hidden rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/35">
                 <div className="p-5 md:p-6">
-                  <h2 className="text-lg font-black text-theme-primary">年度表现</h2>
+                  <h2 className="text-lg font-semibold text-theme-primary">年度表现</h2>
                   <p className="mt-1 text-xs text-theme-muted">按连续组合净值切分自然年；不足120个交易日的片段不参与稳定性门槛。</p>
                 </div>
                 <AnnualComparison rows={annualRows} />
               </section>
 
-              <section className="rounded-3xl border border-amber-500/20 bg-amber-500/[0.07] p-5 text-xs leading-6 text-theme-secondary md:p-6">
-                <div className="flex items-center gap-2 font-semibold text-amber-100"><ShieldCheck className="h-4 w-4" />验证边界</div>
+              <section className="rounded-xl border border-warning/20 bg-warning-soft/[0.07] p-5 text-xs leading-6 text-theme-secondary md:p-6">
+                <div className="flex items-center gap-2 font-semibold text-warning"><ShieldCheck className="h-4 w-4" />验证边界</div>
                 <p className="mt-2">历史代理信号不等于线上V4评分，公开行情也仍需复核复权、分红、停牌和数据许可。本页不构成投资建议，任何候选策略都不会自动进入正式推荐。</p>
               </section>
             </>
@@ -117,17 +117,17 @@ export default function QuantExperimentPage() {
 }
 
 function HeaderStat({ label, value, active = false }: { label: string; value: string; active?: boolean }) {
-  return <div className={cn('rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-3', active && 'border-cyan-500/25 bg-cyan-500/10')}><div className="flex items-center gap-1.5 text-[10px] text-theme-muted">{active && <RefreshCw className="h-3 w-3 animate-spin" />}{label}</div><div className="mt-1 break-words font-semibold leading-4 text-theme-primary">{value}</div></div>
+  return <div className={cn('rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-3', active && 'border-accent/25 bg-accent/10')}><div className="flex items-center gap-1.5 text-[10px] text-theme-muted">{active && <RefreshCw className="h-3 w-3 animate-spin" />}{label}</div><div className="mt-1 break-words font-semibold leading-4 text-theme-primary">{value}</div></div>
 }
 
 function VariantCard({ variant }: { variant: QuantBacktestExperiment['variants'][number] }) {
   const summary = variant.job.normalized_result?.summary
   const qualified = variant.risk_gate?.qualified
   return (
-    <article className={cn('rounded-3xl border p-4', qualified ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-[var(--card-border)] bg-[var(--card-bg)]/35')}>
+    <article className={cn('rounded-xl border p-4', qualified ? 'border-success/30 bg-success/10' : 'border-[var(--card-border)] bg-[var(--card-bg)]/35')}>
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-xl text-sm font-black text-slate-950" style={{ backgroundColor: variantColors[variant.key] }}>{variant.key}</span><div><div className="font-bold text-theme-primary">{variant.name}</div><div className="text-[10px] text-theme-muted">{jobStatusLabel(variant.job.status)}</div></div></div>
-        {qualified && <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-100"><CheckCircle2 className="h-3 w-3" />风险收益改善</span>}
+        <div className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-xl text-sm font-semibold text-theme-primary" style={{ backgroundColor: variantColors[variant.key] }}>{variant.key}</span><div><div className="font-bold text-theme-primary">{variant.name}</div><div className="text-[10px] text-theme-muted">{jobStatusLabel(variant.job.status)}</div></div></div>
+        {qualified && <span className="inline-flex items-center gap-1 rounded-full border border-success/25 bg-success/10 px-2 py-1 text-[10px] font-semibold text-success"><CheckCircle2 className="h-3 w-3" />风险收益改善</span>}
       </div>
       <p className="mt-3 min-h-10 text-xs leading-5 text-theme-secondary">{variant.description}</p>
       <div className="mt-4 grid grid-cols-3 gap-2">
@@ -163,7 +163,7 @@ type AnnualRow = { year: number; tradingDays: number; values: Record<string, num
 
 function AnnualComparison({ rows }: { rows: AnnualRow[] }) {
   if (!rows.length) return <div className="px-5 pb-6 text-sm text-theme-muted">任务完成后显示年度结果</div>
-  return <div className="overflow-x-auto"><table className="min-w-[42rem] w-full text-left text-xs"><thead className="border-y border-[var(--card-border)] bg-[var(--card-bg)]/45 text-theme-muted"><tr><th className="px-5 py-3">年度</th><th className="px-4 py-3">交易日</th>{['A', 'B', 'C', 'D'].map((key) => <th key={key} className="px-4 py-3">策略 {key}</th>)}<th className="px-4 py-3">沪深300</th></tr></thead><tbody>{rows.map((row) => <tr key={row.year} className="border-b border-[var(--card-border)]/70 last:border-0"><td className="px-5 py-3 font-semibold text-theme-primary">{row.year}</td><td className="px-4 py-3 text-theme-muted">{row.tradingDays}</td>{['A', 'B', 'C', 'D'].map((key) => <td key={key} className={cn('px-4 py-3 font-semibold', (row.values[key] || 0) >= 0 ? 'text-emerald-200' : 'text-rose-200')}>{Number.isFinite(row.values[key]) ? percent(row.values[key]) : '--'}</td>)}<td className="px-4 py-3 text-theme-secondary">{Number.isFinite(row.values.benchmark) ? percent(row.values.benchmark) : '--'}</td></tr>)}</tbody></table></div>
+  return <div className="overflow-x-auto"><table className="min-w-[42rem] w-full text-left text-xs"><thead className="border-y border-[var(--card-border)] bg-[var(--card-bg)]/45 text-theme-muted"><tr><th className="px-5 py-3">年度</th><th className="px-4 py-3">交易日</th>{['A', 'B', 'C', 'D'].map((key) => <th key={key} className="px-4 py-3">策略 {key}</th>)}<th className="px-4 py-3">沪深300</th></tr></thead><tbody>{rows.map((row) => <tr key={row.year} className="border-b border-[var(--card-border)]/70 last:border-0"><td className="px-5 py-3 font-semibold text-theme-primary">{row.year}</td><td className="px-4 py-3 text-theme-muted">{row.tradingDays}</td>{['A', 'B', 'C', 'D'].map((key) => <td key={key} className={cn('px-4 py-3 font-semibold', (row.values[key] || 0) >= 0 ? 'text-success' : 'text-danger')}>{Number.isFinite(row.values[key]) ? percent(row.values[key]) : '--'}</td>)}<td className="px-4 py-3 text-theme-secondary">{Number.isFinite(row.values.benchmark) ? percent(row.values.benchmark) : '--'}</td></tr>)}</tbody></table></div>
 }
 
 function buildComparisonSeries(experiment?: QuantBacktestExperiment) {

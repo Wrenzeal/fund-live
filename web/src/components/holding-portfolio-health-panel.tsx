@@ -35,14 +35,14 @@ interface HoldingPortfolioHealthPanelProps {
 function toneClass(tone: InsightTone) {
   switch (tone) {
     case 'danger':
-      return 'border-rose-400/28 bg-rose-500/10 text-rose-100'
+      return 'border-danger/28 bg-danger/10 text-danger'
     case 'warning':
-      return 'border-amber-400/28 bg-amber-400/10 text-amber-100'
+      return 'border-warning/28 bg-warning/10 text-warning'
     case 'good':
-      return 'border-emerald-400/24 bg-emerald-400/10 text-emerald-100'
+      return 'border-success/24 bg-success/10 text-success'
     case 'info':
     default:
-      return 'border-cyan-400/24 bg-cyan-400/10 text-cyan-100'
+      return 'border-accent/24 bg-accent/10 text-accent'
   }
 }
 
@@ -83,25 +83,25 @@ export function HoldingPortfolioHealthPanel({
   }
 
   return (
-    <section className="mb-6 overflow-hidden rounded-[30px] border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
+    <section className="mb-6 overflow-hidden rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
       <div
         className={cn(
           'grid gap-5 xl:items-stretch',
           compact ? 'xl:grid-cols-1' : 'xl:grid-cols-[0.78fr_1.22fr]',
         )}
       >
-        <div className="rounded-[26px] border border-cyan-400/20 bg-cyan-400/8 p-5">
-          <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-cyan-200">
+        <div className="rounded-xl border border-accent/20 bg-accent/8 p-5">
+          <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-accent">
             <HeartPulse className="h-3.5 w-3.5" />
             组合体检
           </div>
           <div className="mt-5 flex items-end gap-3">
-            <div className="text-5xl font-black text-theme-primary">
+            <div className="text-5xl font-semibold text-theme-primary">
               {summary.reviewCount}
             </div>
             <div className="pb-1 text-sm text-theme-muted">项待复核</div>
           </div>
-          <div className="mt-3 text-xl font-black text-theme-primary">
+          <div className="mt-3 text-xl font-semibold text-theme-primary">
             {summary.title}
           </div>
           {!compact && (
@@ -111,7 +111,7 @@ export function HoldingPortfolioHealthPanel({
           )}
           <div
             className={cn(
-              'mt-5 inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-medium',
+              'mt-5 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium',
               toneClass(summary.tone),
             )}
           >
@@ -125,7 +125,7 @@ export function HoldingPortfolioHealthPanel({
             <div
               key={signal.id}
               className={cn(
-                'rounded-[24px] border p-4',
+                'rounded-xl border p-4',
                 toneClass(signal.tone),
               )}
             >
@@ -137,7 +137,7 @@ export function HoldingPortfolioHealthPanel({
                   </div>
                 </div>
                 {signal.metric && (
-                  <span className="shrink-0 rounded-full border border-white/15 bg-white/8 px-2 py-0.5 text-[11px]">
+                  <span className="shrink-0 rounded-full border border-[var(--card-border)] bg-surface-subtle px-2 py-0.5 text-[11px]">
                     {signal.metric}
                   </span>
                 )}

@@ -85,7 +85,7 @@ export function AccountAreaShell({
           <div className="max-w-3xl space-y-2 sm:space-y-3">
             <div className="text-sm font-semibold text-[var(--accent-primary)]">账户数据</div>
             <div>
-              <h1 className="text-2xl font-black text-theme-primary sm:text-4xl">
+              <h1 className="text-2xl font-semibold text-theme-primary sm:text-4xl">
                 {title}
               </h1>
               <p className="mt-1.5 max-w-2xl text-sm leading-6 text-theme-secondary sm:mt-2 sm:text-base">
@@ -103,10 +103,10 @@ export function AccountAreaShell({
                   key={tab.href}
                   href={tab.href}
                   className={cn(
-                    "group relative inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm transition-colors",
+                    "group relative inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm transition-colors",
                     active
-                      ? "account-standard-tab account-standard-tab-active border-cyan-500/40 bg-cyan-500/15 text-cyan-300 shadow-[0_14px_28px_rgba(34,211,238,0.14)]"
-                      : "account-standard-tab account-standard-tab-idle border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-400/35 hover:bg-cyan-400/10 hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)]",
+                      ? "account-standard-tab account-standard-tab-active border-accent/40 bg-accent/15 text-accent shadow-none"
+                      : "account-standard-tab account-standard-tab-idle border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-accent/35 hover:bg-accent/10 hover:text-theme-primary hover:shadow-none",
                   )}
                 >
                   <span
@@ -139,7 +139,7 @@ export function AccountAreaShell({
         <button
           type="button"
           onClick={scrollToTop}
-          className="fixed bottom-5 right-4 z-50 inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-[var(--card-bg)]/95 px-4 py-3 text-sm font-medium text-theme-primary shadow-[0_18px_36px_rgba(2,8,23,0.28)] backdrop-blur md:hidden"
+          className="fixed bottom-5 right-4 z-50 inline-flex items-center gap-2 rounded-full border border-accent/30 bg-[var(--card-bg)]/95 px-4 py-3 text-sm font-medium text-theme-primary shadow-none backdrop-blur md:hidden"
           aria-label="回到顶部"
         >
           <ArrowUp className="h-4 w-4" />

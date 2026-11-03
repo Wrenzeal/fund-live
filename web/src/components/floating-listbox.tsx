@@ -98,7 +98,7 @@ export function FloatingListbox({
       <div
         id={id}
         className={cn(
-          'watchlist-select-dropdown pointer-events-auto fixed z-[90] overflow-hidden rounded-[24px] border border-cyan-400/22 p-2 shadow-[0_24px_60px_rgba(2,8,23,0.42)]',
+          'watchlist-select-dropdown pointer-events-auto fixed z-[90] overflow-hidden rounded-xl border border-accent/22 p-2 shadow-none',
           className
         )}
         style={{ left: rect.left, top: rect.top, width: rect.width }}

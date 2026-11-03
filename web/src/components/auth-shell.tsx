@@ -87,7 +87,7 @@ export function AuthShell({
       <main id="main-content" className="container mx-auto px-4 py-6 sm:py-10">
         <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <ScrollReveal className="order-2 hidden lg:order-1 lg:block">
-            <section className="overflow-hidden rounded-3xl border border-[var(--card-border)] glass-strong p-7 sm:p-9">
+            <section className="overflow-hidden rounded-xl border border-[var(--card-border)] glass-strong p-7 sm:p-9">
               <div className="space-y-7">
                 <div className="text-sm font-semibold text-[var(--accent-primary)]">{eyebrow}</div>
 
@@ -103,7 +103,7 @@ export function AuthShell({
                 <div className="grid gap-3 sm:grid-cols-3">
                   {highlights.map(({ title: itemTitle, description: itemDescription, icon: Icon }) => (
                     <ScrollReveal key={itemTitle} delay={80} className="h-full">
-                      <div className="h-full rounded-2xl border border-[var(--card-border)] bg-[var(--input-bg)]/60 p-4">
+                      <div className="h-full rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/60 p-4">
                         <div className="mb-3 inline-flex rounded-lg bg-[var(--accent-primary)]/12 p-2 text-[var(--accent-primary)]">
                           <Icon className="h-5 w-5" />
                         </div>
@@ -118,7 +118,7 @@ export function AuthShell({
           </ScrollReveal>
 
           <ScrollReveal className="order-1 lg:order-2" delay={80}>
-            <section className="rounded-3xl border border-[var(--card-border)] glass p-5 sm:rounded-[32px] sm:p-10">
+            <section className="rounded-xl border border-[var(--card-border)] glass p-5 sm:rounded-xl sm:p-10">
               <div className="mb-6 space-y-2 sm:mb-8">
                 <h2 className="text-2xl font-bold text-theme-primary sm:text-3xl">{title}</h2>
                 <p className="text-sm text-theme-muted">选择登录方式，继续使用 FundLive。</p>

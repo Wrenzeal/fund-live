@@ -60,7 +60,7 @@ function MarketStatusIndicatorBody({
                 <span
                     className={cn(
                         'inline-block w-2.5 h-2.5 rounded-full',
-                        status.isTrading ? 'bg-green-500 live-indicator' : 'bg-amber-500'
+                        status.isTrading ? 'bg-success-soft live-indicator' : 'bg-warning-soft'
                     )}
                 />
                 <span className={cn(

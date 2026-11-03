@@ -203,7 +203,7 @@ function OfficialCloseTooltip({
                 borderRadius: '8px',
                 color: 'var(--text-primary)',
             }}
-            className="min-w-[180px] px-3 py-2 text-sm shadow-lg"
+            className="min-w-[180px] px-3 py-2 text-sm shadow-none"
         >
             <div className="mb-2 text-xs text-theme-muted">时间: {label}</div>
             {estimateValue !== null && estimateValue !== undefined && (
@@ -215,7 +215,7 @@ function OfficialCloseTooltip({
                 </div>
             )}
             {label === '15:00' && officialValue !== null && officialValue !== undefined && (
-                <div className="mt-2 flex items-center justify-between gap-4 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-2 py-1.5">
+                <div className="mt-2 flex items-center justify-between gap-4 rounded-lg border border-accent/20 bg-accent/10 px-2 py-1.5">
                     <span className="text-theme-secondary">官方真实涨跌</span>
                     <span className={officialValue >= 0 ? 'text-up' : 'text-down'}>
                         {officialValue >= 0 ? '+' : ''}{officialValue.toFixed(2)}%
@@ -425,12 +425,12 @@ export function IntradayChart({
     }, [displayDate])
 
     return (
-        <div className={cn('glass rounded-2xl p-4 sm:p-6', className)}>
+        <div className={cn('glass rounded-xl p-4 sm:p-6', className)}>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-lg font-semibold text-theme-primary">分时走势</h3>
                     {isHistorical && (
-                        <span className="px-2 py-0.5 text-xs rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                        <span className="px-2 py-0.5 text-xs rounded-full bg-warning/20 text-warning border border-warning/30">
                             上一交易日
                         </span>
                     )}
@@ -440,7 +440,7 @@ export function IntradayChart({
                         </span>
                     )}
                     {officialClose?.display_status === 'ready' && officialClose.date && (
-                        <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-200">
+                        <span className="rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-xs text-accent">
                             官方收盘：{formatPercent(officialClose.daily_return).text}
                         </span>
                     )}
@@ -450,7 +450,7 @@ export function IntradayChart({
                         <span>集合竞价中</span>
                     ) : isTrading ? (
                         <>
-                            <span className="inline-block w-2 h-2 rounded-full bg-green-500 live-indicator" />
+                            <span className="inline-block w-2 h-2 rounded-full bg-success-soft live-indicator" />
                             <span>实时更新</span>
                         </>
                     ) : (
@@ -461,7 +461,7 @@ export function IntradayChart({
 
             <div className="h-56 sm:h-64">
                 {isCallAuction ? (
-                    <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/40 text-center">
+                    <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/40 text-center">
                         <div>
                             <div className="text-lg font-semibold text-theme-primary">集合竞价中</div>
                             <div className="mt-2 text-sm text-theme-secondary">等待 09:30 开盘后更新分时走势图</div>
@@ -484,7 +484,7 @@ export function IntradayChart({
             {/* Trading hours indicator */}
             <div className="mt-4 flex justify-between text-xs text-theme-muted">
                 <span>09:30</span>
-                <span className="text-amber-500/70">— 午休 —</span>
+                <span className="text-warning">— 午休 —</span>
                 <span>15:00</span>
             </div>
         </div>

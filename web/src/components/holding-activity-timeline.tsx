@@ -78,40 +78,40 @@ function transactionMeta(type: HoldingTransactionType) {
       return {
         label: '买入/补仓',
         description: '新增持仓本金，等待或已按确认净值补齐份额。',
-        className: 'border-emerald-400/28 bg-emerald-400/10 text-emerald-100',
-        dotClassName: 'bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.42)]',
+        className: 'border-success/28 bg-success/10 text-success',
+        dotClassName: 'bg-success-soft shadow-none',
         icon: Plus,
       }
     case 'correction':
       return {
         label: '校正持仓',
         description: '按外部平台或真实确认口径修正金额、份额或净值。',
-        className: 'border-cyan-400/28 bg-cyan-400/10 text-cyan-100',
-        dotClassName: 'bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.42)]',
+        className: 'border-accent/28 bg-accent/10 text-accent',
+        dotClassName: 'bg-accent-soft shadow-none',
         icon: Pencil,
       }
     case 'delete':
       return {
         label: '删除记录',
         description: '从当前持仓中移除，但保留账本活动痕迹。',
-        className: 'border-rose-400/28 bg-rose-500/10 text-rose-100',
-        dotClassName: 'bg-rose-300 shadow-[0_0_18px_rgba(253,164,175,0.42)]',
+        className: 'border-danger/28 bg-danger/10 text-danger',
+        dotClassName: 'bg-danger-soft shadow-none',
         icon: Trash2,
       }
     case 'sell':
       return {
         label: '卖出',
         description: '赎回或降低当前仓位。',
-        className: 'border-amber-400/28 bg-amber-400/10 text-amber-100',
-        dotClassName: 'bg-amber-300 shadow-[0_0_18px_rgba(252,211,77,0.42)]',
+        className: 'border-warning/28 bg-warning/10 text-warning',
+        dotClassName: 'bg-warning-soft shadow-none',
         icon: WalletCards,
       }
     case 'dividend':
       return {
         label: '分红',
         description: '现金分红或红利再投导致账面口径变化。',
-        className: 'border-violet-400/28 bg-violet-400/10 text-violet-100',
-        dotClassName: 'bg-violet-300 shadow-[0_0_18px_rgba(196,181,253,0.42)]',
+        className: 'border-accent/28 bg-accent/10 text-accent',
+        dotClassName: 'bg-accent-soft shadow-none',
         icon: WalletCards,
       }
     case 'adjustment':
@@ -119,8 +119,8 @@ function transactionMeta(type: HoldingTransactionType) {
       return {
         label: '调整',
         description: '平台迁移、手续费或其他持仓口径调整。',
-        className: 'border-sky-400/28 bg-sky-400/10 text-sky-100',
-        dotClassName: 'bg-sky-300 shadow-[0_0_18px_rgba(125,211,252,0.42)]',
+        className: 'border-accent/28 bg-accent/10 text-accent',
+        dotClassName: 'bg-accent-soft shadow-none',
         icon: CheckCircle2,
       }
   }
@@ -247,7 +247,7 @@ export function HoldingActivityTimeline({
     startDateFilter !== '' ||
     endDateFilter !== ''
   const filterControlClass =
-    'rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-xs font-medium text-theme-secondary outline-none transition focus:border-cyan-300/50'
+    'rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-xs font-medium text-theme-secondary outline-none transition focus:border-accent/50'
 
   const handleClearFilters = () => {
     setRollbackPreview(null)
@@ -355,14 +355,14 @@ export function HoldingActivityTimeline({
   }
 
   return (
-    <section className="mb-6 overflow-hidden rounded-[30px] border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
+    <section className="mb-6 overflow-hidden rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-amber-100">
+          <div className="inline-flex items-center gap-2 rounded-full border border-warning/25 bg-warning/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-warning">
             <History className="h-3.5 w-3.5" />
             持仓流水
           </div>
-          <h3 className="mt-3 text-2xl font-black text-theme-primary">
+          <h3 className="mt-3 text-2xl font-semibold text-theme-primary">
             流水记录
           </h3>
           {!compact && (
@@ -372,14 +372,14 @@ export function HoldingActivityTimeline({
           )}
         </div>
 
-        <div className="rounded-[24px] border border-amber-400/20 bg-amber-400/10 px-4 py-3 lg:min-w-[260px]">
+        <div className="rounded-xl border border-warning/20 bg-warning/10 px-4 py-3 lg:min-w-[260px]">
           <div className="text-xs text-theme-muted">
             {latest ? '最近一次' : '当前筛选'}
           </div>
-          <div className="mt-1 truncate text-lg font-black text-theme-primary">
+          <div className="mt-1 truncate text-lg font-semibold text-theme-primary">
             {latest ? latest.fund?.name || latest.fund_id : '暂无匹配流水'}
           </div>
-          <div className="mt-1 text-xs text-amber-100">
+          <div className="mt-1 text-xs text-warning">
             {latest
               ? `${transactionMeta(latest.type).label} · ${latest.voided ? '已作废 · ' : ''}${formatDateTime(latest.created_at)}`
               : hasActiveFilter
@@ -389,7 +389,7 @@ export function HoldingActivityTimeline({
         </div>
       </div>
 
-      <div className="mt-5 space-y-3 rounded-[24px] border border-[var(--card-border)] bg-[var(--input-bg)]/42 p-3">
+      <div className="mt-5 space-y-3 rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/42 p-3">
         <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] lg:items-center">
           <label className="grid gap-1 text-xs text-theme-muted">
             基金
@@ -465,7 +465,7 @@ export function HoldingActivityTimeline({
             type="button"
             onClick={handleClearFilters}
             disabled={!hasActiveFilter}
-            className="self-end rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-xs font-medium text-theme-secondary transition hover:border-cyan-300/45 hover:text-theme-primary disabled:cursor-not-allowed disabled:opacity-45 md:self-auto"
+            className="self-end rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-xs font-medium text-theme-secondary transition hover:border-accent/45 hover:text-theme-primary disabled:cursor-not-allowed disabled:opacity-45 md:self-auto"
           >
             清空筛选
           </button>
@@ -518,39 +518,39 @@ export function HoldingActivityTimeline({
       </div>
 
       {(voidFeedback || previewFeedback) && (
-        <div className="mt-4 rounded-[20px] border border-slate-400/20 bg-slate-400/10 px-4 py-3 text-xs leading-5 text-theme-secondary">
+        <div className="mt-4 rounded-[20px] border border-[var(--card-border)] bg-surface-subtle px-4 py-3 text-xs leading-5 text-theme-secondary">
           {voidFeedback || previewFeedback}
         </div>
       )}
 
       {rollbackPreview && (
-        <div className="mt-4 rounded-[26px] border border-cyan-300/22 bg-cyan-400/10 p-4 shadow-[0_18px_60px_rgba(34,211,238,0.08)]">
+        <div className="mt-4 rounded-xl border border-accent/22 bg-accent/10 p-4 shadow-none">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-400/12 px-3 py-1 text-[11px] font-semibold text-cyan-100">
+              <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/12 px-3 py-1 text-[11px] font-semibold text-accent">
                 <RotateCcw className="h-3.5 w-3.5" />
                 回滚影响预览
               </div>
-              <h4 className="mt-3 text-lg font-black text-theme-primary">
+              <h4 className="mt-3 text-lg font-semibold text-theme-primary">
                 {rollbackPreview.title}
               </h4>
               <p className="mt-2 text-sm leading-6 text-theme-secondary">
                 {rollbackPreview.summary}
               </p>
-              <p className="mt-2 text-xs leading-5 text-cyan-100">
+              <p className="mt-2 text-xs leading-5 text-accent">
                 {rollbackPreview.suggested_action}
               </p>
             </div>
             <button
               type="button"
               onClick={() => setRollbackPreview(null)}
-              className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-3 py-2 text-xs font-medium text-cyan-100 transition hover:border-cyan-200/45 hover:bg-cyan-400/16"
+              className="rounded-xl border border-accent/20 bg-accent/10 px-3 py-2 text-xs font-medium text-accent transition hover:border-accent/45 hover:bg-accent/16"
             >
               收起预览
             </button>
           </div>
 
-          <div className="mt-4 flex flex-col gap-3 rounded-[20px] border border-white/10 bg-[var(--input-bg)]/44 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-4 flex flex-col gap-3 rounded-[20px] border border-[var(--card-border)] bg-[var(--input-bg)]/44 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-semibold text-theme-primary">
                 {rollbackPreview.can_apply_automatically
@@ -566,7 +566,7 @@ export function HoldingActivityTimeline({
                 type="button"
                 onClick={() => void handleApplyRollback(rollbackPreview)}
                 disabled={pendingApplyID !== null}
-                className="rounded-2xl border border-emerald-300/28 bg-emerald-400/12 px-4 py-2 text-xs font-semibold text-emerald-100 transition hover:border-emerald-200/55 hover:bg-emerald-400/18 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl border border-success/28 bg-success/12 px-4 py-2 text-xs font-semibold text-success transition hover:border-success/55 hover:bg-success/18 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {pendingApplyID === rollbackPreview.transaction.id
                   ? '冲正中...'
@@ -580,7 +580,7 @@ export function HoldingActivityTimeline({
               {rollbackPreview.affected_fields.map((field) => (
                 <div
                   key={`${field.field}-${field.label}`}
-                  className="rounded-[20px] border border-white/10 bg-[var(--input-bg)]/56 p-3"
+                  className="rounded-[20px] border border-[var(--card-border)] bg-[var(--input-bg)]/56 p-3"
                 >
                   <div className="text-xs text-theme-muted">{field.label}</div>
                   <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
@@ -592,13 +592,13 @@ export function HoldingActivityTimeline({
                     </div>
                     <div>
                       <div className="text-theme-muted">建议回到</div>
-                      <div className="mt-1 break-all font-semibold text-cyan-100">
+                      <div className="mt-1 break-all font-semibold text-accent">
                         {formatRollbackValue(field.rollback_value)}
                       </div>
                     </div>
                   </div>
                   {field.delta && (
-                    <div className="mt-2 rounded-2xl border border-amber-300/18 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+                    <div className="mt-2 rounded-xl border border-warning/18 bg-warning/10 px-3 py-2 text-xs text-warning">
                       {field.direction || '变化'}：{field.delta}
                     </div>
                   )}
@@ -612,7 +612,7 @@ export function HoldingActivityTimeline({
               {rollbackPreview.warnings.map((warning) => (
                 <div
                   key={warning}
-                  className="rounded-2xl border border-amber-300/18 bg-amber-400/10 px-3 py-2 text-xs leading-5 text-amber-100"
+                  className="rounded-xl border border-warning/18 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning"
                 >
                   {warning}
                 </div>
@@ -629,7 +629,7 @@ export function HoldingActivityTimeline({
         )}
       >
         {!compact && (
-          <div className="rounded-[24px] border border-[var(--card-border)] bg-[var(--input-bg)]/54 p-4">
+          <div className="rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/54 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-theme-primary">
@@ -639,7 +639,7 @@ export function HoldingActivityTimeline({
                   当前筛选 {transactions.length} 条记录，{activeCount} 条有效
                 </div>
               </div>
-              <div className="text-3xl font-black text-theme-primary">
+              <div className="text-3xl font-semibold text-theme-primary">
                 {transactions.length}
               </div>
             </div>
@@ -658,7 +658,7 @@ export function HoldingActivityTimeline({
                       meta.className,
                     )}
                   >
-                    <div className="text-2xl font-black text-theme-primary">
+                    <div className="text-2xl font-semibold text-theme-primary">
                       {count}
                     </div>
                     <div className="mt-1 text-[11px]">{meta.label}</div>
@@ -666,7 +666,7 @@ export function HoldingActivityTimeline({
                 )
               })}
             </div>
-            <div className="mt-3 rounded-[18px] border border-slate-400/15 bg-slate-400/8 px-3 py-3 text-xs text-theme-muted">
+            <div className="mt-3 rounded-[18px] border border-[var(--card-border)] bg-surface-subtle px-3 py-3 text-xs text-theme-muted">
               已作废 {voidedCount}{' '}
               条；低风险流水可在预览后自动冲正，高风险流水仍只给人工校正建议。
             </div>
@@ -674,9 +674,9 @@ export function HoldingActivityTimeline({
         )}
 
         {transactions.length === 0 ? (
-          <div className="flex min-h-[260px] flex-col items-center justify-center rounded-[24px] border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/40 px-6 py-10 text-center">
+          <div className="flex min-h-[260px] flex-col items-center justify-center rounded-xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/40 px-6 py-10 text-center">
             <History className="h-10 w-10 text-theme-muted" />
-            <div className="mt-3 text-lg font-black text-theme-primary">
+            <div className="mt-3 text-lg font-semibold text-theme-primary">
               当前筛选没有流水
             </div>
             <p className="mt-2 max-w-md text-sm leading-6 text-theme-secondary">
@@ -686,7 +686,7 @@ export function HoldingActivityTimeline({
               <button
                 type="button"
                 onClick={handleClearFilters}
-                className="mt-4 rounded-2xl border border-cyan-300/25 bg-cyan-400/10 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:border-cyan-200/45 hover:bg-cyan-400/16"
+                className="mt-4 rounded-xl border border-accent/25 bg-accent/10 px-4 py-2 text-xs font-semibold text-accent transition hover:border-accent/45 hover:bg-accent/16"
               >
                 查看全部最近活动
               </button>
@@ -694,7 +694,7 @@ export function HoldingActivityTimeline({
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="relative space-y-3 before:absolute before:left-[18px] before:top-3 before:h-[calc(100%-24px)] before:w-px before:bg-gradient-to-b before:from-cyan-300/35 before:via-white/12 before:to-transparent">
+            <div className="relative space-y-3 before:absolute before:left-[18px] before:top-3 before:h-[calc(100%-24px)] before:w-px before:bg-[var(--accent-soft)] before: before:via-white/12 before:to-transparent">
               {displayTransactions.map((transaction) => {
                 const meta = transactionMeta(transaction.type)
                 const Icon = meta.icon
@@ -709,15 +709,15 @@ export function HoldingActivityTimeline({
                       className={cn(
                         'absolute left-[10px] top-5 h-4 w-4 rounded-full ring-4 ring-[var(--card-bg)]',
                         isVoided
-                          ? 'bg-slate-400 shadow-none'
+                          ? 'bg-surface-subtle shadow-none'
                           : meta.dotClassName,
                       )}
                     />
                     <div
                       className={cn(
-                        'rounded-[24px] border border-[var(--card-border)] bg-[var(--input-bg)]/58 p-4 transition-transform duration-200 hover:-translate-y-0.5',
+                        'rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/58 p-4 transition-transform duration-200 hover:-translate-y-0.5',
                         isVoided &&
-                          'border-slate-400/20 bg-slate-500/8 opacity-70',
+                          'border-[var(--card-border)] bg-surface-subtle opacity-70',
                       )}
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -725,9 +725,9 @@ export function HoldingActivityTimeline({
                           <div className="flex items-center gap-2">
                             <span
                               className={cn(
-                                'inline-flex h-8 w-8 items-center justify-center rounded-2xl border',
+                                'inline-flex h-8 w-8 items-center justify-center rounded-xl border',
                                 isVoided
-                                  ? 'border-slate-400/30 bg-slate-400/10 text-slate-200'
+                                  ? 'border-[var(--card-border)] bg-surface-subtle text-theme-primary'
                                   : meta.className,
                               )}
                             >
@@ -752,12 +752,12 @@ export function HoldingActivityTimeline({
                                   {meta.label}
                                 </span>
                                 {isVoided && (
-                                  <span className="rounded-full border border-slate-400/25 bg-slate-400/10 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
+                                  <span className="rounded-full border border-[var(--card-border)] bg-surface-subtle px-2 py-0.5 text-[10px] font-semibold text-theme-primary">
                                     已作废
                                   </span>
                                 )}
                                 {sourceLabel && (
-                                  <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-100">
+                                  <span className="rounded-full border border-accent/20 bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent">
                                     来源：{sourceLabel}
                                   </span>
                                 )}
@@ -775,7 +775,7 @@ export function HoldingActivityTimeline({
                             {transaction.note || meta.description}
                           </p>
                           {isVoided && transaction.void_reason && (
-                            <p className="mt-2 rounded-2xl border border-slate-400/15 bg-slate-400/8 px-3 py-2 text-xs leading-5 text-theme-muted">
+                            <p className="mt-2 rounded-xl border border-[var(--card-border)] bg-surface-subtle px-3 py-2 text-xs leading-5 text-theme-muted">
                               作废原因：{transaction.void_reason}
                             </p>
                           )}
@@ -802,7 +802,7 @@ export function HoldingActivityTimeline({
                           <div className="grid gap-2 sm:grid-cols-3">
                             <Link
                               href={`/holdings/transactions/${transaction.id}`}
-                              className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-center text-xs font-medium text-theme-secondary transition hover:border-cyan-300/35 hover:text-theme-primary"
+                              className="rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-center text-xs font-medium text-theme-secondary transition hover:border-accent/35 hover:text-theme-primary"
                             >
                               查看详情
                             </Link>
@@ -813,7 +813,7 @@ export function HoldingActivityTimeline({
                                   void handlePreviewRollback(transaction)
                                 }
                                 disabled={pendingPreviewID !== null}
-                                className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-3 py-2 text-xs font-medium text-cyan-100 transition hover:border-cyan-200/45 hover:bg-cyan-400/16 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="rounded-xl border border-accent/20 bg-accent/10 px-3 py-2 text-xs font-medium text-accent transition hover:border-accent/45 hover:bg-accent/16 disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 {pendingPreviewID === transaction.id
                                   ? '预览中...'
@@ -827,7 +827,7 @@ export function HoldingActivityTimeline({
                                   void handleVoidTransaction(transaction)
                                 }
                                 disabled={pendingVoidID !== null}
-                                className="rounded-2xl border border-slate-400/20 bg-slate-400/8 px-3 py-2 text-xs font-medium text-theme-secondary transition hover:border-rose-300/35 hover:bg-rose-400/10 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="rounded-xl border border-[var(--card-border)] bg-surface-subtle px-3 py-2 text-xs font-medium text-theme-secondary transition hover:border-danger/35 hover:bg-danger/10 hover:text-danger disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 {pendingVoidID === transaction.id
                                   ? '标记中...'
@@ -847,7 +847,7 @@ export function HoldingActivityTimeline({
               <button
                 type="button"
                 onClick={onLoadMore}
-                className="ml-11 w-[calc(100%-2.75rem)] rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-4 py-3 text-xs font-semibold text-cyan-100 transition hover:border-cyan-200/45 hover:bg-cyan-400/16"
+                className="ml-11 w-[calc(100%-2.75rem)] rounded-xl border border-accent/20 bg-accent/10 px-4 py-3 text-xs font-semibold text-accent transition hover:border-accent/45 hover:bg-accent/16"
               >
                 加载更多流水
               </button>

@@ -206,7 +206,7 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-4">
             <span>还没有账号？</span>
-            <Link href={registerHref} className="font-medium text-cyan-400 transition-colors hover:text-cyan-300">
+            <Link href={registerHref} className="font-medium text-accent transition-colors hover:text-accent">
               使用密码注册
             </Link>
           </div>
@@ -215,14 +215,14 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
       )}
     >
       <div className="space-y-5">
-        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] p-1.5" aria-label="选择登录方式">
+        <div className="grid grid-cols-2 gap-2 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] p-1.5" aria-label="选择登录方式">
           <button
             type="button"
             disabled={!emailCodeEnabled || isLoadingConfig || isBusy}
             onClick={() => changeMode('email_code')}
             className={cn(
               'rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45',
-              mode === 'email_code' ? 'bg-cyan-500/15 text-cyan-300' : 'text-theme-secondary hover:text-theme-primary'
+              mode === 'email_code' ? 'bg-accent/15 text-accent' : 'text-theme-secondary hover:text-theme-primary'
             )}
           >
             验证码登录
@@ -233,7 +233,7 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
             onClick={() => changeMode('password')}
             className={cn(
               'rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45',
-              mode === 'password' ? 'bg-cyan-500/15 text-cyan-300' : 'text-theme-secondary hover:text-theme-primary'
+              mode === 'password' ? 'bg-accent/15 text-accent' : 'text-theme-secondary hover:text-theme-primary'
             )}
           >
             密码登录
@@ -241,13 +241,13 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
         </div>
 
         {isLoadingConfig && (
-          <div role="status" className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm text-theme-secondary">
+          <div role="status" className="rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm text-theme-secondary">
             正在准备验证码登录…
           </div>
         )}
 
         {(availabilityNotice || configError) && (
-          <div role="status" className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          <div role="status" className="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
             {availabilityNotice || (configError instanceof Error ? configError.message : '登录配置读取失败')}
           </div>
         )}
@@ -256,7 +256,7 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
           <form onSubmit={handleStartEmailCode} className="space-y-5">
             <label className="block space-y-2">
               <span className="text-sm text-theme-secondary">邮箱</span>
-              <div className="auth-input-shell flex items-center gap-3 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3">
+              <div className="auth-input-shell flex items-center gap-3 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3">
                 <Mail className="h-4 w-4 text-theme-muted" />
                 <input
                   type="email"
@@ -277,7 +277,7 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
             <button
               type="submit"
               disabled={isBusy || !emailCodeEnabled}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent-primary)] px-5 py-3.5 text-sm font-semibold text-white transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent-primary)] px-5 py-3.5 text-sm font-semibold text-[var(--on-accent)] transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSendingCode ? <><Loader2 className="h-4 w-4 animate-spin" /> 正在发送验证码...</> : <><Mail className="h-4 w-4" /> 发送验证码</>}
             </button>
@@ -286,10 +286,10 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
 
         {mode === 'email_code' && emailStage === 'code' && (
           <div className="space-y-5">
-            <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/10 p-4">
+            <div className="rounded-xl border border-accent/25 bg-accent/10 p-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-200">
+                  <p className="inline-flex items-center gap-2 text-sm font-semibold text-accent">
                     <CheckCircle2 className="h-4 w-4" /> 验证码已发送
                   </p>
                   <p className="mt-1 truncate text-xs text-theme-secondary">{sentEmail}</p>
@@ -298,7 +298,7 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
                   type="button"
                   onClick={handleResend}
                   disabled={isBusy || resendSeconds > 0}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-cyan-500/25 bg-[var(--input-bg)] px-3 py-2 text-xs font-semibold text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-accent/25 bg-[var(--input-bg)] px-3 py-2 text-xs font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isSendingCode ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                   {resendSeconds > 0 ? `${resendSeconds}s 后重发` : '重新发送'}
@@ -315,7 +315,7 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
             </div>
 
             {devCode && (
-              <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+              <div className="rounded-xl border border-success/25 bg-success/10 px-4 py-3 text-sm text-success">
                 开发验证码：<span className="font-mono font-bold tracking-[0.18em]">{devCode}</span>
               </div>
             )}
@@ -323,7 +323,7 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
             <form onSubmit={handleVerifyCode} className="space-y-5">
               <label className="block space-y-2">
                 <span className="text-sm text-theme-secondary">6 位验证码</span>
-                <div className="auth-input-shell flex items-center gap-3 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3">
+                <div className="auth-input-shell flex items-center gap-3 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3">
                   <KeyRound className="h-4 w-4 text-theme-muted" />
                   <input
                     ref={codeInputRef}
@@ -348,7 +348,7 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
               <button
                 type="submit"
                 disabled={isBusy || code.length !== 6}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent-primary)] px-5 py-3.5 text-sm font-semibold text-white transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent-primary)] px-5 py-3.5 text-sm font-semibold text-[var(--on-accent)] transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isVerifyingCode ? <><Loader2 className="h-4 w-4 animate-spin" /> 正在验证...</> : <>验证并登录 <ArrowRight className="h-4 w-4" /></>}
               </button>
@@ -360,7 +360,7 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
           <form onSubmit={handlePasswordSubmit} className="space-y-5">
             <label className="block space-y-2">
               <span className="text-sm text-theme-secondary">邮箱</span>
-              <div className="auth-input-shell flex items-center gap-3 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3">
+              <div className="auth-input-shell flex items-center gap-3 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3">
                 <Mail className="h-4 w-4 text-theme-muted" />
                 <input
                   type="email"
@@ -379,7 +379,7 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
             </label>
             <label className="block space-y-2">
               <span className="text-sm text-theme-secondary">密码</span>
-              <div className="auth-input-shell flex items-center gap-3 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3">
+              <div className="auth-input-shell flex items-center gap-3 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3">
                 <LockKeyhole className="h-4 w-4 text-theme-muted" />
                 <input
                   type="password"
@@ -399,7 +399,7 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
             <button
               type="submit"
               disabled={isBusy}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent-primary)] px-5 py-3.5 text-sm font-semibold text-white transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent-primary)] px-5 py-3.5 text-sm font-semibold text-[var(--on-accent)] transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isPasswordSubmitting ? <><Loader2 className="h-4 w-4 animate-spin" /> 登录中...</> : <>登录并继续 <ArrowRight className="h-4 w-4" /></>}
             </button>
@@ -407,7 +407,7 @@ export function LoginPageClient({ returnTo }: { returnTo: string }) {
         )}
 
         {error && (
-          <div role="alert" className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+          <div role="alert" className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
             {error}
           </div>
         )}

@@ -43,23 +43,23 @@ function severityMeta(severity: ReconciliationSeverity) {
     case 'review':
       return {
         label: '需复核',
-        className: 'border-rose-400/35 bg-rose-500/12 text-rose-200',
+        className: 'border-danger/35 bg-danger/12 text-danger',
       }
     case 'watch':
       return {
         label: '小差异',
-        className: 'border-amber-400/35 bg-amber-400/12 text-amber-100',
+        className: 'border-warning/35 bg-warning/12 text-warning',
       }
     case 'pending':
       return {
         label: '待补齐',
-        className: 'border-sky-400/30 bg-sky-400/10 text-sky-100',
+        className: 'border-accent/30 bg-accent/10 text-accent',
       }
     case 'ok':
     default:
       return {
         label: '已对齐',
-        className: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100',
+        className: 'border-success/30 bg-success/10 text-success',
       }
   }
 }
@@ -95,14 +95,14 @@ export function HoldingReconciliationPanel({
   }, [transactions])
 
   return (
-    <section className="mb-6 overflow-hidden rounded-[30px] border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
+    <section className="mb-6 overflow-hidden rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-cyan-200">
+          <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-accent">
             <Scale className="h-3.5 w-3.5" />
             持仓对账
           </div>
-          <h3 className="mt-3 text-2xl font-black text-theme-primary">
+          <h3 className="mt-3 text-2xl font-semibold text-theme-primary">
             对账与校正
           </h3>
           {!compact && (
@@ -116,14 +116,14 @@ export function HoldingReconciliationPanel({
             {
               label: '已校正',
               value: summary.manualCount,
-              tone: 'text-cyan-200',
+              tone: 'text-accent',
             },
             {
               label: '需复核',
               value: summary.reviewCount,
               tone:
                 summary.reviewCount > 0
-                  ? 'text-rose-200'
+                  ? 'text-danger'
                   : 'text-theme-primary',
             },
             {
@@ -131,7 +131,7 @@ export function HoldingReconciliationPanel({
               value: summary.watchCount,
               tone:
                 summary.watchCount > 0
-                  ? 'text-amber-100'
+                  ? 'text-warning'
                   : 'text-theme-primary',
             },
             {
@@ -139,7 +139,7 @@ export function HoldingReconciliationPanel({
               value: summary.pendingCount,
               tone:
                 summary.pendingCount > 0
-                  ? 'text-sky-100'
+                  ? 'text-accent'
                   : 'text-theme-primary',
             },
           ].map((item) => (
@@ -148,7 +148,7 @@ export function HoldingReconciliationPanel({
               className="rounded-[20px] border border-[var(--card-border)] bg-[var(--input-bg)]/62 px-3 py-3"
             >
               <div className="text-xs text-theme-muted">{item.label}</div>
-              <div className={cn('mt-1 text-2xl font-black', item.tone)}>
+              <div className={cn('mt-1 text-2xl font-semibold', item.tone)}>
                 {item.value}
               </div>
             </div>
@@ -167,10 +167,10 @@ export function HoldingReconciliationPanel({
             type="button"
             onClick={() => setFilter(item.value)}
             className={cn(
-              'rounded-2xl border px-3 py-2 text-xs font-semibold transition',
+              'rounded-xl border px-3 py-2 text-xs font-semibold transition',
               filter === item.value
-                ? 'border-cyan-300/35 bg-cyan-400/14 text-cyan-100'
-                : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-300/30 hover:text-theme-primary',
+                ? 'border-accent/35 bg-accent/14 text-accent'
+                : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-accent/30 hover:text-theme-primary',
             )}
           >
             {item.label}
@@ -186,9 +186,9 @@ export function HoldingReconciliationPanel({
       >
         {!compact && (
           <div className="space-y-3">
-            <div className="rounded-[24px] border border-cyan-400/18 bg-cyan-400/8 p-4">
+            <div className="rounded-xl border border-accent/18 bg-accent/8 p-4">
               <div className="flex items-start gap-3">
-                <Wrench className="mt-1 h-5 w-5 shrink-0 text-cyan-200" />
+                <Wrench className="mt-1 h-5 w-5 shrink-0 text-accent" />
                 <div>
                   <div className="text-sm font-semibold text-theme-primary">
                     什么时候用“校正”？
@@ -203,7 +203,7 @@ export function HoldingReconciliationPanel({
                 </div>
               </div>
             </div>
-            <div className="rounded-[24px] border border-[var(--card-border)] bg-[var(--input-bg)]/54 p-4">
+            <div className="rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/54 p-4">
               <div className="text-sm font-semibold text-theme-primary">
                 差异历史
               </div>
@@ -213,14 +213,14 @@ export function HoldingReconciliationPanel({
               </p>
               <div className="mt-3 space-y-2">
                 {correctionHistory.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-[var(--card-border)] px-3 py-3 text-xs text-theme-muted">
+                  <div className="rounded-xl border border-dashed border-[var(--card-border)] px-3 py-3 text-xs text-theme-muted">
                     暂无校正记录；完成校正后会在这里留下对账痕迹。
                   </div>
                 ) : (
                   correctionHistory.map((transaction) => (
                     <div
                       key={transaction.id}
-                      className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/56 px-3 py-3 text-xs"
+                      className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/56 px-3 py-3 text-xs"
                     >
                       <div className="font-semibold text-theme-primary">
                         {transaction.fund?.name || transaction.fund_id}
@@ -248,7 +248,7 @@ export function HoldingReconciliationPanel({
 
         <div className="space-y-3">
           {allClear ? (
-            <div className="rounded-[24px] border border-emerald-400/22 bg-emerald-400/10 p-4 text-sm text-emerald-100">
+            <div className="rounded-xl border border-success/22 bg-success/10 p-4 text-sm text-success">
               <div className="flex items-center gap-2 font-semibold">
                 <CheckCircle2 className="h-4 w-4" />
                 当前筛选下没有需要处理的对账项
@@ -304,7 +304,7 @@ export function HoldingReconciliationPanel({
                       <span
                         className={
                           item.severity === 'review'
-                            ? 'text-rose-200'
+                            ? 'text-danger'
                             : 'text-theme-primary'
                         }
                       >

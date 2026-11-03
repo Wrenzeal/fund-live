@@ -155,6 +155,7 @@ function HomeContent({
     classificationOverride,
     cacheStatus,
     isLoading: isDashboardLoading,
+    isError: isDashboardError,
     isValidating,
     mutate: refreshDashboard,
     isTrading,
@@ -256,7 +257,7 @@ function HomeContent({
       ? `基金 ${displayFundId} 的资料正在同步，页面会自动更新。`
       : ''
   const activeEstimate = isCallAuction ? undefined : estimate
-  const activeFund = isCallAuction ? holdingsFund : fund
+  const activeFund = fund?.id === displayFundId ? fund : holdingsFund
   const activeTimeSeries = isCallAuction ? [] : timeSeries
   const activeLastUpdated = isCallAuction ? null : lastUpdated
   const warmupDetailText = isDashboardWarming
@@ -402,8 +403,8 @@ function HomeContent({
                 {/* Trading Status Card */}
                 <Surface padding="md" radius="md">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 rounded-lg bg-cyan-500/20">
-                      <BarChart3 className="w-5 h-5 text-cyan-400" />
+                    <div className="p-2 rounded-lg bg-accent/20">
+                      <BarChart3 className="w-5 h-5 text-accent" />
                     </div>
                     <h3 className="font-semibold text-theme-primary">市场状态</h3>
                   </div>
@@ -451,7 +452,7 @@ function HomeContent({
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-theme-secondary">数据来源</span>
-                      <span className="text-cyan-400 font-medium">
+                      <span className="text-accent font-medium">
                         {holdingsDisplayLevel === 'target_layer'
                           ? (lookthroughAvailable ? '追踪目标' : '跟踪标的')
                           : isCallAuction
@@ -574,10 +575,15 @@ function HomeContent({
             </div>
 
             <FundSectorCard
+              key={displayFundId}
               fund={activeFund}
-              sectorSnapshot={isCallAuction ? undefined : sectorSnapshot}
-              themeSnapshot={isCallAuction ? undefined : themeSnapshot}
-              classificationOverride={isCallAuction ? undefined : classificationOverride}
+              sectorSnapshot={sectorSnapshot?.fund_id === displayFundId ? sectorSnapshot : undefined}
+              themeSnapshot={themeSnapshot?.fund_id === displayFundId ? themeSnapshot : undefined}
+              classificationOverride={classificationOverride?.fund_id === displayFundId ? classificationOverride : undefined}
+              isLoading={!isCallAuction && isDashboardLoading}
+              error={!isCallAuction && isDashboardError}
+              isPaused={isCallAuction}
+              onRetry={() => { void refreshDashboard().catch(() => undefined) }}
               onClassificationOverrideUpdated={() => {
                 void refreshDashboard()
               }}
@@ -601,7 +607,7 @@ function HomeContent({
 
             <Link
               href={`/observations/${encodeURIComponent(activeFund?.id || displayFundId)}`}
-              className="flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-[var(--card-border)] px-5 py-4 text-sm text-theme-primary transition-colors hover:bg-[var(--input-bg)] focus-visible:outline-2 focus-visible:outline-[var(--accent-primary)]"
+              className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-[var(--card-border)] px-5 py-4 text-sm text-theme-primary transition-colors hover:bg-[var(--input-bg)] focus-visible:outline-2 focus-visible:outline-[var(--accent-primary)]"
             >
               <span>查看基金公告与披露资料</span>
               <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -690,7 +696,7 @@ function MinimalWatchlistGrid({
       <ScrollReveal className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="text-xs font-semibold tracking-[0.22em] text-theme-muted">自选</div>
-          <h2 className="mt-2 text-2xl font-black text-theme-primary sm:text-3xl">自选基金</h2>
+          <h2 className="mt-2 text-2xl font-semibold text-theme-primary sm:text-3xl">自选基金</h2>
         </div>
         <div className="text-sm tabular-nums text-theme-secondary">
           {visibleFunds.length}/{funds.length}
@@ -739,8 +745,8 @@ function MinimalWatchlistEstimateCard({
       type="button"
       onClick={() => onOpenProfessionalFund(fundId)}
       className={cn(
-        'group block h-full w-full rounded-3xl text-left transition-all duration-200',
-        'hover:-translate-y-1 hover:shadow-[0_24px_55px_rgba(34,211,238,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/45'
+        'group block h-full w-full rounded-xl text-left transition-all duration-200',
+        'hover:-translate-y-1 hover:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/45'
       )}
       aria-label={`查看 ${displayedFund?.name || estimate?.fund_name || fundId} 详情`}
     >
@@ -755,7 +761,7 @@ function MinimalWatchlistEstimateCard({
           lastUpdated={isCallAuction ? null : lastUpdated}
           className="h-full min-h-[25rem]"
         />
-        <div className="pointer-events-none absolute bottom-4 right-4 inline-flex items-center gap-1.5 rounded-full border border-cyan-400/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-300 opacity-0 shadow-[0_10px_24px_rgba(34,211,238,0.12)] transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
+        <div className="pointer-events-none absolute bottom-4 right-4 inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent opacity-0 shadow-none transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
           <MousePointer2 className="h-3.5 w-3.5" />
           查看详情
         </div>
@@ -774,8 +780,8 @@ function MinimalWatchlistCardSkeleton() {
         <div className="h-14 w-44 rounded-full bg-[var(--input-bg)]" />
       </div>
       <div className="mt-10 grid gap-4 sm:grid-cols-2">
-        <div className="h-24 rounded-2xl bg-[var(--input-bg)]" />
-        <div className="h-24 rounded-2xl bg-[var(--input-bg)]" />
+        <div className="h-24 rounded-xl bg-[var(--input-bg)]" />
+        <div className="h-24 rounded-xl bg-[var(--input-bg)]" />
       </div>
       <div className="mt-8 h-4 w-48 rounded-full bg-[var(--input-bg)]" />
     </Surface>

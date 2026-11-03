@@ -37,18 +37,18 @@ function transactionTypeLabel(type: HoldingTransactionType) {
 function transactionTone(type: HoldingTransactionType) {
   switch (type) {
     case 'buy':
-      return 'border-emerald-400/28 bg-emerald-400/10 text-emerald-100'
+      return 'border-success/28 bg-success/10 text-success'
     case 'sell':
-      return 'border-amber-400/28 bg-amber-400/10 text-amber-100'
+      return 'border-warning/28 bg-warning/10 text-warning'
     case 'correction':
-      return 'border-cyan-400/28 bg-cyan-400/10 text-cyan-100'
+      return 'border-accent/28 bg-accent/10 text-accent'
     case 'delete':
-      return 'border-rose-400/28 bg-rose-500/10 text-rose-100'
+      return 'border-danger/28 bg-danger/10 text-danger'
     case 'dividend':
-      return 'border-violet-400/28 bg-violet-400/10 text-violet-100'
+      return 'border-accent/28 bg-accent/10 text-accent'
     case 'adjustment':
     default:
-      return 'border-sky-400/28 bg-sky-400/10 text-sky-100'
+      return 'border-accent/28 bg-accent/10 text-accent'
   }
 }
 
@@ -86,7 +86,7 @@ function DetailMetric({ label, value }: { label: string; value?: string }) {
 
 function RollbackFieldCard({ field }: { field: HoldingTransactionRollbackField }) {
   return (
-    <div className="rounded-[20px] border border-white/10 bg-[var(--input-bg)]/56 p-4">
+    <div className="rounded-[20px] border border-[var(--card-border)] bg-[var(--input-bg)]/56 p-4">
       <div className="text-xs text-theme-muted">{field.label}</div>
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
         <div>
@@ -95,11 +95,11 @@ function RollbackFieldCard({ field }: { field: HoldingTransactionRollbackField }
         </div>
         <div>
           <div className="text-theme-muted">建议回到</div>
-          <div className="mt-1 break-all font-semibold text-cyan-100">{emptyText(field.rollback_value)}</div>
+          <div className="mt-1 break-all font-semibold text-accent">{emptyText(field.rollback_value)}</div>
         </div>
       </div>
       {field.delta && (
-        <div className="mt-3 rounded-2xl border border-amber-300/18 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+        <div className="mt-3 rounded-xl border border-warning/18 bg-warning/10 px-3 py-2 text-xs text-warning">
           {field.direction || '变化'}：{field.delta}
         </div>
       )}
@@ -111,7 +111,7 @@ function RelatedTransactionRow({ transaction }: { transaction: HoldingTransactio
   return (
     <Link
       href={`/holdings/transactions/${transaction.id}`}
-      className="block rounded-[20px] border border-[var(--card-border)] bg-[var(--input-bg)]/54 p-4 transition hover:-translate-y-0.5 hover:border-cyan-300/30"
+      className="block rounded-[20px] border border-[var(--card-border)] bg-[var(--input-bg)]/54 p-4 transition hover:-translate-y-0.5 hover:border-accent/30"
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
@@ -119,12 +119,12 @@ function RelatedTransactionRow({ transaction }: { transaction: HoldingTransactio
             <span className={cn('rounded-full border px-2 py-0.5 text-[11px] font-semibold', transactionTone(transaction.type))}>
               {transactionTypeLabel(transaction.type)}
             </span>
-            {transaction.voided && <span className="rounded-full border border-slate-400/25 bg-slate-400/10 px-2 py-0.5 text-[11px] text-slate-200">已作废</span>}
+            {transaction.voided && <span className="rounded-full border border-[var(--card-border)] bg-surface-subtle px-2 py-0.5 text-[11px] text-theme-primary">已作废</span>}
           </div>
           <div className="mt-2 truncate text-sm font-semibold text-theme-primary">{transaction.note || transaction.fund?.name || transaction.fund_id}</div>
           <div className="mt-1 text-xs text-theme-muted">{formatDateTime(transaction.created_at)}</div>
         </div>
-        <div className="text-sm font-black text-theme-primary">{formatSummaryMoney(transaction.amount)}</div>
+        <div className="text-sm font-semibold text-theme-primary">{formatSummaryMoney(transaction.amount)}</div>
       </div>
     </Link>
   )
@@ -140,7 +140,7 @@ export default function HoldingTransactionDetailPage() {
     return (
       <AccountAreaShell title="流水详情" description="查看单条持仓流水、快照变化和回滚预览。">
         <div className="rounded-[36px] border border-[var(--card-border)] p-10 text-center glass">
-          <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
+          <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-accent" />
           <div className="mt-4 text-sm text-theme-secondary">正在读取流水详情…</div>
         </div>
       </AccountAreaShell>
@@ -150,9 +150,9 @@ export default function HoldingTransactionDetailPage() {
   if (!user) {
     return (
       <AccountAreaShell title="流水详情" description="登录后查看你的持仓流水详情。">
-        <div className="rounded-[32px] border border-[var(--card-border)] p-8 text-center glass">
+        <div className="rounded-xl border border-[var(--card-border)] p-8 text-center glass">
           <div className="text-xl font-bold text-theme-primary">登录后可查看流水详情</div>
-          <Link href={`/auth/login?returnTo=${encodeURIComponent(`/holdings/transactions/${transactionID}`)}`} className="mt-5 inline-flex rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-3 text-sm font-semibold text-white">
+          <Link href={`/auth/login?returnTo=${encodeURIComponent(`/holdings/transactions/${transactionID}`)}`} className="mt-5 inline-flex rounded-xl bg-[var(--accent-soft)]   px-4 py-3 text-sm font-semibold text-theme-primary">
             去登录
           </Link>
         </div>
@@ -163,13 +163,13 @@ export default function HoldingTransactionDetailPage() {
   if (!detail) {
     return (
       <AccountAreaShell title="流水详情" description="查看单条持仓流水、快照变化和回滚预览。">
-        <div className="rounded-[32px] border border-rose-500/20 bg-rose-500/10 p-6 text-rose-100">
+        <div className="rounded-xl border border-danger/20 bg-danger/10 p-6 text-danger">
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
             <div>
               <div className="text-lg font-bold">流水不存在或当前账号无权查看</div>
               <p className="mt-2 text-sm text-theme-secondary">{error instanceof Error ? error.message : '请返回持仓页重新选择流水。'}</p>
-              <Link href="/holdings" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-rose-50 underline-offset-4 hover:underline">
+              <Link href="/holdings" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-danger underline-offset-4 hover:underline">
                 <ArrowLeft className="h-4 w-4" /> 返回持仓页
               </Link>
             </div>
@@ -187,7 +187,7 @@ export default function HoldingTransactionDetailPage() {
   return (
     <AccountAreaShell title="流水详情" description="查看单条持仓流水、快照变化和回滚预览。">
       <ScrollRevealStack className="space-y-6">
-        <Link href="/holdings" className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition hover:border-cyan-300/35 hover:text-theme-primary">
+        <Link href="/holdings" className="inline-flex items-center gap-2 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition hover:border-accent/35 hover:text-theme-primary">
           <ArrowLeft className="h-4 w-4" /> 返回持仓页
         </Link>
 
@@ -199,21 +199,21 @@ export default function HoldingTransactionDetailPage() {
                   {transactionTypeLabel(transaction.type)}
                 </span>
                 {transaction.voided && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-400/25 bg-slate-400/10 px-3 py-1 text-xs font-semibold text-slate-200">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-[var(--card-border)] bg-surface-subtle px-3 py-1 text-xs font-semibold text-theme-primary">
                     <Ban className="h-3.5 w-3.5" /> 已作废
                   </span>
                 )}
-                {sourceLabel && <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-100">来源：{sourceLabel}</span>}
+                {sourceLabel && <span className="rounded-full border border-accent/20 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">来源：{sourceLabel}</span>}
               </div>
-              <h1 className="mt-4 truncate text-3xl font-black text-theme-primary">{transaction.fund?.name || transaction.fund_id}</h1>
+              <h1 className="mt-4 truncate text-3xl font-semibold text-theme-primary">{transaction.fund?.name || transaction.fund_id}</h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-theme-secondary">
                 {transaction.note || '暂无备注。下方列出流水明细和回滚影响。'}
               </p>
             </div>
-            <div className="rounded-[26px] border border-cyan-300/18 bg-cyan-400/10 px-5 py-4 text-right">
+            <div className="rounded-xl border border-accent/18 bg-accent/10 px-5 py-4 text-right">
               <div className="text-xs text-theme-muted">流水金额</div>
-              <div className="mt-2 text-3xl font-black text-theme-primary">{formatSummaryMoney(transaction.amount)}</div>
-              <div className="mt-1 text-xs text-cyan-100">{formatDateTime(transaction.created_at)}</div>
+              <div className="mt-2 text-3xl font-semibold text-theme-primary">{formatSummaryMoney(transaction.amount)}</div>
+              <div className="mt-1 text-xs text-accent">{formatDateTime(transaction.created_at)}</div>
             </div>
           </div>
 
@@ -226,36 +226,36 @@ export default function HoldingTransactionDetailPage() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-[30px] border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-amber-100">
+          <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
+            <div className="inline-flex items-center gap-2 rounded-full border border-warning/25 bg-warning/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-warning">
               <Clock3 className="h-3.5 w-3.5" />
               影响明细
             </div>
             <div className="mt-4 space-y-3">
               {(detail.impact_chain ?? []).map((item, index) => (
                 <div key={`${index}-${item}`} className="flex gap-3 rounded-[20px] border border-[var(--card-border)] bg-[var(--input-bg)]/54 p-3 text-sm leading-6 text-theme-secondary">
-                  <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-amber-300/24 bg-amber-400/10 text-[11px] font-bold text-amber-100">{index + 1}</span>
+                  <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-warning/24 bg-warning/10 text-[11px] font-bold text-warning">{index + 1}</span>
                   <span>{item}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="rounded-[30px] border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-cyan-100">
+          <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
+            <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-accent">
               <RotateCcw className="h-3.5 w-3.5" />
               回滚预览
             </div>
-            <h2 className="mt-3 text-xl font-black text-theme-primary">{rollbackPreview?.title || '只读预览'}</h2>
+            <h2 className="mt-3 text-xl font-semibold text-theme-primary">{rollbackPreview?.title || '只读预览'}</h2>
             <p className="mt-2 text-sm leading-6 text-theme-secondary">{rollbackPreview?.summary || '暂无回滚预览。'}</p>
-            {rollbackPreview?.suggested_action && <p className="mt-2 text-xs leading-5 text-cyan-100">{rollbackPreview.suggested_action}</p>}
+            {rollbackPreview?.suggested_action && <p className="mt-2 text-xs leading-5 text-accent">{rollbackPreview.suggested_action}</p>}
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {(rollbackPreview?.affected_fields ?? []).map((field) => <RollbackFieldCard key={`${field.field}-${field.label}`} field={field} />)}
             </div>
             {(rollbackPreview?.warnings ?? []).length > 0 && (
               <div className="mt-4 space-y-2">
                 {rollbackPreview?.warnings?.map((warning) => (
-                  <div key={warning} className="rounded-2xl border border-amber-300/18 bg-amber-400/10 px-3 py-2 text-xs leading-5 text-amber-100">{warning}</div>
+                  <div key={warning} className="rounded-xl border border-warning/18 bg-warning/10 px-3 py-2 text-xs leading-5 text-warning">{warning}</div>
                 ))}
               </div>
             )}
@@ -263,8 +263,8 @@ export default function HoldingTransactionDetailPage() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-2">
-          <div className="rounded-[30px] border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
-            <div className="inline-flex items-center gap-2 rounded-full border border-sky-400/25 bg-sky-400/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-sky-100">
+          <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
+            <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-accent">
               <WalletCards className="h-3.5 w-3.5" />
               当前快照
             </div>
@@ -282,8 +282,8 @@ export default function HoldingTransactionDetailPage() {
             )}
           </div>
 
-          <div className="rounded-[30px] border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
-            <div className="inline-flex items-center gap-2 rounded-full border border-violet-400/25 bg-violet-400/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-violet-100">
+          <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
+            <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-accent">
               <FileText className="h-3.5 w-3.5" />
               附加信息
             </div>
@@ -301,8 +301,8 @@ export default function HoldingTransactionDetailPage() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-2">
-          <div className="rounded-[30px] border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-cyan-100">
+          <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
+            <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-accent">
               <History className="h-3.5 w-3.5" />
               之后流水
             </div>
@@ -313,8 +313,8 @@ export default function HoldingTransactionDetailPage() {
             </div>
           </div>
 
-          <div className="rounded-[30px] border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-emerald-100">
+          <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
+            <div className="inline-flex items-center gap-2 rounded-full border border-success/25 bg-success/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-success">
               <CheckCircle2 className="h-3.5 w-3.5" />
               同基金相关流水
             </div>

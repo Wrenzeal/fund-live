@@ -82,7 +82,7 @@ export function HoldingRecordComposer({
         : "保存后按确认净值日更新份额和市值。";
 
   return (
-    <section className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 sm:p-6" aria-labelledby={`${formID}-title`}>
+    <section className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 sm:p-6" aria-labelledby={`${formID}-title`}>
       <h2 id={`${formID}-title`} className="text-xl font-semibold text-theme-primary">记录买入</h2>
       <p className="mt-2 text-sm leading-6 text-theme-secondary">按实际买入本金和交易日期记录，不把当前市值当作买入金额。</p>
 

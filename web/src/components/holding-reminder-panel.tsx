@@ -83,23 +83,23 @@ function toneMeta(tone: InsightTone) {
   switch (tone) {
     case 'danger':
       return {
-        className: 'border-rose-400/28 bg-rose-500/10 text-rose-100',
+        className: 'border-danger/28 bg-danger/10 text-danger',
         icon: ShieldAlert,
       }
     case 'warning':
       return {
-        className: 'border-amber-400/28 bg-amber-400/10 text-amber-100',
+        className: 'border-warning/28 bg-warning/10 text-warning',
         icon: AlertTriangle,
       }
     case 'good':
       return {
-        className: 'border-emerald-400/24 bg-emerald-400/10 text-emerald-100',
+        className: 'border-success/24 bg-success/10 text-success',
         icon: CheckCircle2,
       }
     case 'info':
     default:
       return {
-        className: 'border-cyan-400/24 bg-cyan-400/10 text-cyan-100',
+        className: 'border-accent/24 bg-accent/10 text-accent',
         icon: Info,
       }
   }
@@ -172,14 +172,14 @@ export function HoldingReminderPanel({
   }
 
   return (
-    <section className="mb-6 overflow-hidden rounded-[30px] border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
+    <section className="mb-6 overflow-hidden rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/84 p-5 glass">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-rose-400/25 bg-rose-400/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-rose-100">
+          <div className="inline-flex items-center gap-2 rounded-full border border-danger/25 bg-danger/10 px-3 py-1 text-[11px] font-medium tracking-[0.2em] text-danger">
             <BellRing className="h-3.5 w-3.5" />
             持仓提醒
           </div>
-          <h3 className="mt-3 text-2xl font-black text-theme-primary">
+          <h3 className="mt-3 text-2xl font-semibold text-theme-primary">
             风险提醒
           </h3>
           {!compact && (
@@ -193,16 +193,16 @@ export function HoldingReminderPanel({
               <button
                 type="button"
                 onClick={restoreReminders}
-                className="rounded-full border border-rose-300/22 bg-rose-400/10 px-3 py-1 font-semibold text-rose-100 transition hover:border-rose-200/45"
+                className="rounded-full border border-danger/22 bg-danger/10 px-3 py-1 font-semibold text-danger transition hover:border-danger/45"
               >
                 恢复全部提醒
               </button>
             </div>
           )}
         </div>
-        <div className="rounded-[24px] border border-rose-300/20 bg-rose-400/10 px-4 py-3 text-center">
+        <div className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-center">
           <div className="text-xs text-theme-muted">需优先关注</div>
-          <div className="mt-1 text-3xl font-black text-theme-primary">
+          <div className="mt-1 text-3xl font-semibold text-theme-primary">
             {visibleUrgentCount}
           </div>
         </div>
@@ -210,7 +210,7 @@ export function HoldingReminderPanel({
 
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {visibleReminders.length === 0 ? (
-          <div className="rounded-[24px] border border-emerald-400/22 bg-emerald-400/10 p-4 text-sm text-emerald-100 md:col-span-2 xl:col-span-3">
+          <div className="rounded-xl border border-success/22 bg-success/10 p-4 text-sm text-success md:col-span-2 xl:col-span-3">
             <div className="flex items-center gap-2 font-semibold">
               <CheckCircle2 className="h-4 w-4" />
               {summary.reminders.length === 0
@@ -230,7 +230,7 @@ export function HoldingReminderPanel({
             return (
               <div
                 key={reminder.id}
-                className={cn('rounded-[24px] border p-4', meta.className)}
+                className={cn('rounded-xl border p-4', meta.className)}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2">
@@ -240,7 +240,7 @@ export function HoldingReminderPanel({
                     </div>
                   </div>
                   {reminder.metric && (
-                    <span className="shrink-0 rounded-full border border-white/15 bg-white/8 px-2 py-0.5 text-[11px]">
+                    <span className="shrink-0 rounded-full border border-[var(--card-border)] bg-surface-subtle px-2 py-0.5 text-[11px]">
                       {reminder.metric}
                     </span>
                   )}
@@ -257,14 +257,14 @@ export function HoldingReminderPanel({
                   <button
                     type="button"
                     onClick={() => snoozeReminder(reminder.id)}
-                    className="rounded-2xl border border-white/15 bg-white/8 px-3 py-1.5 text-[11px] font-semibold transition hover:border-white/35 hover:bg-white/12"
+                    className="rounded-xl border border-[var(--card-border)] bg-surface-subtle px-3 py-1.5 text-[11px] font-semibold transition hover:border-[var(--card-border)] hover:bg-surface-subtle"
                   >
                     稍后提醒
                   </button>
                   <button
                     type="button"
                     onClick={() => muteReminder(reminder.id)}
-                    className="rounded-2xl border border-white/15 bg-white/8 px-3 py-1.5 text-[11px] font-semibold transition hover:border-white/35 hover:bg-white/12"
+                    className="rounded-xl border border-[var(--card-border)] bg-surface-subtle px-3 py-1.5 text-[11px] font-semibold transition hover:border-[var(--card-border)] hover:bg-surface-subtle"
                   >
                     已读
                   </button>

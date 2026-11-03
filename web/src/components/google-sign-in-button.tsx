@@ -76,7 +76,7 @@ export function GoogleSignInButton({ onCredential }: GoogleSignInButtonProps) {
 
   if (isLoadingConfig) {
     return (
-      <div className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-4 text-sm text-theme-secondary">
+      <div className="rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-4 text-sm text-theme-secondary">
         正在准备 Google 登录…
       </div>
     )
@@ -84,7 +84,7 @@ export function GoogleSignInButton({ onCredential }: GoogleSignInButtonProps) {
 
   if (!googleClientId) {
     return (
-      <div className="rounded-2xl border border-dashed border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-4 text-sm text-theme-secondary">
+      <div className="rounded-xl border border-dashed border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-4 text-sm text-theme-secondary">
         {configError instanceof Error ? configError.message : 'Google 登录暂不可用，请先使用邮箱登录。'}
       </div>
     )

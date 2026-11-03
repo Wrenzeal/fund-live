@@ -58,8 +58,8 @@ function IdeaSelect<T extends string>({
         onClick={onToggle}
         className={cn(
           'watchlist-select-shell group relative block w-full overflow-hidden rounded-[22px] border border-[var(--input-border)] bg-[var(--input-bg)]/70 px-4 py-3 text-left transition-all duration-200',
-          'hover:border-cyan-400/35 hover:bg-[var(--input-bg)] focus:outline-none focus-visible:border-cyan-400/55 focus-visible:bg-[var(--input-bg)] focus-visible:shadow-[0_14px_30px_rgba(34,211,238,0.12)]',
-          isOpen && 'border-cyan-400/55 bg-[var(--input-bg)] shadow-[0_14px_30px_rgba(34,211,238,0.12)]'
+          'hover:border-accent/35 hover:bg-[var(--input-bg)] focus:outline-none focus-visible:border-accent/55 focus-visible:bg-[var(--input-bg)] focus-visible:shadow-none',
+          isOpen && 'border-accent/55 bg-[var(--input-bg)] shadow-none'
         )}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -73,7 +73,7 @@ function IdeaSelect<T extends string>({
           </div>
           <ChevronDown
             className={cn(
-              'h-4 w-4 shrink-0 text-cyan-300 transition-all duration-300',
+              'h-4 w-4 shrink-0 text-accent transition-all duration-300',
               isOpen ? 'rotate-180' : 'group-hover:translate-y-0.5'
             )}
           />
@@ -83,7 +83,7 @@ function IdeaSelect<T extends string>({
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={onToggle} />
-          <div className="absolute left-0 right-0 top-full z-50 mt-3 overflow-hidden rounded-[24px] border border-cyan-400/22 bg-[var(--card-bg)]/98 p-2 shadow-[0_24px_60px_rgba(2,8,23,0.42)] backdrop-blur-xl">
+          <div className="absolute left-0 right-0 top-full z-50 mt-3 overflow-hidden rounded-xl border border-accent/22 bg-[var(--card-bg)]/98 p-2 shadow-none backdrop-blur-xl">
             <div className="max-h-72 space-y-1 overflow-y-auto">
               {options.map((option) => {
                 const active = option.id === value
@@ -98,7 +98,7 @@ function IdeaSelect<T extends string>({
                     className={cn(
                       'flex w-full items-start justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors',
                       active
-                        ? 'bg-cyan-500/14 text-cyan-100'
+                        ? 'bg-accent/14 text-accent'
                         : 'text-theme-secondary hover:bg-[var(--input-bg)] hover:text-theme-primary'
                     )}
                     role="option"
@@ -108,7 +108,7 @@ function IdeaSelect<T extends string>({
                       <div className="truncate text-sm font-medium">{option.label}</div>
                       <div className="mt-1 text-xs text-theme-muted">{option.hint}</div>
                     </div>
-                    {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" />}
+                    {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent" />}
                   </button>
                 )
               })}
@@ -125,19 +125,19 @@ function issueTypeMeta(type: IssueType) {
     case 'bug':
       return {
         label: 'Bug',
-        className: 'border-rose-500/25 bg-rose-500/10 text-rose-200',
+        className: 'border-danger/25 bg-danger/10 text-danger',
         icon: Bug,
       }
     case 'feature':
       return {
         label: '功能',
-        className: 'border-cyan-500/25 bg-cyan-500/10 text-cyan-200',
+        className: 'border-accent/25 bg-accent/10 text-accent',
         icon: Sparkles,
       }
     default:
       return {
         label: '改进',
-        className: 'border-amber-500/25 bg-amber-500/10 text-amber-200',
+        className: 'border-warning/25 bg-warning/10 text-warning',
         icon: WandSparkles,
       }
   }
@@ -148,17 +148,17 @@ function issueStatusMeta(status: IssueStatus) {
     case 'accepted':
       return {
         label: '处理中',
-        className: 'border-cyan-500/25 bg-cyan-500/10 text-cyan-200',
+        className: 'border-accent/25 bg-accent/10 text-accent',
       }
     case 'completed':
       return {
         label: '已完成',
-        className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200',
+        className: 'border-success/25 bg-success/10 text-success',
       }
     default:
       return {
         label: '待接收',
-        className: 'border-amber-500/25 bg-amber-500/10 text-amber-200',
+        className: 'border-warning/25 bg-warning/10 text-warning',
       }
   }
 }
@@ -224,14 +224,14 @@ export default function IssuesPage() {
       <div className="space-y-6 md:space-y-8">
         <ScrollRevealStack className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4" stagger={65}>
           {[
-            { label: '反馈总数', value: counts.total, accent: 'text-cyan-300' },
-            { label: '待接收', value: counts.pending, accent: 'text-amber-300' },
-            { label: '处理中', value: counts.accepted, accent: 'text-cyan-300' },
-            { label: '已完成', value: counts.completed, accent: 'text-emerald-300' },
+            { label: '反馈总数', value: counts.total, accent: 'text-accent' },
+            { label: '待接收', value: counts.pending, accent: 'text-warning' },
+            { label: '处理中', value: counts.accepted, accent: 'text-accent' },
+            { label: '已完成', value: counts.completed, accent: 'text-success' },
           ].map((item) => (
             <Surface as="article" key={item.label} radius="md" padding="md" className="p-4 md:p-6">
               <div className="text-xs tracking-[0.14em] text-theme-muted sm:tracking-[0.22em]">{item.label}</div>
-              <div className={cn('mt-2 text-3xl font-black sm:mt-3 sm:text-4xl', item.accent)}>{item.value}</div>
+              <div className={cn('mt-2 text-3xl font-semibold sm:mt-3 sm:text-4xl', item.accent)}>{item.value}</div>
             </Surface>
           ))}
         </ScrollRevealStack>
@@ -285,7 +285,7 @@ export default function IssuesPage() {
           <ScrollRevealStack className="space-y-4">
             {isLoading ? (
               <Surface radius="xl" padding="lg" className="text-center">
-                <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
+                <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-accent" />
                 <div className="mt-4 text-sm text-theme-secondary">正在读取反馈…</div>
               </Surface>
             ) : error ? (
@@ -308,7 +308,7 @@ export default function IssuesPage() {
                   <Link
                     key={issue.id}
                     href={`/issues/${issue.id}`}
-                    className="block rounded-[32px] border border-[var(--card-border)] p-6 glass transition-colors hover:border-cyan-400/30"
+                    className="block rounded-xl border border-[var(--card-border)] p-6 glass transition-colors hover:border-accent/30"
                   >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="space-y-3">

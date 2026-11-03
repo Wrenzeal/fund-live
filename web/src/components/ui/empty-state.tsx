@@ -32,7 +32,7 @@ export function EmptyState({ icon, title, description, features, action, classNa
           {features.map((item) => (
             <div
               key={item.title}
-              className="rounded-2xl border border-[var(--card-border)] bg-[var(--input-bg)]/66 px-4 py-4 text-left"
+              className="rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/66 px-4 py-4 text-left"
             >
               <div className="text-sm font-semibold text-theme-primary">{item.title}</div>
               <div className="mt-2 text-xs leading-5 text-theme-secondary">{item.description}</div>

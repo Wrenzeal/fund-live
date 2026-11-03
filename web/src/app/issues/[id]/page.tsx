@@ -15,22 +15,22 @@ import { cn } from '@/lib/utils'
 function issueTypeMeta(type: 'bug' | 'feature' | 'improvement') {
   switch (type) {
     case 'bug':
-      return { label: '问题反馈', className: 'border-rose-500/25 bg-rose-500/10 text-rose-200' }
+      return { label: '问题反馈', className: 'border-danger/25 bg-danger/10 text-danger' }
     case 'feature':
-      return { label: '功能诉求', className: 'border-cyan-500/25 bg-cyan-500/10 text-cyan-200' }
+      return { label: '功能诉求', className: 'border-accent/25 bg-accent/10 text-accent' }
     default:
-      return { label: '改进建议', className: 'border-amber-500/25 bg-amber-500/10 text-amber-200' }
+      return { label: '改进建议', className: 'border-warning/25 bg-warning/10 text-warning' }
   }
 }
 
 function issueStatusMeta(status: IssueStatus) {
   switch (status) {
     case 'accepted':
-      return { label: '处理中', className: 'border-cyan-500/25 bg-cyan-500/10 text-cyan-200' }
+      return { label: '处理中', className: 'border-accent/25 bg-accent/10 text-accent' }
     case 'completed':
-      return { label: '已完成', className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200' }
+      return { label: '已完成', className: 'border-success/25 bg-success/10 text-success' }
     default:
-      return { label: '待接收', className: 'border-amber-500/25 bg-amber-500/10 text-amber-200' }
+      return { label: '待接收', className: 'border-warning/25 bg-warning/10 text-warning' }
   }
 }
 
@@ -101,7 +101,7 @@ export default function IssueDetailPage() {
         EyebrowIcon={WandSparkles}
       >
         <Surface radius="xl" padding="lg" className="text-center">
-          <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
+          <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-accent" />
           <div className="mt-4 text-sm text-theme-secondary">正在读取反馈详情…</div>
         </Surface>
       </SiteShell>
@@ -161,7 +161,7 @@ export default function IssueDetailPage() {
               </div>
 
               <div>
-                <h2 className="text-4xl font-black leading-tight text-theme-primary">{issue.title}</h2>
+                <h2 className="text-4xl font-semibold leading-tight text-theme-primary">{issue.title}</h2>
                 <div className="mt-3 text-sm text-theme-muted">
                   提交人：{issue.created_by_display_name} · {new Date(issue.created_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}
                 </div>
@@ -179,10 +179,10 @@ export default function IssueDetailPage() {
                       onClick={() => void handleStatusUpdate(status)}
                       disabled={isUpdatingStatus || isSavingReply || issue.status === status}
                       className={cn(
-                        'rounded-2xl border px-4 py-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                        'rounded-xl border px-4 py-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60',
                         issue.status === status
-                          ? 'border-cyan-500/30 bg-cyan-500/15 text-cyan-200'
-                          : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-primary hover:border-cyan-400/30'
+                          ? 'border-accent/30 bg-accent/15 text-accent'
+                          : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-primary hover:border-accent/30'
                       )}
                     >
                       {issueStatusMeta(status).label}
@@ -208,9 +208,9 @@ export default function IssueDetailPage() {
                       onClick={() => void handleReplyUpdate()}
                       disabled={!canSaveReply}
                       className={cn(
-                        'inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                        'inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60',
                         canSaveReply
-                          ? 'border-cyan-500/30 bg-cyan-500/15 text-cyan-100 hover:border-cyan-400/40'
+                          ? 'border-accent/30 bg-accent/15 text-accent hover:border-accent/40'
                           : 'border-[var(--input-border)] bg-[var(--input-bg)] text-theme-muted'
                       )}
                     >
@@ -243,7 +243,7 @@ export default function IssueDetailPage() {
 
         <Surface as="section" radius="xl" padding="md">
           <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-500/20 bg-cyan-500/10 text-cyan-200">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 text-accent">
               <MessageSquareQuote className="h-5 w-5" />
             </div>
             <div>
@@ -254,7 +254,7 @@ export default function IssueDetailPage() {
 
           {officialReply ? (
             <div className="space-y-4">
-              <div className="whitespace-pre-wrap rounded-[24px] border border-cyan-500/20 bg-cyan-500/10 px-5 py-4 text-sm leading-8 text-cyan-50">
+              <div className="whitespace-pre-wrap rounded-xl border border-accent/20 bg-accent/10 px-5 py-4 text-sm leading-8 text-accent">
                 {officialReply.body}
               </div>
               <div className="text-sm text-theme-muted">

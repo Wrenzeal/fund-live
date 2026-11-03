@@ -16,17 +16,17 @@ interface StatusBannerProps {
 }
 
 const toneClass: Record<StatusBannerTone, string> = {
-  info: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-50',
-  warning: 'border-amber-500/30 bg-amber-500/10 text-amber-100',
-  success: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-50',
-  danger: 'border-rose-500/30 bg-rose-500/10 text-rose-50',
+  info: 'border-accent/30 bg-accent/10 text-accent',
+  warning: 'border-warning/30 bg-warning/10 text-warning',
+  success: 'border-success/25 bg-success/10 text-success',
+  danger: 'border-danger/30 bg-danger/10 text-danger',
 }
 
 const iconClass: Record<StatusBannerTone, string> = {
-  info: 'text-cyan-200',
-  warning: 'text-amber-100',
-  success: 'text-emerald-200',
-  danger: 'text-rose-100',
+  info: 'text-accent',
+  warning: 'text-warning',
+  success: 'text-success',
+  danger: 'text-danger',
 }
 
 const defaultIcon: Record<StatusBannerTone, ReactNode> = {
@@ -48,7 +48,7 @@ export function StatusBanner({
   return (
     <div
       className={cn(
-        'rounded-2xl border px-4 py-3 text-sm shadow-[0_14px_34px_rgba(2,8,23,0.10)]',
+        'rounded-xl border px-4 py-3 text-sm shadow-none',
         toneClass[tone],
         className,
       )}

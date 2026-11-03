@@ -34,7 +34,7 @@ export function HoldingsSummaryMetrics({ holdings, estimatesByFundID, metricScop
   const dateLabel = dates.length === 1 ? `截至 ${dates[0]}` : dates.length > 1 ? `净值日 ${dates[0]} 至 ${dates.at(-1)}，日期不一致` : '等待净值更新'
   const totalCost = holdings.reduce((sum, holding) => sum + (Number.isFinite(Number(holding.amount)) ? Number(holding.amount) : 0), 0)
 
-  return <section data-testid="holdings-summary" aria-label="持仓金额总览" className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 sm:p-6">
+  return <section data-testid="holdings-summary" aria-label="持仓金额总览" className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 sm:p-6">
     <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-theme-secondary">
       <span>{partial && ready ? '已计价持仓市值' : '持仓市值'}{metricScope === 'estimate' && '（预估）'}</span>
       <span>{metricScope === 'official' ? '官方净值' : '盘中预估'} · {dateLabel}</span>

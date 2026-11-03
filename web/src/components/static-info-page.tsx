@@ -77,7 +77,7 @@ export function StaticInfoCardGrid({ cards, accentClassName }: StaticInfoCardGri
     <section className="mt-8 grid gap-5 md:grid-cols-3">
       {cards.map(({ title, body, icon: Icon }) => (
         <Surface as="article" key={title} padding="md" radius="lg">
-          <div className={cn('inline-flex rounded-2xl bg-cyan-500/12 p-3 text-cyan-200', accentClassName)}>
+          <div className={cn('inline-flex rounded-xl bg-accent/12 p-3 text-accent', accentClassName)}>
             <Icon className="h-5 w-5" />
           </div>
           <h2 className="mt-5 text-xl font-semibold text-theme-primary">{title}</h2>

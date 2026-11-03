@@ -46,7 +46,7 @@ export function LoadingOverlay({ isLoading, text = '正在加载…', children }
             {children}
             {isLoading && (
                 <div
-                    className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl backdrop-blur-sm"
+                    className="absolute inset-0 z-20 flex items-center justify-center rounded-xl backdrop-blur-sm"
                     style={{ backgroundColor: 'color-mix(in srgb, var(--background) 82%, transparent)' }}
                 >
                     <LoadingSpinner size="lg" text={text} />
@@ -64,17 +64,17 @@ interface LayoutSkeletonProps {
 
 export function LayoutSkeleton({ className, rows = 4, dense = false }: LayoutSkeletonProps) {
     return (
-        <div className={cn('rounded-[28px] border border-[var(--card-border)] p-5 glass', className)} aria-hidden="true">
+        <div className={cn('rounded-xl border border-[var(--card-border)] p-5 glass', className)} aria-hidden="true">
             <div className="flex items-start justify-between gap-4">
                 <div className="space-y-3">
                     <div className="skeleton-line h-3 w-28 rounded-full" />
                     <div className="skeleton-line h-7 w-48 rounded-full" />
                 </div>
-                <div className="skeleton-block h-12 w-12 rounded-2xl" />
+                <div className="skeleton-block h-12 w-12 rounded-xl" />
             </div>
             <div className={cn('mt-6 grid gap-3', dense ? 'grid-cols-2' : 'sm:grid-cols-3')}>
                 {Array.from({ length: rows }).map((_, index) => (
-                    <div key={index} className="rounded-2xl border border-[var(--card-border)] bg-[var(--input-bg)]/55 p-4">
+                    <div key={index} className="rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/55 p-4">
                         <div className="skeleton-line h-3 w-20 rounded-full" />
                         <div className="skeleton-line mt-4 h-6 w-24 rounded-full" />
                     </div>

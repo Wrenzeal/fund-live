@@ -37,15 +37,15 @@ export function GlobalAnnouncementDialog() {
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4 py-8 backdrop-blur-sm">
-      <Surface tone="strong" radius="xl" padding="md" className="w-full max-w-2xl shadow-2xl">
+      <Surface tone="strong" radius="xl" padding="md" className="w-full max-w-2xl shadow-none">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-cyan-500/12 p-3 text-cyan-300">
+            <div className="rounded-xl bg-accent/12 p-3 text-accent">
               <Bell className="h-5 w-5" />
             </div>
             <div>
               <div className="text-xs tracking-[0.22em] text-theme-muted">未读公告</div>
-              <h2 className="mt-2 text-2xl font-black text-theme-primary">{currentAnnouncement.title}</h2>
+              <h2 className="mt-2 text-2xl font-semibold text-theme-primary">{currentAnnouncement.title}</h2>
               <div className="mt-2 text-sm text-theme-muted">
                 {new Date(currentAnnouncement.published_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}
               </div>
@@ -55,7 +55,7 @@ export function GlobalAnnouncementDialog() {
           <button
             type="button"
             onClick={() => setDismissedIDs((current) => current.includes(currentAnnouncement.id) ? current : [...current, currentAnnouncement.id])}
-            className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] p-2 text-theme-secondary transition-colors hover:text-theme-primary"
+            className="rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] p-2 text-theme-secondary transition-colors hover:text-theme-primary"
             aria-label="关闭公告"
           >
             <X className="h-4 w-4" />

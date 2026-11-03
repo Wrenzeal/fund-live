@@ -72,7 +72,7 @@ export function HoldingsTable({
 
     if (rows.length === 0) {
         return (
-            <div className={cn('glass rounded-2xl p-4 sm:p-6', className)}>
+            <div className={cn('glass rounded-xl p-4 sm:p-6', className)}>
                 <h3 className="mb-4 text-lg font-semibold text-theme-primary">
                     {displayLevel === 'target_layer' ? '追踪目标' : '持仓明细'}
                 </h3>
@@ -92,7 +92,7 @@ export function HoldingsTable({
     const hasTotalHoldingRatio = rows.some((holding) => Number.isFinite(parseOptionalNumber(holding.holding_ratio)))
 
     return (
-        <div className={cn('glass rounded-2xl p-4 sm:p-6', className)}>
+        <div className={cn('glass rounded-xl p-4 sm:p-6', className)}>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h3 className="text-lg font-semibold text-theme-primary">
@@ -281,7 +281,7 @@ function HoldingsSystemState({
     scanning?: boolean
 }) {
     return (
-        <div role="status" data-diagnostic-code={code} data-loading={scanning || undefined} className="rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--card-bg)]/25 px-4 py-8 text-center text-sm text-theme-muted">
+        <div role="status" data-diagnostic-code={code} data-loading={scanning || undefined} className="rounded-xl border border-dashed border-[var(--card-border)] bg-[var(--card-bg)]/25 px-4 py-8 text-center text-sm text-theme-muted">
             <div>{text}</div>
             <div className="mt-2">{scanning ? '数据到达后会自动更新。' : '可以稍后重试。'}</div>
         </div>

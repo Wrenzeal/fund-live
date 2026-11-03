@@ -63,23 +63,9 @@ export function EstimateCard({
     return (
         <div
             className={cn(
-                'relative overflow-hidden rounded-3xl p-5 sm:p-8 glass',
-                // 动态边框颜色
-                isPositive
-                    ? 'border-[var(--accent-up)]/30'
-                    : isNegative
-                        ? 'border-[var(--accent-down)]/30'
-                        : 'border-[var(--card-border)]',
+                'relative overflow-hidden rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-5 sm:p-7',
                 className
             )}
-            style={{
-                // 使用 CSS 变量确保主题感知
-                background: isPositive
-                    ? 'linear-gradient(135deg, rgba(var(--accent-up-rgb, 244, 63, 94), 0.1), rgba(var(--accent-up-rgb, 244, 63, 94), 0.05))'
-                    : isNegative
-                        ? 'linear-gradient(135deg, rgba(var(--accent-down-rgb, 16, 185, 129), 0.1), rgba(var(--accent-down-rgb, 16, 185, 129), 0.05))'
-                        : 'linear-gradient(135deg, rgba(148, 163, 184, 0.10), rgba(15, 23, 42, 0.05))',
-            }}
         >
             <div className="relative z-10">
                 {/* Fund name and info */}
@@ -92,6 +78,7 @@ export function EstimateCard({
                             基金代码：{fundCode}
                         </p>
                     )}
+                    {(fund?.category_name || fund?.type) && <p className="mt-1 text-sm text-theme-secondary">{fund?.category_name || ({ hybrid: '混合型', stock: '股票型', bond: '债券型', index: '指数型', money: '货币型', qdii: 'QDII', feeder: 'ETF 联接', fof: 'FOF' } as Record<string, string>)[fund?.type || ''] || fund?.type}</p>}
                     {metaText && (
                         <p className="text-sm text-theme-secondary mt-1">
                             {metaText}
@@ -110,7 +97,7 @@ export function EstimateCard({
                     />
                     <div className="min-w-0">
                         <div className={cn(
-                            'text-4xl sm:text-6xl lg:text-7xl font-black leading-none tracking-tight transition-colors duration-300',
+                            'text-4xl sm:text-5xl font-semibold leading-none tracking-tight tabular-nums transition-colors duration-160',
                             isPositive ? 'text-up' : isNegative ? 'text-down' : 'text-theme-muted'
                         )}>
                             {isLoading && !estimate && !isCallAuction ? (
@@ -149,7 +136,7 @@ export function EstimateCard({
                 <div className="mt-4 text-xs text-theme-muted flex flex-wrap items-center gap-2">
                     {lastUpdated && !isCallAuction && (
                         <>
-                            <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                            <span className="inline-block w-2 h-2 rounded-full bg-success-soft animate-pulse" />
                             <span>更新: {lastUpdated.toLocaleTimeString('zh-CN')}</span>
                             <span>·</span>
                         </>
@@ -164,13 +151,13 @@ export function EstimateCard({
                 </div>
 
                 {!isCallAuction && officialClose?.display_status === 'pending' && (
-                    <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                    <div className="mt-4 rounded-xl border border-warning/20 bg-warning/10 px-4 py-3 text-sm text-warning">
                         {officialClose.message || '真实涨跌情况稍后更新'}
                     </div>
                 )}
 
                 {!isCallAuction && officialClose?.display_status === 'ready' && (
-                    <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3">
+                    <div className="mt-4 rounded-xl border border-accent/20 bg-accent/10 px-4 py-3">
                         <div className="text-xs tracking-[0.18em] text-theme-muted">
                             {officialClose.date ? `${officialClose.date} 官方收盘结果` : '官方收盘结果'}
                         </div>

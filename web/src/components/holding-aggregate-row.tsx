@@ -17,7 +17,7 @@ export function HoldingAggregateRow({ aggregate, metricScope, estimateMetrics, h
   const [isExpanded, setIsExpanded] = useState(false)
   const metrics = resolveAggregateMetrics(aggregate, estimateMetrics, metricScope)
   const name = aggregate.fund?.name || aggregate.fund_id
-  return <article data-testid="holding-aggregate-row" data-fund-id={aggregate.fund_id} className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]">
+  return <article data-testid="holding-aggregate-row" data-fund-id={aggregate.fund_id} className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]">
     <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1.4fr)_1fr_1fr_1fr_auto] lg:items-center">
       <div className="min-w-0"><h3 className="break-words text-base font-semibold text-theme-primary">{name}</h3><p className="mt-1 text-sm text-theme-secondary">{aggregate.fund_id} · {aggregate.holding_count} 笔</p>{metrics.partial && <p className="mt-2 text-sm text-[var(--accent-secondary)]">仅显示已计价部分</p>}</div>
       <dl className="grid grid-cols-3 gap-3 lg:col-span-3 lg:contents">

@@ -13,20 +13,16 @@ interface BrandMarkProps {
 export function BrandMark({ subtitle, href = '/', className, compact = false }: BrandMarkProps) {
   const content = (
     <>
-      <div className="relative">
+      <div>
         <div className={cn(
-          'flex items-center justify-center bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20',
-          compact ? 'h-9 w-9 rounded-xl' : 'h-11 w-11 rounded-2xl'
+          'flex items-center justify-center border border-[var(--card-border)] bg-[var(--accent-soft)] text-[var(--accent-primary)]',
+          compact ? 'h-9 w-9 rounded-lg' : 'h-11 w-11 rounded-lg'
         )}>
           <Activity className={compact ? 'h-5 w-5' : 'h-6 w-6'} />
         </div>
-        <div className={cn(
-          'absolute -inset-1 bg-gradient-to-br from-cyan-500 to-blue-600 opacity-30 blur',
-          compact ? 'rounded-xl' : 'rounded-2xl'
-        )} />
       </div>
       <div>
-        <div className={cn('font-bold gradient-text', compact ? 'text-base' : 'text-lg')}>涨了多少</div>
+        <div className={cn('font-semibold tracking-tight text-theme-primary', compact ? 'text-base' : 'text-lg')}>涨了多少</div>
         {!compact && <div className="text-xs text-theme-muted">{subtitle}</div>}
       </div>
     </>

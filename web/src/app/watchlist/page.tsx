@@ -549,7 +549,7 @@ export default function WatchlistPage() {
             <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="text-sm text-theme-muted">分组总览</div>
-                <div className="mt-1 text-3xl font-black text-theme-primary">
+                <div className="mt-1 text-3xl font-semibold text-theme-primary">
                   {watchlistGroups.length} 个分组 / {totalWatchlistFunds} 只基金
                 </div>
               </div>
@@ -573,7 +573,7 @@ export default function WatchlistPage() {
                   value={groupName}
                   onChange={(event) => setGroupName(event.target.value)}
                   placeholder="例如：核心观察"
-                  className="auth-input w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-theme-primary outline-none placeholder:text-theme-muted"
+                  className="auth-input w-full rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-theme-primary outline-none placeholder:text-theme-muted"
                 />
               </label>
 
@@ -583,7 +583,7 @@ export default function WatchlistPage() {
                   value={groupDescription}
                   onChange={(event) => setGroupDescription(event.target.value)}
                   placeholder="例如：长期定投、行业轮动等"
-                  className="auth-input w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-theme-primary outline-none placeholder:text-theme-muted"
+                  className="auth-input w-full rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-theme-primary outline-none placeholder:text-theme-muted"
                 />
               </label>
             </div>
@@ -623,11 +623,11 @@ export default function WatchlistPage() {
                   }}
                   disabled={watchlistGroups.length === 0}
                   className={cn(
-                    "watchlist-select-shell group relative block w-full overflow-hidden rounded-[24px] border border-[var(--input-border)] px-4 py-3 text-left transition-all duration-200",
-                    "hover:border-cyan-400/35 hover:bg-[var(--input-bg)] focus:outline-none focus-visible:border-cyan-400/55 focus-visible:bg-[var(--input-bg)] focus-visible:shadow-[0_14px_30px_rgba(34,211,238,0.12)]",
+                    "watchlist-select-shell group relative block w-full overflow-hidden rounded-xl border border-[var(--input-border)] px-4 py-3 text-left transition-all duration-200",
+                    "hover:border-accent/35 hover:bg-[var(--input-bg)] focus:outline-none focus-visible:border-accent/55 focus-visible:bg-[var(--input-bg)] focus-visible:shadow-none",
                     "disabled:cursor-not-allowed disabled:opacity-70",
                     isGroupMenuOpen &&
-                      "border-cyan-400/55 bg-[var(--input-bg)] shadow-[0_14px_30px_rgba(34,211,238,0.12)]",
+                      "border-accent/55 bg-[var(--input-bg)] shadow-none",
                   )}
                   aria-haspopup="listbox"
                   aria-expanded={isGroupMenuOpen}
@@ -660,7 +660,7 @@ export default function WatchlistPage() {
                     </div>
                     <ChevronDown
                       className={cn(
-                        "h-4 w-4 shrink-0 text-cyan-300 transition-all duration-300",
+                        "h-4 w-4 shrink-0 text-accent transition-all duration-300",
                         isGroupMenuOpen
                           ? "rotate-180"
                           : "group-hover:translate-y-0.5",
@@ -687,7 +687,7 @@ export default function WatchlistPage() {
                     className={cn(
                       "relative z-10 flex w-full items-start justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors",
                       !selectedGroup
-                        ? "bg-cyan-500/14 text-theme-primary"
+                        ? "bg-accent/14 text-theme-primary"
                         : "text-theme-secondary hover:bg-[var(--input-bg)] hover:text-theme-primary",
                     )}
                     role="option"
@@ -700,7 +700,7 @@ export default function WatchlistPage() {
                       </div>
                     </div>
                     {!selectedGroup && (
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" />
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
                     )}
                   </button>
 
@@ -717,7 +717,7 @@ export default function WatchlistPage() {
                         className={cn(
                           "relative z-10 flex w-full items-start justify-between gap-3 rounded-[18px] px-4 py-3 text-left transition-colors",
                           active
-                            ? "bg-cyan-500/14 text-theme-primary"
+                            ? "bg-accent/14 text-theme-primary"
                             : "text-theme-secondary hover:bg-[var(--input-bg)] hover:text-theme-primary",
                         )}
                         role="option"
@@ -733,7 +733,7 @@ export default function WatchlistPage() {
                           </div>
                         </div>
                         {active && (
-                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" />
+                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
                         )}
                       </button>
                     );
@@ -757,7 +757,7 @@ export default function WatchlistPage() {
                     );
                   }}
                   placeholder="搜索基金代码或名称"
-                  className="auth-input w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-theme-primary outline-none placeholder:text-theme-muted"
+                  className="auth-input w-full rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-theme-primary outline-none placeholder:text-theme-muted"
                   role="combobox"
                   aria-haspopup="listbox"
                   aria-expanded={shouldShowFundSearchMenu}
@@ -774,7 +774,7 @@ export default function WatchlistPage() {
                 >
                   {isFundSearchLoading ? (
                     <div className="flex items-center gap-2 rounded-[18px] px-4 py-3 text-sm text-theme-secondary">
-                      <LoaderCircle className="h-4 w-4 animate-spin text-cyan-300" />
+                      <LoaderCircle className="h-4 w-4 animate-spin text-accent" />
                       正在搜索基金…
                     </div>
                   ) : visibleFundResults.length > 0 ? (
@@ -814,7 +814,7 @@ export default function WatchlistPage() {
                           className={cn(
                             "h-4 w-4 shrink-0",
                             selectedGroup
-                              ? "text-cyan-300"
+                              ? "text-accent"
                               : "text-theme-muted",
                           )}
                         />
@@ -850,7 +850,7 @@ export default function WatchlistPage() {
                         value={groupSearchQuery}
                         onChange={(event) => setGroupSearchQuery(event.target.value)}
                         placeholder="搜索分组名称"
-                        className="auth-input w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] py-3 pl-11 pr-4 text-theme-primary outline-none placeholder:text-theme-muted"
+                        className="auth-input w-full rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] py-3 pl-11 pr-4 text-theme-primary outline-none placeholder:text-theme-muted"
                       />
                     </div>
                     <div className="text-sm text-theme-secondary">
@@ -863,7 +863,7 @@ export default function WatchlistPage() {
 
                   <div className="space-y-2">
                     <div className="text-sm font-medium text-theme-muted">显示范围</div>
-                    <div className="flex rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] p-1">
+                    <div className="flex rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] p-1">
                       {(
                         [
                           { id: "all", label: "全部分组", icon: Layers3 },
@@ -895,7 +895,7 @@ export default function WatchlistPage() {
                 </div>
 
                 {focusedGroup && (
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--accent-primary)]/25 bg-[var(--accent-primary)]/8 px-4 py-3">
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--accent-primary)]/25 bg-[var(--accent-primary)]/8 px-4 py-3">
                     <div className="flex items-center gap-2 text-sm text-theme-secondary">
                       <span>正在浏览</span>
                       <strong className="text-theme-primary">{focusedGroup.name}</strong>
@@ -909,7 +909,7 @@ export default function WatchlistPage() {
                 <div className="mt-5">
                   <div className="mb-3 text-sm text-theme-muted">分组导航</div>
                   {filteredGroups.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-[var(--card-border)] px-4 py-6 text-sm text-theme-secondary">
+                    <div className="rounded-xl border border-dashed border-[var(--card-border)] px-4 py-6 text-sm text-theme-secondary">
                       没有匹配的分组，试试别的关键词。
                     </div>
                   ) : (
@@ -923,10 +923,10 @@ export default function WatchlistPage() {
                             onClick={() => handleFocusGroup(group.id)}
                             className={cn(
                               "group relative shrink-0 overflow-hidden rounded-full border px-3 py-2 text-xs transition-all duration-200",
-                              "hover:-translate-y-0.5 hover:shadow-[0_10px_22px_rgba(34,211,238,0.10)] active:scale-[0.97]",
+                              "hover:-translate-y-0.5 hover:shadow-none active:scale-[0.97]",
                               active
-                                ? "border-cyan-400/50 bg-cyan-400/15 text-theme-primary shadow-[0_10px_22px_rgba(34,211,238,0.12)]"
-                                : "border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-cyan-400/35 hover:text-theme-primary",
+                                ? "border-accent/50 bg-accent/15 text-theme-primary shadow-none"
+                                : "border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary hover:border-accent/35 hover:text-theme-primary",
                               animatingNavGroupId === group.id &&
                                 "action-button-pop",
                             )}
@@ -934,7 +934,7 @@ export default function WatchlistPage() {
                             <span className="action-button-shine" />
                             <span className="relative z-10 inline-flex items-center gap-1.5">
                               {active && (
-                                <span className="h-1.5 w-1.5 rounded-full bg-cyan-200 shadow-[0_0_10px_rgba(165,243,252,0.9)]" />
+                                <span className="h-1.5 w-1.5 rounded-full bg-accent-soft shadow-none" />
                               )}
                               {group.name}
                             </span>
@@ -980,15 +980,15 @@ export default function WatchlistPage() {
                           "var(--account-shell-anchor-offset, 112px)",
                       }}
                       className={cn(
-                        "rounded-[32px] border border-[var(--card-border)] p-6 glass transition-all duration-200",
+                        "rounded-xl border border-[var(--card-border)] p-6 glass transition-all duration-200",
                         isDragging &&
-                          "scale-[0.99] border-cyan-400/35 shadow-[0_20px_40px_rgba(34,211,238,0.12)] opacity-80",
+                          "scale-[0.99] border-accent/35 shadow-none opacity-80",
                         isDragOver &&
-                          "border-cyan-400/40 shadow-[0_18px_34px_rgba(34,211,238,0.10)]",
+                          "border-accent/40 shadow-none",
                       )}
                     >
                       <div
-                        className={`mb-6 rounded-[28px] bg-gradient-to-r ${watchlistAccentToClass(group.accent)} p-5`}
+                        className={`mb-6 rounded-xl bg-[var(--accent-soft)] ${watchlistAccentToClass(group.accent)} p-5`}
                       >
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                           <div>
@@ -1006,9 +1006,9 @@ export default function WatchlistPage() {
                                   }}
                                   className={cn(
                                     "group/drag inline-flex cursor-grab select-none items-center gap-1 rounded-full border border-[var(--input-border)] bg-[var(--input-bg)]/70 px-2 py-1 text-[11px] text-theme-muted transition-all duration-200 active:cursor-grabbing",
-                                    "hover:border-cyan-400/35 hover:bg-cyan-400/10 hover:text-theme-primary",
+                                    "hover:border-accent/35 hover:bg-accent/10 hover:text-theme-primary",
                                     isDragging &&
-                                      "border-cyan-400/45 bg-cyan-400/14 text-theme-primary action-button-pop",
+                                      "border-accent/45 bg-accent/14 text-theme-primary action-button-pop",
                                   )}
                                   aria-label={`拖拽调整 ${group.name} 的排序`}
                                   title="拖拽调整排序"
@@ -1017,11 +1017,11 @@ export default function WatchlistPage() {
                                   拖拽排序
                                 </button>
                               )}
-                              <div className="text-2xl font-black text-theme-primary">
+                              <div className="text-2xl font-semibold text-theme-primary">
                                 {group.name}
                               </div>
                               {isFocused && (
-                                <span className="rounded-full border border-cyan-400/35 bg-cyan-400/10 px-2 py-1 text-[11px] tracking-[0.18em] text-cyan-200">
+                                <span className="rounded-full border border-accent/35 bg-accent/10 px-2 py-1 text-[11px] tracking-[0.18em] text-accent">
                                   当前分组
                                 </span>
                               )}
@@ -1057,11 +1057,11 @@ export default function WatchlistPage() {
                                 savingGroupId === group.id
                               }
                               className={cn(
-                                "group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition-all duration-200",
-                                "hover:-translate-y-0.5 hover:border-cyan-400/35 hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)] active:scale-[0.985]",
+                                "group relative inline-flex items-center gap-2 overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition-all duration-200",
+                                "hover:-translate-y-0.5 hover:border-accent/35 hover:text-theme-primary hover:shadow-none active:scale-[0.985]",
                                 "disabled:cursor-not-allowed disabled:opacity-70",
                                 animatingEditGroupId === group.id &&
-                                  "action-button-pop border-cyan-400/40 bg-cyan-500/12 text-theme-primary",
+                                  "action-button-pop border-accent/40 bg-accent/12 text-theme-primary",
                               )}
                             >
                               <span className="action-button-shine" />
@@ -1072,10 +1072,10 @@ export default function WatchlistPage() {
                               type="button"
                               onClick={() => toggleGroupCollapse(group.id)}
                               className={cn(
-                                "group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition-all duration-200",
-                                "hover:-translate-y-0.5 hover:border-cyan-400/35 hover:text-theme-primary hover:shadow-[0_12px_24px_rgba(34,211,238,0.10)] active:scale-[0.985]",
+                                "group relative inline-flex items-center gap-2 overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition-all duration-200",
+                                "hover:-translate-y-0.5 hover:border-accent/35 hover:text-theme-primary hover:shadow-none active:scale-[0.985]",
                                 animatingCollapseGroupId === group.id &&
-                                  "action-button-pop border-cyan-400/40 bg-cyan-500/12 text-theme-primary",
+                                  "action-button-pop border-accent/40 bg-accent/12 text-theme-primary",
                               )}
                             >
                               <span className="action-button-shine" />
@@ -1100,11 +1100,11 @@ export default function WatchlistPage() {
                                 savingGroupId === group.id
                               }
                               className={cn(
-                                "group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition-all duration-200",
-                                "hover:-translate-y-0.5 hover:border-rose-400/40 hover:bg-rose-500/12 hover:text-rose-200 active:scale-[0.985]",
+                                "group relative inline-flex items-center gap-2 overflow-hidden rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition-all duration-200",
+                                "hover:-translate-y-0.5 hover:border-danger/40 hover:bg-danger/12 hover:text-danger active:scale-[0.985]",
                                 "disabled:cursor-not-allowed disabled:opacity-80",
                                 deletingGroupID === group.id &&
-                                  "danger-button-pop border-rose-400/45 bg-rose-500/14 text-down",
+                                  "danger-button-pop border-danger/45 bg-danger/14 text-down",
                               )}
                             >
                               <span className="action-button-shine" />
@@ -1124,11 +1124,11 @@ export default function WatchlistPage() {
                       </div>
 
                       {isCollapsed ? (
-                        <div className="rounded-2xl border border-dashed border-[var(--card-border)] px-5 py-6 text-center text-sm text-theme-secondary">
+                        <div className="rounded-xl border border-dashed border-[var(--card-border)] px-5 py-6 text-center text-sm text-theme-secondary">
                           当前分组已折叠，展开后可查看分组内基金。
                         </div>
                       ) : group.funds.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-[var(--card-border)] px-5 py-10 text-center text-sm text-theme-secondary">
+                        <div className="rounded-xl border border-dashed border-[var(--card-border)] px-5 py-10 text-center text-sm text-theme-secondary">
                           这个分组还没有基金，可从上方搜索结果加入。
                         </div>
                       ) : (
@@ -1163,14 +1163,14 @@ export default function WatchlistPage() {
         {editingGroupId && (
           <>
             <div
-              className="watchlist-editor-backdrop fixed inset-0 z-[70] bg-slate-950/62 backdrop-blur-sm"
+              className="watchlist-editor-backdrop fixed inset-0 z-[70] bg-overlay/62 backdrop-blur-sm"
               onClick={closeGroupEditor}
             />
             <div className="pointer-events-none fixed inset-0 z-[71] flex items-center justify-center px-4 py-6">
-              <div className="watchlist-editor-panel pointer-events-auto w-full max-w-2xl rounded-[32px] border border-[var(--card-border)] bg-[var(--card-bg)]/95 p-6 shadow-[0_28px_80px_rgba(2,8,23,0.40)] backdrop-blur-xl">
+              <div className="watchlist-editor-panel pointer-events-auto w-full max-w-2xl rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/95 p-6 shadow-none backdrop-blur-xl">
                 <div className="mb-6 flex items-start justify-between gap-4">
                   <div>
-                    <div className="text-xs tracking-[0.24em] text-cyan-300">
+                    <div className="text-xs tracking-[0.24em] text-accent">
                       编辑分组
                     </div>
                     <div className="mt-2 text-2xl font-bold text-theme-primary">
@@ -1183,7 +1183,7 @@ export default function WatchlistPage() {
                   <button
                     type="button"
                     onClick={closeGroupEditor}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary transition-all duration-200 hover:border-cyan-400/35 hover:text-theme-primary"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] text-theme-secondary transition-all duration-200 hover:border-accent/35 hover:text-theme-primary"
                     aria-label="关闭编辑分组弹窗"
                   >
                     <X className="h-4 w-4" />
@@ -1201,7 +1201,7 @@ export default function WatchlistPage() {
                         setEditingGroupName(event.target.value)
                       }
                       placeholder="例如：核心观察"
-                      className="auth-input w-full rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-base font-semibold text-theme-primary outline-none placeholder:text-theme-muted"
+                      className="auth-input w-full rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-base font-semibold text-theme-primary outline-none placeholder:text-theme-muted"
                     />
                   </label>
 
@@ -1216,13 +1216,13 @@ export default function WatchlistPage() {
                       }
                       rows={4}
                       placeholder="例如：长期观察、行业主题"
-                      className="auth-input w-full resize-y rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm leading-6 text-theme-primary outline-none placeholder:text-theme-muted"
+                      className="auth-input w-full resize-y rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3 text-sm leading-6 text-theme-primary outline-none placeholder:text-theme-muted"
                     />
                   </label>
 
                   <div>
                     <div className="mb-3 flex items-center gap-2 text-sm text-theme-secondary">
-                      <Palette className="h-4 w-4 text-cyan-300" />
+                      <Palette className="h-4 w-4 text-accent" />
                       分组颜色
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -1236,15 +1236,15 @@ export default function WatchlistPage() {
                             className={cn(
                               "group rounded-[22px] border px-4 py-4 text-left transition-all duration-200",
                               active
-                                ? `${option.shell} shadow-[0_14px_28px_rgba(15,23,42,0.12)]`
-                                : "border-[var(--input-border)] bg-[var(--input-bg)]/70 text-theme-secondary hover:border-cyan-400/35 hover:text-theme-primary",
+                                ? `${option.shell} shadow-none`
+                                : "border-[var(--input-border)] bg-[var(--input-bg)]/70 text-theme-secondary hover:border-accent/35 hover:text-theme-primary",
                             )}
                           >
                             <div className="flex items-center justify-between gap-3">
                               <div className="flex items-center gap-3">
                                 <span
                                   className={cn(
-                                    "h-3 w-3 rounded-full shadow-[0_0_12px_rgba(255,255,255,0.18)]",
+                                    "h-3 w-3 rounded-full shadow-none",
                                     option.dot,
                                   )}
                                 />
@@ -1268,7 +1268,7 @@ export default function WatchlistPage() {
                     type="button"
                     onClick={closeGroupEditor}
                     disabled={savingGroupId !== null}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-5 py-3 text-sm text-theme-secondary transition-all duration-200 hover:border-cyan-400/35 hover:text-theme-primary disabled:cursor-not-allowed disabled:opacity-70"
+                    className="inline-flex items-center gap-2 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-5 py-3 text-sm text-theme-secondary transition-all duration-200 hover:border-accent/35 hover:text-theme-primary disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     取消
                   </button>
@@ -1284,8 +1284,8 @@ export default function WatchlistPage() {
                     }}
                     disabled={savingGroupId !== null}
                     className={cn(
-                      "group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-600 px-5 py-3 text-sm font-medium text-theme-primary transition-all duration-200",
-                      "hover:-translate-y-0.5 hover:shadow-[0_18px_35px_rgba(14,165,233,0.28)] active:scale-[0.985]",
+                      "group relative inline-flex items-center gap-2 overflow-hidden rounded-xl bg-[var(--accent-soft)]    px-5 py-3 text-sm font-medium text-theme-primary transition-all duration-200",
+                      "hover:-translate-y-0.5 hover:shadow-none active:scale-[0.985]",
                       "disabled:cursor-not-allowed disabled:opacity-80",
                       savingGroupId !== null && "action-button-pop",
                     )}

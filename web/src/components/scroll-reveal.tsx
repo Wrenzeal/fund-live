@@ -1,7 +1,6 @@
 'use client'
 
 import { Children, isValidElement, useEffect, useRef, useState, type ReactNode } from 'react'
-import { cn } from '@/lib/utils'
 
 export type RevealVariant = 'fade-up' | 'fade-in' | 'scale-in'
 
@@ -44,42 +43,9 @@ export function useLazyReveal<T extends HTMLElement>() {
   return [ref, hasEnteredView] as const
 }
 
-export function ScrollReveal({
-  children,
-  delay = 0,
-  className,
-  variant = 'fade-up',
-}: {
-  children: ReactNode
-  delay?: number
-  className?: string
-  variant?: RevealVariant
-}) {
-  const [ref, hasEnteredView] = useLazyReveal<HTMLDivElement>()
-  const initialVariantClass = {
-    'fade-up': 'translate-y-6 opacity-0',
-    'fade-in': 'opacity-0',
-    'scale-in': 'scale-[0.98] opacity-0',
-  }[variant]
-  const enteredVariantClass = {
-    'fade-up': 'translate-y-0 opacity-100',
-    'fade-in': 'opacity-100',
-    'scale-in': 'scale-100 opacity-100',
-  }[variant]
-
-  return (
-    <div
-      ref={ref}
-      className={cn(
-        'transition-[opacity,transform] duration-500 ease-out motion-reduce:translate-y-0 motion-reduce:scale-100 motion-reduce:opacity-100',
-        hasEnteredView ? enteredVariantClass : initialVariantClass,
-        className
-      )}
-      style={{ transitionDelay: hasEnteredView ? `${delay}ms` : '0ms' }}
-    >
-      {children}
-    </div>
-  )
+// Product data is immediately visible; keep this wrapper API for existing call sites.
+export function ScrollReveal({ children, className }: { children: ReactNode; delay?: number; className?: string; variant?: RevealVariant }) {
+  return <div className={className}>{children}</div>
 }
 
 export function ScrollRevealStack({

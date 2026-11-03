@@ -45,7 +45,7 @@ export default function AnnouncementDetailPageClient({ initialData, serverUnavai
         EyebrowIcon={Bell}
       >
         <Surface radius="xl" padding="lg" className="text-center">
-          <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
+          <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-accent" />
           <div className="mt-4 text-sm text-theme-secondary">正在读取公告详情…</div>
         </Surface>
       </SiteShell>
@@ -105,14 +105,14 @@ export default function AnnouncementDetailPageClient({ initialData, serverUnavai
         <Surface as="section" radius="xl" padding="lg">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-3 py-1 text-xs tracking-[0.18em] text-cyan-200">
+              <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-xs tracking-[0.18em] text-accent">
                 <Bell className="h-3.5 w-3.5" />
                 {announcement.source_type === 'changelog' ? 'CHANGELOG 导入' : '手动公告'}
               </div>
               <p className="mt-4 max-w-3xl text-sm leading-7 text-theme-secondary">{announcement.summary}</p>
             </div>
 
-            <div className="rounded-[28px] border border-[var(--card-border)] bg-[var(--input-bg)]/70 p-5 text-sm text-theme-secondary">
+            <div className="rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/70 p-5 text-sm text-theme-secondary">
               <div>发布时间：<time dateTime={announcement.published_at}>{new Date(announcement.published_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}</time></div>
               <div className="mt-2">更新：<time dateTime={announcement.updated_at}>{new Date(announcement.updated_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}</time></div>
               <div className="mt-2">发布与维护：FundLive 项目</div>

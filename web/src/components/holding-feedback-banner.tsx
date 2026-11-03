@@ -17,10 +17,10 @@ export function HoldingFeedbackBanner({ feedback, showIcon = true }: HoldingFeed
   return (
     <div
       className={cn(
-        'flex items-start gap-3 rounded-[28px] border px-4 py-4 text-sm',
+        'flex items-start gap-3 rounded-xl border px-4 py-4 text-sm',
         feedback.type === 'success'
-          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-50'
-          : 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+          ? 'border-success/30 bg-success/10 text-success'
+          : 'border-warning/30 bg-warning/10 text-warning'
       )}
     >
       {showIcon && (

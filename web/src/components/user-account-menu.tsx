@@ -46,7 +46,7 @@ function AccountAvatar({ src, displayName, size }: AccountAvatarProps) {
       className={cn(
         'flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--card-border)]',
         accountAvatarSizeClass[size],
-        !showImage && 'bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-600 font-bold text-white shadow-lg shadow-cyan-500/20'
+        !showImage && 'bg-[var(--accent-soft)]    font-bold text-theme-primary shadow-none'
       )}
     >
       {showImage ? (
@@ -66,10 +66,10 @@ function AccountAvatar({ src, displayName, size }: AccountAvatarProps) {
 }
 
 const accountMenuOptionClass =
-  'account-menu-option group flex items-center gap-3 rounded-2xl px-3 py-3 text-left'
+  'account-menu-option group flex items-center gap-3 rounded-xl px-3 py-3 text-left'
 
 const accountMenuButtonClass =
-  'account-menu-option group flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left disabled:cursor-not-allowed disabled:opacity-60'
+  'account-menu-option group flex w-full items-center justify-between rounded-xl px-3 py-3 text-left disabled:cursor-not-allowed disabled:opacity-60'
 
 export function UserAccountMenu() {
   const pathname = usePathname()
@@ -81,7 +81,7 @@ export function UserAccountMenu() {
   if (isLoading) {
     return (
       <div className="flex">
-        <div className="glass h-11 w-28 animate-pulse rounded-2xl border border-[var(--card-border)] md:w-36" />
+        <div className="glass h-11 w-28 animate-pulse rounded-xl border border-[var(--card-border)] md:w-36" />
       </div>
     )
   }
@@ -101,7 +101,7 @@ export function UserAccountMenu() {
         <Link
           href={authRouteWithReturnTo('/auth/register', pathname)}
           className={cn(
-            'group relative hidden h-11 items-center overflow-hidden rounded-xl bg-[var(--accent-primary)] px-3 text-sm font-medium text-white transition-[filter] md:inline-flex',
+            'group relative hidden h-11 items-center overflow-hidden rounded-xl bg-[var(--accent-primary)] px-3 text-sm font-medium text-[var(--on-accent)] transition-[filter] md:inline-flex',
             'hover:brightness-105'
           )}
         >
@@ -160,7 +160,7 @@ export function UserAccountMenu() {
         aria-label={`打开${displayName}的账户菜单`}
         aria-expanded={isOpen}
         className={cn(
-          'flex items-center gap-2 rounded-2xl border border-[var(--input-border)] px-2.5 py-2.5 transition-colors md:gap-3 md:px-3',
+          'flex items-center gap-2 rounded-xl border border-[var(--input-border)] px-2.5 py-2.5 transition-colors md:gap-3 md:px-3',
           'glass hover:bg-[var(--input-bg)]'
         )}
       >
@@ -178,7 +178,7 @@ export function UserAccountMenu() {
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
           <div className="absolute right-0 top-full z-50 mt-3 w-[calc(100vw-1.5rem)] max-w-96 sm:w-96">
-            <div className="glass switcher-dropdown-panel overflow-hidden rounded-2xl border border-[var(--card-border)] shadow-2xl">
+            <div className="glass switcher-dropdown-panel overflow-hidden rounded-xl border border-[var(--card-border)] shadow-none">
               <div className="border-b border-[var(--card-border)] px-4 py-4">
                 <div className="mb-3 flex items-center gap-3">
                   <AccountAvatar src={user.avatar_url} displayName={displayName} size="md" />
@@ -189,12 +189,12 @@ export function UserAccountMenu() {
                   </div>
                 </div>
 
-                <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-300">
+                <div className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-xs text-accent">
                   <ShieldCheck className="h-3.5 w-3.5" />
                   用户 ID: {user.id}
                 </div>
                 {user.is_admin && (
-                  <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
+                  <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-warning/25 bg-warning/10 px-3 py-1 text-xs text-warning">
                     <ShieldUser className="h-3.5 w-3.5" />
                     管理员
                   </div>
@@ -212,7 +212,7 @@ export function UserAccountMenu() {
                   onClick={() => setIsOpen(false)}
                   className={accountMenuOptionClass}
                 >
-                  <div className="account-menu-icon shrink-0 rounded-xl bg-cyan-500/15 p-2 text-cyan-300">
+                  <div className="account-menu-icon shrink-0 rounded-xl bg-accent/15 p-2 text-accent">
                     <Layers3 className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -226,7 +226,7 @@ export function UserAccountMenu() {
                   onClick={() => setIsOpen(false)}
                   className={accountMenuOptionClass}
                 >
-                  <div className="account-menu-icon shrink-0 rounded-xl bg-amber-500/15 p-2 text-amber-300">
+                  <div className="account-menu-icon shrink-0 rounded-xl bg-warning/15 p-2 text-warning">
                     <Wallet className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -240,7 +240,7 @@ export function UserAccountMenu() {
                   onClick={() => setIsOpen(false)}
                   className={accountMenuOptionClass}
                 >
-                  <div className="account-menu-icon shrink-0 rounded-xl bg-rose-500/15 p-2 text-rose-300">
+                  <div className="account-menu-icon shrink-0 rounded-xl bg-danger/15 p-2 text-danger">
                     <Bug className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -254,7 +254,7 @@ export function UserAccountMenu() {
                   onClick={() => setIsOpen(false)}
                   className={accountMenuOptionClass}
                 >
-                  <div className="account-menu-icon shrink-0 rounded-xl bg-emerald-500/15 p-2 text-emerald-300">
+                  <div className="account-menu-icon shrink-0 rounded-xl bg-success/15 p-2 text-success">
                     <Bell className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -284,7 +284,7 @@ export function UserAccountMenu() {
                       <div className="flex min-w-0 flex-1 items-center gap-3">
                         <div className={cn(
                           'account-menu-icon shrink-0 rounded-xl p-2',
-                          active ? 'bg-cyan-500/15 text-cyan-300' : 'bg-[var(--input-bg)] text-theme-muted'
+                          active ? 'bg-accent/15 text-accent' : 'bg-[var(--input-bg)] text-theme-muted'
                         )}>
                           {active ? <Check className="h-4 w-4" /> : <Radio className="h-4 w-4" />}
                         </div>
@@ -293,7 +293,7 @@ export function UserAccountMenu() {
                           <div className="truncate text-xs text-theme-muted">{source.description}</div>
                         </div>
                       </div>
-                      {active && <span className="shrink-0 whitespace-nowrap rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-300">当前使用</span>}
+                      {active && <span className="shrink-0 whitespace-nowrap rounded-full border border-accent/25 bg-accent/10 px-2 py-1 text-xs text-accent">当前使用</span>}
                     </button>
                   )
                 })}
@@ -308,7 +308,7 @@ export function UserAccountMenu() {
                   className={accountMenuButtonClass}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <div className="account-menu-icon shrink-0 rounded-xl bg-rose-500/15 p-2 text-rose-300">
+                    <div className="account-menu-icon shrink-0 rounded-xl bg-danger/15 p-2 text-danger">
                       {isLoggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
                     </div>
                     <div className="min-w-0 flex-1">

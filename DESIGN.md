@@ -2,9 +2,9 @@
 
 ## Source of truth
 - Status: Active
-- Last refreshed: 2026-11-02
+- Last refreshed: 2026-11-03
 - Primary product surfaces: Fund home `/`, fund observations `/observations` and `/observations/[fundId]`, holdings `/holdings`, watchlist `/watchlist`, market research `/research`, issues, and product announcements.
-- Current scope: `.omx/plans/fund-observation-simplification.md`. Old fund analysis detail/rankings URLs redirect to observations; scoring and Lean remain compatibility/research internals, not production decision UI.
+- Current scope: `.omx/plans/fundlive-2-implementation.md`, the user-approved paper-white/pine system and fund holding structure. Old fund analysis detail/rankings URLs redirect to observations; scoring and Lean remain compatibility/research internals, not production decision UI.
 - Evidence reviewed:
   - `web/src/app/analysis/[fundId]/page-client.tsx`
   - `web/src/components/fund-analysis-card.tsx`
@@ -65,14 +65,14 @@
 - Content hierarchy:
   - Observation detail order: fund identity and raw disclosure metadata → source status → notice filters and dated source list → concise method boundary.
   - Observation entry order: concise module purpose and shared search → recently viewed funds → existing valuation/research links.
-  - Holding classification card order: effective category/manual tags → manual correction note → automatic sector/theme exposure modules → confidence hints.
-  - Holdings overview order: principal → total value → total return → today P/L → today change; total return must state whether it is official-ready or intraday-confirmed scope.
+  - Fund holding structure: fund type remains beside fund identity. Industry rows show raw returned weights on a fixed 0–100% scale; related themes and manual annotations are separate keyboard-accessible views. Keep each snapshot date/source and qualitative mapping coverage beside its data; never infer remainder from Top 3.
+  - Holdings overview order: current market value → holding P/L and dated current-position change → remaining cost. P/L compares only positions priced under the chosen scope and is not lifetime account profit.
   - Holdings page: summary and grouped fund rows share the default view. Current market value leads, followed by holding P/L and dated daily movement; remaining cost is secondary. One primary “记一笔” opens the buy form. Ledger, review/reminders and import/reconciliation stay secondary. Expand fund details for correction, sale, dividends and share adjustment.
 
 ## Design principles
 - Principle 1: Facts, source dates and explicit data gaps first; no inferred investment conclusion.
 - Principle 2: Compress repeated explanations into one explicit method/limitations zone.
-- Principle 3: Prefer progressive disclosure and scroll reveal over stacking many equal-weight cards.
+- Principle 3: Use progressive disclosure instead of equal-weight nested cards. Product data is visible immediately; do not hide money or classification behind scroll-entry choreography.
 - Holdings pages should make each block's job explicit in the navigation label and keep primary actions inside the block that owns them.
 - Observations do not render scores, gauges, recommendation distributions, shadow score comparisons, sentiment labels or investment ranking pools.
 - Date-only publication fields and disclosure periods must be explicit; a fetch timestamp cannot substitute for a source's publication date.
@@ -86,12 +86,12 @@
 - Authentication UX should explain password requirements before submission; backend remains the source of truth and must return generic login failures plus explicit rate-limit feedback.
 
 ## Visual language
-- Color: Theme-variable based dark/classic/cyber system; cyan for neutral/data, rose for positive A-share style, emerald for defensive/negative or risk-down contexts, amber for warnings/limitations.
-- Typography: Strong section titles, compact metadata labels, readable Chinese body copy at 12–14px+ depending on density.
+- Color: Paper-white/pine. classic: canvas #F3F5F2, panel #FFFFFF, ink #202B26, accent #285D49, secondary #58665E. dark: canvas #131A17, panel #1B2420, accent #9CC4AF. cyber keeps the existing preference ID as a higher-contrast pine-dark variant. Red-up/green-down remain independent from brand color; warnings use an amber semantic token. Primary actions pair accent with --on-accent.
+- Typography: Existing Geist / Noto Sans SC sans stack, restrained semibold titles, 14–16px operational copy, 12px provenance, 36–48px primary financial values and tabular numbers. Supporting text has explicit contrast tokens; large type does not make all labels bold.
 - Spacing/layout rhythm: Max width around `max-w-7xl`; use 5–6 unit vertical section rhythm; avoid too many four-column grids on content-heavy panels.
-- Shape/radius/elevation: Rounded cards (`rounded-2xl` / `rounded-3xl`) with glass surfaces; avoid stacking heavy shadows on every nested card.
-- Motion: Keep only functional CSS transitions for menus, loading, submission, and state changes; decorative sweeps, universal hover lifts, and infinite background animations are not part of the default language. Respect `motion-reduce` utilities.
-- Imagery/iconography: Lucide icons for section identity; icons should clarify semantics, not decorate every line. Keep the current activity favicon and wordmark. Browser titles use stable, route-specific metadata; do not animate or rewrite document.title after hydration. Social previews use the generated 1200×630 FundLive image and shared OG/Twitter metadata.
+- Shape/radius/elevation: 8px shared buttons, 12px default Surface panels, restrained 16px larger surfaces. Opaque surfaces and one subtle border establish hierarchy; elevation is reserved for popovers. Legacy glass call sites now render flat panels, without blur, gradients or glow.
+- Motion: Keep functional transitions for menus, loading, submission and states. ScrollReveal remains a compatibility layout wrapper and does not animate product-data entry; research chart lazy activation is separate. Respect reduced motion, and verify theme contrast after finite color transitions settle.
+- Imagery/iconography: Lucide icons for section identity; icons should clarify semantics, not decorate every line. Keep the activity icon and brand name, using an outlined/tinted mark without the former glow or gradient wordmark. Browser titles use stable, route-specific metadata; do not animate or rewrite document.title after hydration. Social previews use the generated 1200×630 FundLive image and shared OG/Twitter metadata.
 
 ## Components
 - Existing components to reuse:
@@ -159,11 +159,11 @@
 
 ## Implementation constraints
 - Framework/styling system: Next.js App Router, React 19, TypeScript, Tailwind CSS v4, theme CSS variables.
-- Design-token constraints: Reuse existing `glass`, `text-theme-*`, `var(--card-*)`, and accent utility patterns.
+- Design-token constraints: Use Surface/ActionButton and --surface-subtle / --card-bg / --card-border / --on-accent. text-accent, text-warning, text-danger, text-success and their soft backgrounds derive from semantic theme tokens. Avoid hardcoded palette utilities and new theme-specific overrides; retained glass/text-theme-* names are compatibility APIs.
 - Performance constraints: No new frontend dependency for motion; use IntersectionObserver and CSS transitions.
 - Compatibility constraints: Existing analysis/research backend APIs and database data remain intact. The new observation endpoint does not invoke score calculation; old public detail/rankings links redirect.
 - Deployment constraints: production frontend runtime must set `BACKEND_URL` to the actual backend listener (`http://127.0.0.1:13896` in the current server), and deployment health checks must target the same backend port.
-- Classification constraints: Manual classification labels are an overlay; never present manual tags as automatic holdings weights, and keep automatic sector/theme breakdown visible.
+- Classification constraints: Snapshot primary labels may already have administrator overrides; derive automatic labels from unchanged breakdown entries. Manual annotations are a separate view and preserve edit permissions/update payloads. Theme weights use the existing mapped split, not official theme allocation. Target ETF provenance is explicit; never infer total holdings coverage from returned rows.
 - Test/screenshot expectations: At minimum run `npm run lint` and `npm run build`; for high-risk visual changes, capture browser screenshots or run visual QA when available.
 
 ## Search and AI discovery
@@ -177,3 +177,12 @@
 ## Open questions
 - Holdings refactor (2026-11-02): `docs/holdings-ux-redesign.md`. Current held-fund market value is the primary amount. Keep official and preview modes explicit; missing data stays unavailable. Partial coverage must use matching priced cost for P/L. Never label cost reduction as redemption proceeds or current holding P/L as lifetime profit. Preserve the three themes, 44px controls, and a first-record flow without demo writes.
 - [ ] Whether strict empirical validation will justify any future scoring product. No unvalidated score may be reintroduced through observation or portfolio labels.
+
+
+## FundLive 2.0 delivery evidence — 2026-11-03
+- Direction approved from docs/design/fundlive-2-concept.html A, adapted to the real product navigation and existing API data rather than copying demo-only routes or content.
+- Shared palette, typography, buttons, Surface, brand and floating surfaces apply across home, holdings, watchlist, observations, research, auth and existing utility screens.
+- Source cleanup removes the prior theme-override/glow/gradient layer. Functional research chart colors and financial calculations are preserved.
+- Local browser fixtures cover original industry weights, ETF denominator, separate dates, keyboard views, empty/error states, administrator save and failure drafts. Existing auction, accounting, auth and SEO regressions remain required.
+- Readability checks measure rendered primary-action/supporting text in all three themes, and classification labels/metadata. This is bounded evidence, not a claim of a complete WCAG audit.
+- Screenshot captures are test fixtures, never real user portfolios. They are stored under ignored logs/test-results; no generated raster ships with the interface.

@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
+import { readabilityIssues } from '../helpers/readability'
 
 type SessionState = 'anonymous' | 'authenticated'
 
@@ -167,7 +168,7 @@ test.describe('authentication and navigation', () => {
     await mockAppApi(page)
     await page.goto('/')
 
-    const themeButton = page.getByRole('button', { name: /主题|暖白|深色/ }).last()
+    const themeButton = page.getByRole('button', { name: /主题|纸白|深色/ }).last()
     await themeButton.focus()
     await expect(themeButton).toBeFocused()
     await themeButton.press('Enter')
@@ -362,4 +363,21 @@ test.describe('authentication and navigation', () => {
     await accountButton.click()
     await expect(page.locator('[data-avatar-state="fallback"]')).toHaveCount(2)
   })
+})
+
+
+test('primary actions and supporting text remain readable in all saved themes', async ({ page }, testInfo) => {
+  await mockAppApi(page)
+  for (const theme of ['classic', 'dark', 'cyber']) {
+    for (const width of [1440, 390]) {
+      await page.addInitScript(value => localStorage.setItem('fund-ui-preferences-v1', JSON.stringify({ themeType: value, viewMode: 'professional' })), theme)
+      await page.setViewportSize({ width, height: 1000 })
+      await page.goto('/auth/login')
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+      await expect(page.getByRole('button', { name: '发送验证码', exact: true })).toBeEnabled()
+      await expect.poll(() => readabilityIssues(page, 'main button, main h1, main p, main label')).toEqual([])
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)
+      await page.screenshot({ path: testInfo.outputPath('login-' + theme + '-' + width + '.png'), fullPage: true })
+    }
+  }
 })

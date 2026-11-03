@@ -52,7 +52,7 @@ export function RegisterPageClient({ returnTo }: { returnTo: string }) {
       footer={(
         <div className="flex items-center justify-between gap-4">
           <span>已经有账号？</span>
-          <Link href={authRouteWithReturnTo('/auth/login', returnTo)} className="font-medium text-cyan-400 transition-colors hover:text-cyan-300">
+          <Link href={authRouteWithReturnTo('/auth/login', returnTo)} className="font-medium text-accent transition-colors hover:text-accent">
             去登录
           </Link>
         </div>
@@ -61,7 +61,7 @@ export function RegisterPageClient({ returnTo }: { returnTo: string }) {
       <form onSubmit={handleSubmit} className="space-y-5">
         <label className="block space-y-2">
           <span className="text-sm text-theme-secondary">显示名称</span>
-          <div className="auth-input-shell flex items-center gap-3 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3">
+          <div className="auth-input-shell flex items-center gap-3 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3">
             <UserRound className="h-4 w-4 text-theme-muted" />
             <input
               type="text"
@@ -76,7 +76,7 @@ export function RegisterPageClient({ returnTo }: { returnTo: string }) {
 
         <label className="block space-y-2">
           <span className="text-sm text-theme-secondary">邮箱</span>
-          <div className="auth-input-shell flex items-center gap-3 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3">
+          <div className="auth-input-shell flex items-center gap-3 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3">
             <Mail className="h-4 w-4 text-theme-muted" />
             <input
               type="email"
@@ -92,7 +92,7 @@ export function RegisterPageClient({ returnTo }: { returnTo: string }) {
 
         <label className="block space-y-2">
           <span className="text-sm text-theme-secondary">密码</span>
-          <div className="auth-input-shell flex items-center gap-3 rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3">
+          <div className="auth-input-shell flex items-center gap-3 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-3">
             <LockKeyhole className="h-4 w-4 text-theme-muted" />
             <input
               type="password"
@@ -108,7 +108,7 @@ export function RegisterPageClient({ returnTo }: { returnTo: string }) {
         </label>
 
         {error && (
-          <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+          <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
             {error}
           </div>
         )}
@@ -116,7 +116,7 @@ export function RegisterPageClient({ returnTo }: { returnTo: string }) {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent-primary)] px-5 py-3.5 text-sm font-semibold text-white transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent-primary)] px-5 py-3.5 text-sm font-semibold text-[var(--on-accent)] transition-[filter] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting ? (
             <>

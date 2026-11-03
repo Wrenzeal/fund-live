@@ -22,14 +22,14 @@ export default function QuantBacktestPage() {
     <div className="min-h-[100dvh]">
       <AppTopBar />
       <main id="main-content" className="container mx-auto max-w-7xl px-4 py-4 md:py-8">
-        <header className="rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/45 p-5 md:p-6">
+        <header className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/45 p-5 md:p-6">
           <Link href="/observations" className="inline-flex items-center gap-2 text-sm text-theme-secondary hover:text-theme-primary">
             <ArrowLeft className="h-4 w-4" />返回基金观察
           </Link>
           <div className="mt-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <div className="flex items-center gap-2 text-2xl font-black text-theme-primary">
-                <BarChart3 className="h-6 w-6 text-cyan-200" />Lean 回测结果
+              <div className="flex items-center gap-2 text-2xl font-semibold text-theme-primary">
+                <BarChart3 className="h-6 w-6 text-accent" />Lean 回测结果
               </div>
               <p className="mt-2 text-sm text-theme-secondary">任务 {jobId.slice(0, 12)} · 周度 Top 5 等权组合</p>
               <p className="mt-2 text-xs text-theme-muted">历史实验档案，不用于生成当前基金的买卖结论。</p>
@@ -43,9 +43,9 @@ export default function QuantBacktestPage() {
 
         <div className="mt-5 space-y-5">
           {isLoading && !job ? (
-            <div className="rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 py-20"><LoadingSpinner text="正在读取回测结果…" /></div>
+            <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 py-20"><LoadingSpinner text="正在读取回测结果…" /></div>
           ) : error ? (
-            <div className="flex items-start gap-3 rounded-3xl border border-amber-500/25 bg-amber-500/10 p-5 text-sm text-amber-100">
+            <div className="flex items-start gap-3 rounded-xl border border-warning/25 bg-warning/10 p-5 text-sm text-warning">
               <CircleAlert className="mt-0.5 h-4 w-4" />回测结果暂时不可用。
             </div>
           ) : (
@@ -57,8 +57,8 @@ export default function QuantBacktestPage() {
                 <Metric label="完成时间" value={job?.completed_at ? new Date(job.completed_at).toLocaleString('zh-CN') : '--'} />
               </section>
 
-              <section className="rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-5 md:p-6">
-                <h2 className="text-lg font-black text-theme-primary">组合与基准曲线</h2>
+              <section className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-5 md:p-6">
+                <h2 className="text-lg font-semibold text-theme-primary">组合与基准曲线</h2>
                 <p className="mt-1 text-xs text-theme-muted">成交费用与滑点已计入组合结果；基准包含沪深300、试点池等权和现金。</p>
                 <div className="mt-5 h-80">
                   {chart.length > 1 ? (
@@ -76,12 +76,12 @@ export default function QuantBacktestPage() {
                 </div>
               </section>
 
-              <section className="rounded-3xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-5 md:p-6">
-                <h2 className="text-lg font-black text-theme-primary">统计摘要</h2>
+              <section className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-5 md:p-6">
+                <h2 className="text-lg font-semibold text-theme-primary">统计摘要</h2>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {metrics.length ? metrics.slice(0, 16).map(([label, value]) => <Metric key={label} label={label} value={value} />) : <div className="text-sm text-theme-muted">暂无统计结果</div>}
                 </div>
-                {job?.error_message && <div className="mt-4 rounded-2xl border border-rose-500/25 bg-rose-500/10 p-4 text-sm text-rose-100">{job.error_message}</div>}
+                {job?.error_message && <div className="mt-4 rounded-xl border border-danger/25 bg-danger/10 p-4 text-sm text-danger">{job.error_message}</div>}
               </section>
             </>
           )}
@@ -93,7 +93,7 @@ export default function QuantBacktestPage() {
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4"><div className="text-[11px] text-theme-muted">{label}</div><div className="mt-1 break-words text-sm font-bold text-theme-primary">{value}</div></div>
+  return <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/35 p-4"><div className="text-[11px] text-theme-muted">{label}</div><div className="mt-1 break-words text-sm font-bold text-theme-primary">{value}</div></div>
 }
 
 function statusLabel(status: string) {

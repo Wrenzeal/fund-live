@@ -15,10 +15,10 @@ interface SurfaceProps extends HTMLAttributes<HTMLElement> {
 }
 
 const toneClass: Record<SurfaceTone, string> = {
-  default: 'glass border border-[var(--card-border)]',
-  strong: 'glass-strong border border-[var(--card-border)]',
-  subtle: 'border border-[var(--card-border)] bg-[var(--card-bg)]/35',
-  dashed: 'glass border border-dashed border-[var(--card-border)]',
+  default: 'border border-[var(--card-border)] bg-[var(--card-bg)]',
+  strong: 'border border-[var(--card-border)] bg-[var(--card-bg)]',
+  subtle: 'border border-[var(--card-border)] bg-[var(--surface-subtle)]',
+  dashed: 'border border-dashed border-[var(--card-border)] bg-[var(--card-bg)]',
 }
 
 const paddingClass: Record<SurfacePadding, string> = {
@@ -29,9 +29,9 @@ const paddingClass: Record<SurfacePadding, string> = {
 }
 
 const radiusClass: Record<SurfaceRadius, string> = {
-  md: 'rounded-2xl',
-  lg: 'rounded-3xl',
-  xl: 'rounded-[2rem]',
+  md: 'rounded-lg',
+  lg: 'rounded-xl',
+  xl: 'rounded-xl',
 }
 
 export function Surface({

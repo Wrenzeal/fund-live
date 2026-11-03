@@ -12,7 +12,7 @@ export function TargetETFHoldingsCard({ targetName, holdings }: TargetETFHolding
   const topHoldings = holdings.slice(0, 10)
 
   return (
-    <div className="glass rounded-2xl p-6">
+    <div className="glass rounded-xl p-6">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
           <h3 className="text-lg font-semibold text-theme-primary">目标 ETF 持仓</h3>

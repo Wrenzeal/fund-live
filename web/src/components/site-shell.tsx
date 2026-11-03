@@ -43,7 +43,7 @@ export function SiteShell({
               {eyebrowLabel}
             </div>
             <div>
-              <h1 className="text-3xl font-black text-theme-primary sm:text-4xl">{title}</h1>
+              <h1 className="text-3xl font-semibold text-theme-primary sm:text-4xl">{title}</h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-theme-secondary sm:text-base">
                 {description}
               </p>
@@ -63,7 +63,7 @@ export function SiteShell({
         <button
           type="button"
           onClick={scrollToTop}
-          className="fixed bottom-5 right-4 z-50 inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-[var(--card-bg)]/95 px-4 py-3 text-sm font-medium text-theme-primary shadow-[0_18px_36px_rgba(2,8,23,0.28)] backdrop-blur md:hidden"
+          className="fixed bottom-5 right-4 z-50 inline-flex items-center gap-2 rounded-full border border-accent/30 bg-[var(--card-bg)]/95 px-4 py-3 text-sm font-medium text-theme-primary shadow-none backdrop-blur md:hidden"
           aria-label="回到顶部"
         >
           <ArrowUp className="h-4 w-4" />

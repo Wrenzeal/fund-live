@@ -46,7 +46,7 @@ function MiniTrendTooltip({ active, payload }: MiniTrendTooltipProps) {
   return (
     <div
       className={cn(
-        'rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)]/95 px-2.5 py-1.5 text-[11px] font-semibold shadow-[0_12px_28px_rgba(2,8,23,0.22)] backdrop-blur-md',
+        'rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)]/95 px-2.5 py-1.5 text-[11px] font-semibold shadow-none backdrop-blur-md',
         isUp
           ? 'text-up'
           : 'text-down'
@@ -96,7 +96,7 @@ export function FundMiniTrend({
 
   if (isCallAuction) {
     return (
-      <div className={cn('flex h-24 items-center justify-center rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/35 px-4 text-center', className)}>
+      <div className={cn('flex h-24 items-center justify-center rounded-xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/35 px-4 text-center', className)}>
         <div className="text-xs text-theme-muted">集合竞价中</div>
       </div>
     )
@@ -104,7 +104,7 @@ export function FundMiniTrend({
 
   if (data.length === 0) {
     return (
-      <div className={cn('relative flex h-24 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/25 px-4 text-center text-xs text-theme-muted', className)}>
+      <div className={cn('relative flex h-24 items-center justify-center overflow-hidden rounded-xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/25 px-4 text-center text-xs text-theme-muted', className)}>
         <div className="relative">
           <div>{isLoading ? '分时数据正在同步' : '暂时没有分时数据'}</div>
           <div className="mt-1">分时数据暂未生成</div>
@@ -114,7 +114,7 @@ export function FundMiniTrend({
   }
 
   return (
-    <div className={cn('relative h-24 w-full overflow-hidden rounded-2xl border border-[var(--card-border)] bg-[var(--input-bg)]/25 px-3 py-2', className)}>
+    <div className={cn('relative h-24 w-full overflow-hidden rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)]/25 px-3 py-2', className)}>
       <div className="mb-1 flex items-center justify-between gap-2 text-[10px]">
         <span className="font-semibold text-theme-secondary">{title}</span>
         {dateLabel && <span className="font-mono text-theme-muted">{dateLabel}</span>}

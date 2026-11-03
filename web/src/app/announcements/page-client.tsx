@@ -160,7 +160,7 @@ export default function AnnouncementsPageClient({ initialData, serverUnavailable
         <div className="space-y-4">
           {isLoading && !initialData && serverUnavailable ? <StatusBanner tone="warning">产品公告暂时无法读取，请稍后重新打开。当前状态不表示没有公告。</StatusBanner> : isLoading && !initialData ? (
             <Surface radius="xl" padding="lg" className="text-center">
-              <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-300" />
+              <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-accent" />
               <div className="mt-4 text-sm text-theme-secondary">正在读取公告…</div>
             </Surface>
           ) : error ? (
@@ -174,12 +174,12 @@ export default function AnnouncementsPageClient({ initialData, serverUnavailable
               <Link
                 key={announcement.id}
                 href={`/announcements/${announcement.id}`}
-                className="block rounded-[32px] border border-[var(--card-border)] p-6 glass transition-colors hover:border-cyan-400/30"
+                className="block rounded-xl border border-[var(--card-border)] p-6 glass transition-colors hover:border-accent/30"
               >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center gap-3">
-                      <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-3 py-1 text-xs tracking-[0.18em] text-cyan-200">
+                      <span className="rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-xs tracking-[0.18em] text-accent">
                         {announcement.source_type === 'changelog' ? 'CHANGELOG 导入' : '手动公告'}
                       </span>
                     </div>
