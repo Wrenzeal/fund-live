@@ -955,7 +955,7 @@ export function useFundHistory(fundId: string | null, days = 30) {
             refreshInterval: shouldRefreshHistory ? FUND_HISTORY_REFRESH_INTERVAL : 0,
             revalidateOnFocus: true,
             revalidateOnReconnect: true,
-            keepPreviousData: true,
+            keepPreviousData: false,
             dedupingInterval: 60000,
         }
     )

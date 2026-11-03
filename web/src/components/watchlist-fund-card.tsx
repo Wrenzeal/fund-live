@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { ArrowUpRight, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useMarketTradingState } from '@/hooks/use-market-status'
-import { useFundDashboard } from '@/hooks/use-fund-data'
+import { useFund, useFundDashboard } from '@/hooks/use-fund-data'
 import { FundMiniTrend } from '@/components/fund-mini-trend'
 import { cn, formatPercent } from '@/lib/utils'
 
@@ -27,7 +27,8 @@ export function WatchlistFundCard({ fundId, onRemove }: WatchlistFundCardProps) 
     isValidating,
   } = useFundDashboard(isCallAuction ? null : fundId)
 
-  const fundName = fund?.name || estimate?.fund_name || fundId
+  const { fund: auctionFund } = useFund(isCallAuction ? fundId : null)
+  const fundName = (isCallAuction ? auctionFund?.name : fund?.name || estimate?.fund_name) || fundId
   const percent = isCallAuction ? { text: '-', isPositive: false } : formatPercent(estimate?.change_percent)
 
   const handleRemove = async () => {

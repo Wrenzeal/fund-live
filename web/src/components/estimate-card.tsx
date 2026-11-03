@@ -6,6 +6,7 @@ import { TrendingUp, TrendingDown, Minus, RefreshCw } from 'lucide-react'
 import type { FundEstimate, Fund } from '@/hooks/use-fund-data'
 
 interface EstimateCardProps {
+    fundId?: string
     estimate: FundEstimate | undefined
     fund: Fund | undefined
     isLoading: boolean
@@ -27,6 +28,7 @@ function formatNavCurrency(value?: string) {
 }
 
 export function EstimateCard({
+    fundId,
     estimate,
     fund,
     isLoading,
@@ -47,17 +49,13 @@ export function EstimateCard({
 
     // 使用 CSS 变量实现主题感知的颜色，但缺失数据必须保持中性，不渲染为 0 或正收益。
     const change = Number.parseFloat(estimate?.change_percent || '')
-    const hasChange = Number.isFinite(change)
+    const hasChange = !isCallAuction && Number.isFinite(change)
     const isPositive = hasChange && change >= 0
     const isNegative = hasChange && change < 0
-    const TrendIcon = change > 0 ? TrendingUp : change < 0 ? TrendingDown : Minus
-    const fundCode = estimate?.fund_id || fund?.id
-    const displayName = isCallAuction
-        ? '集合竞价中'
-        : estimate?.fund_name || fund?.name || (isLoading ? '基金信息加载中' : fundCode ? `基金 ${fundCode}` : '基金信息待同步')
-    const metaText = isCallAuction
-        ? '等待 09:30 开盘后更新基金估值数据'
-        : [
+    const TrendIcon = isPositive ? TrendingUp : isNegative ? TrendingDown : Minus
+    const fundCode = fund?.id || estimate?.fund_id || fundId
+    const displayName = fund?.name || estimate?.fund_name || (isLoading ? '基金信息加载中' : fundCode ? `基金 ${fundCode}` : '基金信息待同步')
+    const metaText = [
             fund?.manager ? `基金经理: ${fund.manager}` : '',
             fund?.company ? fund.company : '',
         ].filter(Boolean).join(' · ')
@@ -89,7 +87,7 @@ export function EstimateCard({
                     <h2 className="text-2xl font-bold text-theme-primary">
                         {displayName}
                     </h2>
-                    {!isCallAuction && fundCode && (
+                    {fundCode && (
                         <p className="text-sm text-theme-secondary mt-1">
                             基金代码：{fundCode}
                         </p>
@@ -98,6 +96,9 @@ export function EstimateCard({
                         <p className="text-sm text-theme-secondary mt-1">
                             {metaText}
                         </p>
+                    )}
+                    {isCallAuction && (
+                        <p className="mt-2 text-sm text-theme-secondary">集合竞价中 · 等待 09:30 开盘后更新基金估值</p>
                     )}
                 </div>
 

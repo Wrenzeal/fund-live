@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { useFundDashboard, useFundHistory, useFundHoldings, useTimeSeries } from '@/hooks/use-fund-data'
+import { useFund, useFundDashboard, useFundHistory, useFundHoldings, useTimeSeries } from '@/hooks/use-fund-data'
 import { useMarketStatus, getSessionLabel, formatTimeUntil } from '@/hooks/use-market-status'
 import { useUIPreferences } from '@/hooks/use-ui-preferences'
 import { useCurrentUser } from '@/hooks/use-auth'
@@ -173,13 +173,15 @@ function HomeContent({
     mutate: refreshTimeSeries,
   } = useTimeSeries(isCallAuction ? null : displayFundId)
   const {
+    fund: holdingsFund,
+    isLoading: isFundInfoLoading,
     holdings: resolvedHoldings,
     displayItems: holdingsDisplayItems,
     displayLevel: holdingsDisplayLevel,
     lookthroughAvailable,
   } = useFundHoldings(displayFundId)
 
-  const { points: historyPoints, isLoading: isHistoryLoading } = useFundHistory(isCallAuction ? null : displayFundId, 30)
+  const { points: historyPoints, isLoading: isHistoryLoading, error: historyError, mutate: refreshHistory } = useFundHistory(displayFundId, 30)
 
   // 切换基金时使用 transition 避免阻塞
   const handleFundSelect = (fundId: string) => {
@@ -243,6 +245,7 @@ function HomeContent({
     setSelectionError(null)
     refreshDashboard()
     refreshTimeSeries()
+    void refreshHistory().catch(() => undefined)
   }
 
   const lastUpdated = estimate?.calculated_at ? new Date(estimate.calculated_at) : null
@@ -253,7 +256,7 @@ function HomeContent({
       ? `基金 ${displayFundId} 的资料正在同步，页面会自动更新。`
       : ''
   const activeEstimate = isCallAuction ? undefined : estimate
-  const activeFund = isCallAuction ? undefined : fund
+  const activeFund = isCallAuction ? holdingsFund : fund
   const activeTimeSeries = isCallAuction ? [] : timeSeries
   const activeLastUpdated = isCallAuction ? null : lastUpdated
   const warmupDetailText = isDashboardWarming
@@ -357,9 +360,10 @@ function HomeContent({
           ) : (
             <ScrollReveal className="flex min-h-[60vh] items-center justify-center" variant="scale-in">
               <EstimateCard
+                fundId={displayFundId}
                 estimate={activeEstimate}
                 fund={activeFund}
-                isLoading={isDashboardLoading}
+                isLoading={isCallAuction ? isFundInfoLoading : isDashboardLoading}
                 isCallAuction={isCallAuction}
                 isValidating={isValidating}
                 lastUpdated={activeLastUpdated}
@@ -383,9 +387,10 @@ function HomeContent({
             {/* Top Section: Estimate Card + Stats */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <EstimateCard
+                fundId={displayFundId}
                 estimate={activeEstimate}
                 fund={activeFund}
-                isLoading={isDashboardLoading}
+                isLoading={isCallAuction ? isFundInfoLoading : isDashboardLoading}
                 isCallAuction={isCallAuction}
                 isValidating={isValidating}
                 lastUpdated={activeLastUpdated}
@@ -558,9 +563,11 @@ function HomeContent({
                 officialClose={officialClose}
               />
               <FundHistoryTrend
-                points={isCallAuction ? [] : historyPoints}
+                points={historyPoints}
                 days={30}
-                isLoading={!isCallAuction && isHistoryLoading}
+                isLoading={isHistoryLoading}
+                error={historyError}
+                onRetry={() => { void refreshHistory().catch(() => undefined) }}
                 title="近 30 日官方净值"
                 description="每日收盘净值走势，用于和盘中估值分开观察。"
               />
@@ -723,6 +730,8 @@ function MinimalWatchlistEstimateCard({
     isLoading,
     isValidating,
   } = useFundDashboard(isCallAuction ? null : fundId)
+  const { fund: auctionFund, isLoading: isAuctionFundLoading } = useFund(isCallAuction ? fundId : null)
+  const displayedFund = isCallAuction ? auctionFund : fund
   const lastUpdated = estimate?.calculated_at ? new Date(estimate.calculated_at) : null
 
   return (
@@ -733,13 +742,14 @@ function MinimalWatchlistEstimateCard({
         'group block h-full w-full rounded-3xl text-left transition-all duration-200',
         'hover:-translate-y-1 hover:shadow-[0_24px_55px_rgba(34,211,238,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/45'
       )}
-      aria-label={`查看 ${fund?.name || estimate?.fund_name || fundId} 详情`}
+      aria-label={`查看 ${displayedFund?.name || estimate?.fund_name || fundId} 详情`}
     >
       <div className="relative h-full">
         <EstimateCard
+          fundId={fundId}
           estimate={isCallAuction ? undefined : estimate}
-          fund={isCallAuction ? undefined : fund}
-          isLoading={!isCallAuction && isLoading}
+          fund={displayedFund}
+          isLoading={isCallAuction ? isAuctionFundLoading : isLoading}
           isCallAuction={isCallAuction}
           isValidating={isValidating}
           lastUpdated={isCallAuction ? null : lastUpdated}

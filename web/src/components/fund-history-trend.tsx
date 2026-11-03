@@ -10,6 +10,8 @@ interface FundHistoryTrendProps {
   days?: number
   compact?: boolean
   isLoading?: boolean
+  error?: Error | null
+  onRetry?: () => void
   className?: string
   title?: string
   description?: string
@@ -96,6 +98,8 @@ export function FundHistoryTrend({
   days = 30,
   compact = false,
   isLoading = false,
+  error,
+  onRetry,
   className,
   title,
   description,
@@ -116,10 +120,12 @@ export function FundHistoryTrend({
     return (
       <div className={cn('relative overflow-hidden rounded-3xl border border-dashed border-[var(--card-border)] bg-[var(--input-bg)]/35', compact ? 'h-20' : 'min-h-[16rem] p-5', className)}>
         <div className="pointer-events-none absolute inset-0 opacity-60 [background-image:linear-gradient(rgba(148,163,184,0.10)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.10)_1px,transparent_1px)] [background-size:18px_18px]" />
-        <div role="status" className="relative flex h-full min-h-[inherit] items-center justify-center px-4 text-center text-sm text-theme-muted">
+        <div role={error ? 'alert' : 'status'} className="relative flex h-full min-h-[inherit] items-center justify-center px-4 text-center text-sm text-theme-secondary">
           <div>
-            <div>{isLoading ? '历史净值正在同步' : `暂时没有近 ${days} 日官方净值`}</div>
-            {!compact && <div className="mt-2">{isLoading ? '同步完成后会显示走势。' : '官方净值公布后会自动补上。'}</div>}
+            {!compact && <div className="mb-3 font-semibold text-theme-primary">{title || `近 ${days} 日官方净值走势`}</div>}
+            <div>{error ? '历史净值暂时无法读取' : isLoading ? '历史净值正在同步' : '暂无已收录的官方净值记录'}</div>
+            {!compact && <div className="mt-2">{error ? '请稍后重试，读取失败不代表基金尚未公布净值。' : isLoading ? '同步完成后会显示走势。' : '当前数据源尚未返回历史记录，可稍后重新获取。'}</div>}
+            {onRetry && !isLoading && <button type="button" onClick={onRetry} className="mt-3 min-h-11 rounded-xl border border-[var(--input-border)] px-4 text-sm text-theme-primary">重试历史净值</button>}
           </div>
         </div>
       </div>
@@ -135,6 +141,7 @@ export function FundHistoryTrend({
             <div className="mt-1 text-xs leading-5 text-theme-muted">
               {description || '只展示每日官方收盘净值，不与盘中估值混算。'}
             </div>
+            <div className="mt-1 text-xs text-theme-secondary">{first.date} 至 {last.date} · {data.length} 条已公布记录</div>
           </div>
           <div className="rounded-2xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-right">
             <div className="text-[10px] tracking-[0.18em] text-theme-muted">区间变化</div>
@@ -142,6 +149,7 @@ export function FundHistoryTrend({
           </div>
         </div>
       )}
+      {error && <div role="alert" className="mb-3 text-sm text-theme-secondary">历史净值更新失败，当前显示上次读取的记录。{onRetry && <button type="button" onClick={onRetry} className="ml-2 min-h-11 underline underline-offset-4">重试历史净值</button>}</div>}
 
       <div className={cn('w-full', compact ? 'h-20' : 'h-56')}>
         <ResponsiveContainer width="100%" height="100%" minWidth={compact ? 120 : 240} minHeight={compact ? 72 : 180}>
