@@ -103,6 +103,7 @@ func (UserHoldingOverride) TableName() string {
 
 // UserFundHolding is the GORM model for user fund-level positions.
 type UserFundHolding struct {
+	EntryType          string           `gorm:"type:varchar(16);not null;default:buy" json:"entry_type"`
 	ID                 string           `gorm:"primaryKey;type:varchar(40)" json:"id"`
 	UserID             string           `gorm:"type:varchar(40);index:idx_user_fund_holding_user_created,priority:1;not null" json:"user_id"`
 	FundID             string           `gorm:"type:varchar(10);index;not null" json:"fund_id"`

@@ -186,3 +186,15 @@
 - Local browser fixtures cover original industry weights, ETF denominator, separate dates, keyboard views, empty/error states, administrator save and failure drafts. Existing auction, accounting, auth and SEO regressions remain required.
 - Readability checks measure rendered primary-action/supporting text in all three themes, and classification labels/metadata. This is bounded evidence, not a claim of a complete WCAG audit.
 - Screenshot captures are test fixtures, never real user portfolios. They are stored under ignored logs/test-results; no generated raster ships with the interface.
+
+## Holding activity deletion
+- List rows and detail pages expose the same explicit Delete activity control. A native confirmation dialog identifies the fund, amount and Beijing record date, with cancel focused initially.
+- Deletion is irreversible removal of a history record, independent from reversing its financial effect. Current positions stay unchanged; voiding and safe rollback remain separate actions.
+- Preserve confirmation on failure, disable repeat submission while pending, return detail deletion to the ledger, and invalidate cached filtered lists/details. See docs/holding-transaction-delete.md for API and transaction-chain boundaries.
+
+## Opening positions and historical valuation
+- Existing positions and new purchases are explicit, separate entry modes. Support actual shares/remaining cost and date-aligned market value/holding P/L; never label current market value as principal or create a synthetic buy for a snapshot.
+- Industry/account history is not the source of a position's identity: persist buy/opening origin on the holding so deleting ledger entries cannot change its meaning.
+- Official money uses the latest usable published NAV, with actual date and stale status. Pending confirmation remains distinct; never price a purchase with a NAV before its pricing date or substitute previews silently.
+- Import templates and previews distinguish snapshots from purchases, preserve supplied timestamps, show row errors and retry only failed rows within the current preview. No silent overwrite or over-limit truncation.
+- See docs/holding-opening-and-valuation.md for the input contract, data-repair boundary and additive schema upgrade.

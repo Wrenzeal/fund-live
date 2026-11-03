@@ -815,6 +815,11 @@ CREATE INDEX IF NOT EXISTS idx_tb_user_fund_holding_tx_source_platform ON tb_use
 
 INSERT INTO schema_migrations (id) VALUES ('20260526_user_holding_sources');
 
+-- Migration: 20261103_holding_opening_positions
+ALTER TABLE tb_user_fund_holding ADD COLUMN IF NOT EXISTS entry_type varchar(16) NOT NULL DEFAULT 'buy';
+
+INSERT INTO schema_migrations (id) VALUES ('20261103_holding_opening_positions');
+
 -- Migration: 20260423_user_watchlist_group_ordering
 ALTER TABLE tb_user_watchlist_group ADD COLUMN IF NOT EXISTS sort_order integer;
 

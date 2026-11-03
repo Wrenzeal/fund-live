@@ -41,7 +41,7 @@ export function HoldingsSummaryMetrics({ holdings, estimatesByFundID, metricScop
     </div>
     <div className="mt-4 grid gap-5 lg:grid-cols-[1.1fr_1.4fr] lg:items-center">
     <div><div className="break-words text-4xl font-semibold tracking-tight tabular-nums text-theme-primary sm:text-5xl">{holdingMoney(totalValue)}</div>
-    <div className="mt-3 text-sm text-theme-secondary">{ready ? `已计价 ${priced.length}/${holdings.length} 笔` : '尚无可计价持仓'}{partial && ` · ${holdings.length - priced.length} 笔待确认或待更新`}</div>
+    <div className="mt-3 text-sm text-theme-secondary">{ready ? `已计价 ${priced.length}/${holdings.length} 笔` : '尚无可计价持仓'}{partial && ` · ${holdings.length - priced.length} 笔待确认或待更新`}{priced.some(entry => entry.holding.real_metrics_stale) && ' · 部分净值待更新'}</div>
     </div>
     <dl className="grid grid-cols-2 gap-4 border-t border-[var(--card-border)] pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
       <div><dt className="text-sm text-theme-secondary">持有盈亏{partial && ready ? '（已计价部分）' : ''}</dt><dd className={cn('mt-2 text-2xl font-semibold tabular-nums', holdingTone(profit))}>{holdingMoney(profit, true)}</dd><dd className="mt-1 text-sm tabular-nums text-theme-secondary">{returnPercent}</dd></div>

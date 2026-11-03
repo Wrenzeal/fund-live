@@ -113,7 +113,7 @@ func (s *CrawlService) FetchRecentFundHistory(ctx context.Context, fundCode stri
 		limit = 30
 	}
 
-	url := fmt.Sprintf("http://fund.eastmoney.com/pingzhongdata/%s.js", fundCode)
+	url := fmt.Sprintf("https://fund.eastmoney.com/pingzhongdata/%s.js", fundCode)
 
 	resp, err := s.client.R().
 		SetContext(ctx).
@@ -144,7 +144,7 @@ func (s *CrawlService) FetchRecentFundHistory(ctx context.Context, fundCode stri
 
 // fetchFundInfo fetches fund information from Eastmoney pingzhongdata JS.
 func (s *CrawlService) fetchFundInfo(ctx context.Context, fundCode string) (*domain.Fund, error) {
-	url := fmt.Sprintf("http://fund.eastmoney.com/pingzhongdata/%s.js", fundCode)
+	url := fmt.Sprintf("https://fund.eastmoney.com/pingzhongdata/%s.js", fundCode)
 
 	resp, err := s.client.R().
 		SetContext(ctx).

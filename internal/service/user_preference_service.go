@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/RomaticDOG/fund/internal/domain"
@@ -46,11 +47,16 @@ var holdingSourceLabels = map[string]string{
 
 // UserPreferenceService handles user-owned watchlists and holding overrides.
 type UserPreferenceService struct {
-	fundRepo        domain.FundRepository
-	favoriteRepo    domain.UserFavoriteRepository
-	watchlistRepo   domain.UserWatchlistRepository
-	fundHoldingRepo domain.UserFundHoldingRepository
-	overrideRepo    domain.UserHoldingOverrideRepository
+	// Serialize deletion, voiding and reversal within this API instance.
+	historyMutationMu  sync.Mutex
+	holdingHistorySync func(context.Context, string, []string) error
+	navRequestsMu      sync.Mutex
+	navRequests        map[string]time.Time
+	fundRepo           domain.FundRepository
+	favoriteRepo       domain.UserFavoriteRepository
+	watchlistRepo      domain.UserWatchlistRepository
+	fundHoldingRepo    domain.UserFundHoldingRepository
+	overrideRepo       domain.UserHoldingOverrideRepository
 }
 
 // NewUserPreferenceService creates a new UserPreferenceService.
@@ -386,6 +392,25 @@ func (s *UserPreferenceService) ListFundHoldings(ctx context.Context, userID str
 		return nil, err
 	}
 
+	requestedDates := make(map[string][]string)
+	missingConfirmation := make(map[string]bool)
+	for _, holding := range holdings {
+		if needsHoldingConfirmationData(holding) {
+			missingConfirmation[holding.FundID] = true
+		}
+		if needsHoldingConfirmationData(holding) || canRefreshAutomaticConfirmation(holding) {
+			requestedDates[holding.FundID] = append(requestedDates[holding.FundID], holding.AsOfDate)
+		}
+	}
+	for _, fundID := range fundIDs {
+		if historyByID[fundID] == nil || historyByID[fundID].Date < expectedOfficialDate || missingConfirmation[fundID] {
+			s.requestHoldingHistory(fundID, requestedDates[fundID])
+		} else if len(requestedDates[fundID]) > 0 {
+			// Verify older automatic confirmations once per day, including dates beyond the nightly window.
+			s.requestHoldingHistory(fundID, requestedDates[fundID], 24*time.Hour)
+		}
+	}
+
 	items := make([]domain.UserFundHoldingDetail, 0, len(holdings))
 	aggregateAccumulators := make(map[string]*holdingAggregateAccumulator, len(holdings))
 	aggregateOrder := make([]string, 0, len(holdings))
@@ -397,9 +422,14 @@ func (s *UserPreferenceService) ListFundHoldings(ctx context.Context, userID str
 
 	for _, holding := range holdings {
 		resolvedHolding := holding
-		if needsHoldingConfirmationData(resolvedHolding) {
+		if needsHoldingConfirmationData(resolvedHolding) || canRefreshAutomaticConfirmation(resolvedHolding) {
 			if history := confirmationHistoryBy[holdingHistoryLookupKey(holding)]; history != nil {
-				applyHoldingConfirmationData(&resolvedHolding, history)
+				if (needsHoldingConfirmationData(resolvedHolding) || !resolvedHolding.ConfirmedNav.Equal(history.NetAssetVal)) && applyHoldingConfirmationData(&resolvedHolding, history) {
+					resolvedHolding.UpdatedAt = time.Now()
+					if _, err := s.fundHoldingRepo.ConfirmFundHoldingIfUnchanged(ctx, &holding, &resolvedHolding); err != nil {
+						return nil, err
+					}
+				}
 			}
 		}
 
@@ -460,6 +490,8 @@ func (s *UserPreferenceService) CreateFundHoldingsBatch(ctx context.Context, use
 		return nil, ErrInvalidHoldingAmount
 	}
 
+	ctx = s.prepareHoldingBatchHistory(ctx, inputs)
+
 	result := &domain.UserFundHoldingBatchCreateResult{
 		Total:   len(inputs),
 		Created: make([]domain.UserFundHoldingDetail, 0, len(inputs)),
@@ -484,6 +516,12 @@ func (s *UserPreferenceService) CreateFundHoldingsBatch(ctx context.Context, use
 }
 
 func (s *UserPreferenceService) createFundHolding(ctx context.Context, userID string, input domain.CreateFundHoldingInput) (*domain.UserFundHoldingDetail, error) {
+	if input.EntryType == "opening" {
+		return s.createOpeningHolding(ctx, userID, input)
+	}
+	if (input.EntryType != "" && input.EntryType != "buy") || input.Shares != "" || input.MarketValue != "" || input.HoldingProfit != "" || input.SnapshotDate != "" {
+		return nil, ErrInvalidOpeningPosition
+	}
 	fundID := strings.TrimSpace(input.FundID)
 	if fundID == "" {
 		return nil, ErrFundNotFound
@@ -514,6 +552,7 @@ func (s *UserPreferenceService) createFundHolding(ctx context.Context, userID st
 
 	now := time.Now()
 	holding := &domain.UserFundHolding{
+		EntryType:      "buy",
 		ID:             generateID("ufh"),
 		UserID:         userID,
 		FundID:         fundID,
@@ -527,26 +566,35 @@ func (s *UserPreferenceService) createFundHolding(ctx context.Context, userID st
 		UpdatedAt:      now,
 	}
 
-	if confirmationHistory, err := s.lookupFundHistory(ctx, fundID, holding.AsOfDate); err != nil {
-		return nil, err
-	} else if confirmationHistory != nil {
-		applyHoldingConfirmationData(holding, confirmationHistory)
-	}
-
-	if err := s.fundHoldingRepo.SaveFundHolding(ctx, holding); err != nil {
+	confirmation, err := s.lookupFundHistory(ctx, fundID, holding.AsOfDate)
+	if err != nil {
 		return nil, err
 	}
-	if err := s.recordFundHoldingTransaction(ctx, domain.UserFundHoldingTransactionBuy, holding, "记录买入/补仓", map[string]string{
-		"source": "create_holding",
-	}); err != nil {
+	if confirmation == nil && s.holdingHistorySync != nil && holding.AsOfDate <= expectedOfficialHistoryDate(time.Now()) {
+		_ = s.ensureHoldingHistory(ctx, fundID, []string{holding.AsOfDate})
+		confirmation, err = s.lookupFundHistory(ctx, fundID, holding.AsOfDate)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if confirmation != nil {
+		applyHoldingConfirmationData(holding, confirmation)
+	}
+	activity := newFundHoldingTransaction(domain.UserFundHoldingTransactionBuy, holding, "记录买入/补仓", map[string]string{"source": "create_holding"})
+	if err := s.fundHoldingRepo.CreateFundHoldingWithTransaction(ctx, holding, activity); err != nil {
 		return nil, err
 	}
+	s.requestHoldingHistory(fundID, []string{holding.AsOfDate})
 
 	return buildStoredUserFundHoldingDetail(holding, fund), nil
 }
 
 func holdingImportErrorCode(err error) string {
 	switch {
+	case errors.Is(err, ErrOpeningNAVUnavailable):
+		return "OPENING_NAV_UNAVAILABLE"
+	case errors.Is(err, ErrInvalidOpeningPosition):
+		return "INVALID_OPENING_POSITION"
 	case errors.Is(err, ErrFundNotFound):
 		return "FUND_NOT_FOUND"
 	case errors.Is(err, ErrInvalidHoldingDate):
@@ -564,6 +612,10 @@ func holdingImportErrorCode(err error) string {
 
 func holdingImportErrorMessage(err error) string {
 	switch holdingImportErrorCode(err) {
+	case "OPENING_NAV_UNAVAILABLE":
+		return ErrOpeningNAVUnavailable.Error()
+	case "INVALID_OPENING_POSITION":
+		return ErrInvalidOpeningPosition.Error()
 	case "FUND_NOT_FOUND":
 		return "基金不存在或基金代码不正确"
 	case "INVALID_DATE":
@@ -600,6 +652,10 @@ func (s *UserPreferenceService) UpdateFundHolding(ctx context.Context, userID, h
 	}
 	if fund == nil {
 		return nil, ErrFundNotFound
+	}
+
+	if holding.EntryType == "opening" {
+		return s.updateOpeningHolding(ctx, holding, fund, input)
 	}
 
 	amountDecimal, err := parsePositiveDecimal(input.Amount, ErrInvalidHoldingAmount)
@@ -1030,6 +1086,7 @@ func buildStoredUserFundHoldingDetail(holding *domain.UserFundHolding, fund *dom
 		return nil
 	}
 	return &domain.UserFundHoldingDetail{
+		EntryType:          holdingEntryType(holding.EntryType),
 		ID:                 holding.ID,
 		FundID:             holding.FundID,
 		Amount:             holding.Amount,
@@ -1159,6 +1216,8 @@ func buildHoldingTransactionImpactChain(
 
 func holdingTransactionTypeLabel(txType domain.UserFundHoldingTransactionType) string {
 	switch txType {
+	case domain.UserFundHoldingTransactionOpening:
+		return "期初持仓"
 	case domain.UserFundHoldingTransactionBuy:
 		return "买入/补仓"
 	case domain.UserFundHoldingTransactionCorrection:
@@ -1241,7 +1300,7 @@ func sanitizeHoldingTransactionFilter(filter domain.UserFundHoldingTransactionFi
 
 func isValidHoldingTransactionType(txType domain.UserFundHoldingTransactionType) bool {
 	switch txType {
-	case domain.UserFundHoldingTransactionBuy,
+	case domain.UserFundHoldingTransactionOpening, domain.UserFundHoldingTransactionBuy,
 		domain.UserFundHoldingTransactionCorrection,
 		domain.UserFundHoldingTransactionDelete,
 		domain.UserFundHoldingTransactionSell,
@@ -1297,8 +1356,28 @@ func normalizeHoldingSourcePlatform(platform string) string {
 	}
 }
 
+// DeleteFundHoldingTransaction removes an owned history record without changing positions.
+func (s *UserPreferenceService) DeleteFundHoldingTransaction(ctx context.Context, userID, transactionID string) error {
+	s.historyMutationMu.Lock()
+	defer s.historyMutationMu.Unlock()
+	transactionID = strings.TrimSpace(transactionID)
+	if transactionID == "" {
+		return ErrFundHoldingTransactionNotFound
+	}
+	deleted, err := s.fundHoldingRepo.DeleteFundHoldingTransaction(ctx, userID, transactionID)
+	if err != nil {
+		return err
+	}
+	if !deleted {
+		return ErrFundHoldingTransactionNotFound
+	}
+	return nil
+}
+
 // VoidFundHoldingTransaction marks a historical holding activity as ignored without changing current holdings.
 func (s *UserPreferenceService) VoidFundHoldingTransaction(ctx context.Context, userID, transactionID, reason string) (*domain.UserFundHoldingTransaction, error) {
+	s.historyMutationMu.Lock()
+	defer s.historyMutationMu.Unlock()
 	transactionID = strings.TrimSpace(transactionID)
 	if transactionID == "" {
 		return nil, ErrFundHoldingTransactionNotFound
@@ -1376,17 +1455,22 @@ func (s *UserPreferenceService) PreviewFundHoldingTransactionRollback(ctx contex
 		return nil, err
 	}
 	preview.CanApplyAutomatically = canApplyHoldingRollbackAutomatically(*transaction, currentSnapshot, hasSubsequent)
+	if transaction.Metadata[domain.HoldingTransactionDeletedHistoryKey] == "true" {
+		preview.Warnings = append(preview.Warnings, "关联的后续流水已删除，无法完整核对交易链；请使用持仓校正。")
+	}
 	if preview.CanApplyAutomatically {
 		preview.SuggestedAction = "确认这条流水录错后，可直接应用自动冲正：系统会先作废原流水，再按预览安全更新当前持仓快照，并追加一条冲正痕迹。"
 		preview.Warnings = append(preview.Warnings, "自动冲正只在没有后续有效流水、且当前快照可安全计算时开放。")
 	} else if hasSubsequent {
-		preview.Warnings = append(preview.Warnings, "这条流水之后还有有效流水，自动冲正可能影响后续链路，因此当前只提供人工校正建议。")
+		preview.Warnings = append(preview.Warnings, "后续交易链无法安全核对，自动冲正可能影响关联持仓，当前提供人工校正建议。")
 	}
 	return &preview, nil
 }
 
 // ApplyFundHoldingTransactionRollback applies a user-confirmed rollback for low-risk activity types.
 func (s *UserPreferenceService) ApplyFundHoldingTransactionRollback(ctx context.Context, userID, transactionID, reason string) (*domain.UserFundHoldingTransactionRollbackApplyResult, error) {
+	s.historyMutationMu.Lock()
+	defer s.historyMutationMu.Unlock()
 	transactionID = strings.TrimSpace(transactionID)
 	if transactionID == "" {
 		return nil, ErrFundHoldingTransactionNotFound
@@ -1472,6 +1556,17 @@ func (s *UserPreferenceService) hasSubsequentActiveHoldingTransaction(ctx contex
 	if err != nil {
 		return false, err
 	}
+	// A delete may commit between the initial transaction read and this list query.
+	current, err := s.fundHoldingRepo.GetFundHoldingTransaction(ctx, userID, transaction.ID)
+	if err != nil {
+		return false, err
+	}
+	if current == nil {
+		return false, ErrFundHoldingTransactionNotFound
+	}
+	if current.Metadata[domain.HoldingTransactionDeletedHistoryKey] == "true" {
+		return true, nil
+	}
 	for _, candidate := range related {
 		if candidate.ID == transaction.ID || candidate.Voided || !candidate.CreatedAt.After(transaction.CreatedAt) {
 			continue
@@ -1487,7 +1582,7 @@ func (s *UserPreferenceService) hasSubsequentActiveHoldingTransaction(ctx contex
 }
 
 func canApplyHoldingRollbackAutomatically(transaction domain.UserFundHoldingTransaction, currentSnapshot *domain.UserFundHolding, hasSubsequent bool) bool {
-	if transaction.Voided || hasSubsequent {
+	if transaction.Voided || hasSubsequent || transaction.Metadata[domain.HoldingTransactionDeletedHistoryKey] == "true" {
 		return false
 	}
 
@@ -1645,6 +1740,7 @@ func (s *UserPreferenceService) restoreHoldingFromTransaction(ctx context.Contex
 	}
 	now := time.Now()
 	restored := &domain.UserFundHolding{
+		EntryType:          holdingEntryType(transaction.Metadata["holding_entry_type"]),
 		ID:                 transaction.HoldingID,
 		UserID:             transaction.UserID,
 		FundID:             transaction.FundID,
@@ -1660,6 +1756,9 @@ func (s *UserPreferenceService) restoreHoldingFromTransaction(ctx context.Contex
 		SourceLabel:        transaction.SourceLabel,
 		CreatedAt:          now,
 		UpdatedAt:          now,
+	}
+	if restored.EntryType == "opening" {
+		restored.TradeAt = ""
 	}
 	if restored.ID == "" {
 		restored.ID = generateID("ufh")
@@ -1808,8 +1907,9 @@ func buildHoldingTransactionRollbackPreview(
 		Title:                 "回滚影响预览",
 		Summary:               "这是只读预览，不会自动修改当前持仓快照。",
 		SuggestedAction:       "如确认历史流水录错，请先作废流水；如果当前金额或份额也需要变化，再使用持仓校正手动调整。",
+		AffectedFields:        make([]domain.UserFundHoldingTransactionRollbackField, 0),
 		Warnings: []string{
-			"当前版本不会自动回滚资产，避免误操作影响真实持仓。",
+			"自动冲正仅在交易链与当前持仓可安全核对时开放。",
 			"若这条流水之后还有卖出、分红、校正或份额调整，预览只作为人工对账参考。",
 		},
 	}
@@ -1824,6 +1924,10 @@ func buildHoldingTransactionRollbackPreview(
 	}
 
 	switch transaction.Type {
+	case domain.UserFundHoldingTransactionOpening:
+		preview.Title = "期初持仓登记"
+		preview.Summary = "这条记录登记已有份额与成本，不是一笔新增买入。"
+		preview.SuggestedAction = "登记信息有误时请校正当前持仓；仅清理历史记录可使用删除流水，不会改变当前资产。"
 	case domain.UserFundHoldingTransactionBuy:
 		preview.Title = "买入/补仓作废影响"
 		preview.Summary = "如果这笔买入是误录，理论上需要从当前本金与份额中扣除该笔记录。"
@@ -2233,6 +2337,7 @@ func buildUserFundHoldingDetail(
 	expectedOfficialDate string,
 ) (domain.UserFundHoldingDetail, *holdingRealMetrics) {
 	detail := domain.UserFundHoldingDetail{
+		EntryType:          holdingEntryType(holding.EntryType),
 		ID:                 holding.ID,
 		FundID:             holding.FundID,
 		Amount:             holding.Amount,
@@ -2243,12 +2348,14 @@ func buildUserFundHoldingDetail(
 		TradeAt:            holding.TradeAt,
 		AsOfDate:           holding.AsOfDate,
 		Note:               holding.Note,
+		SourcePlatform:     holding.SourcePlatform,
+		SourceLabel:        holding.SourceLabel,
 		CreatedAt:          holding.CreatedAt,
 		UpdatedAt:          holding.UpdatedAt,
 		Fund:               fund,
 	}
 
-	if latestHistory != nil && latestHistory.Date == expectedOfficialDate {
+	if latestHistory != nil && latestHistory.Date <= expectedOfficialDate {
 		detail.ActualDate = latestHistory.Date
 		detail.ActualNav = latestHistory.NetAssetVal.String()
 		detail.ActualDailyReturn = latestHistory.DailyReturn.String()
@@ -2264,6 +2371,10 @@ func buildUserFundHoldingDetail(
 	detail.TodayProfit = metrics.todayProfit.StringFixedBank(2)
 	detail.TodayChangePercent = metrics.todayChangePercent.String()
 	detail.RealMetricsReady = true
+	detail.RealMetricsStale = latestHistory.Date < expectedOfficialDate
+	if detail.RealMetricsStale {
+		detail.RealMetricsMessage = "按 " + latestHistory.Date + " 已公布官方净值计价，新净值待更新。"
+	}
 	return detail, metrics
 }
 
@@ -2403,9 +2514,13 @@ func calculateHoldingRealMetrics(
 	latestHistory *domain.FundHistory,
 	expectedOfficialDate string,
 ) (*holdingRealMetrics, bool, string) {
-	if latestHistory == nil || latestHistory.Date != expectedOfficialDate {
+	if latestHistory == nil || latestHistory.Date > expectedOfficialDate {
 		return nil, false, "待今日官方净值同步完成后展示真实市值与盈亏。"
 	}
+	if holding.EntryType != "opening" && latestHistory.Date < holding.AsOfDate {
+		return nil, false, "待交易确认日官方净值公布后计价。"
+	}
+
 	if !holding.Shares.GreaterThan(decimal.Zero) {
 		return nil, false, "待确认净值补齐后展示真实市值与盈亏。"
 	}
@@ -2445,14 +2560,26 @@ func (s *UserPreferenceService) lookupFundHistory(ctx context.Context, fundID, d
 }
 
 func needsHoldingConfirmationData(holding domain.UserFundHolding) bool {
+	if holding.EntryType == "opening" || holding.ManualConfirmation {
+		return false
+	}
 	return !holding.Shares.GreaterThan(decimal.Zero) || !holding.ConfirmedNav.GreaterThan(decimal.Zero) || strings.TrimSpace(holding.ConfirmedNavDate) == ""
+}
+
+// Only refresh automatically derived shares while they still match the original cost/NAV relation.
+// Reinvested, adjusted, opening and manually-confirmed positions keep their actual share counts.
+func canRefreshAutomaticConfirmation(holding domain.UserFundHolding) bool {
+	if holding.EntryType == "opening" || holding.ManualConfirmation || holding.ConfirmedNav.Sign() <= 0 || holding.Shares.Sign() <= 0 {
+		return false
+	}
+	return holding.ConfirmedNavDate == holding.AsOfDate && holding.Shares.Sub(holding.Amount.DivRound(holding.ConfirmedNav, 6)).Abs().LessThanOrEqual(decimal.RequireFromString("0.000001"))
 }
 
 func collectHoldingHistoryLookupKeys(holdings []domain.UserFundHolding) []domain.FundHistoryLookupKey {
 	keys := make([]domain.FundHistoryLookupKey, 0, len(holdings))
 	seen := make(map[domain.FundHistoryLookupKey]struct{}, len(holdings))
 	for _, holding := range holdings {
-		if !needsHoldingConfirmationData(holding) {
+		if !needsHoldingConfirmationData(holding) && !canRefreshAutomaticConfirmation(holding) {
 			continue
 		}
 		key := holdingHistoryLookupKey(holding)
@@ -2476,7 +2603,7 @@ func holdingHistoryLookupKey(holding domain.UserFundHolding) domain.FundHistoryL
 }
 
 func applyHoldingConfirmationData(holding *domain.UserFundHolding, history *domain.FundHistory) bool {
-	if holding == nil || history == nil {
+	if holding == nil || history == nil || holding.EntryType == "opening" || holding.ManualConfirmation {
 		return false
 	}
 	if !holding.Amount.GreaterThan(decimal.Zero) || !history.NetAssetVal.GreaterThan(decimal.Zero) {
@@ -2490,16 +2617,11 @@ func applyHoldingConfirmationData(holding *domain.UserFundHolding, history *doma
 	return holding.Shares.GreaterThan(decimal.Zero)
 }
 
-func (s *UserPreferenceService) recordFundHoldingTransaction(
-	ctx context.Context,
-	txType domain.UserFundHoldingTransactionType,
-	holding *domain.UserFundHolding,
-	note string,
-	metadata map[string]string,
-) error {
-	if holding == nil {
-		return nil
+func newFundHoldingTransaction(txType domain.UserFundHoldingTransactionType, holding *domain.UserFundHolding, note string, metadata map[string]string) *domain.UserFundHoldingTransaction {
+	if metadata == nil {
+		metadata = make(map[string]string)
 	}
+	metadata["holding_entry_type"] = holdingEntryType(holding.EntryType)
 
 	now := time.Now()
 	transaction := &domain.UserFundHoldingTransaction{
@@ -2522,7 +2644,13 @@ func (s *UserPreferenceService) recordFundHoldingTransaction(
 		CreatedAt:          now,
 	}
 
-	return s.fundHoldingRepo.SaveFundHoldingTransaction(ctx, transaction)
+	return transaction
+}
+func (s *UserPreferenceService) recordFundHoldingTransaction(ctx context.Context, txType domain.UserFundHoldingTransactionType, holding *domain.UserFundHolding, note string, metadata map[string]string) error {
+	if holding == nil {
+		return nil
+	}
+	return s.fundHoldingRepo.SaveFundHoldingTransaction(ctx, newFundHoldingTransaction(txType, holding, note, metadata))
 }
 
 func buildHoldingCorrectionMetadata(before, after *domain.UserFundHolding) map[string]string {

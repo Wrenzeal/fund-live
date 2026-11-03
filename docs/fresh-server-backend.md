@@ -576,10 +576,12 @@ umask 077
 install -d -m 700 /var/backups/fund-live
 fundlive_backup="/var/backups/fund-live/fundlive-$(date +%F-%H%M%S).dump"
 /usr/local/sbin/infra-compose exec -T postgres \
-  pg_dump -U fundlive -d fundlive -Fc > "$fundlive_backup.partial"
+  pg_dump -U fundlive -d fundlive -Fc </dev/null > "$fundlive_backup.partial"
 mv "$fundlive_backup.partial" "$fundlive_backup"
 SH
 ~~~
+
+`pg_dump` 不需要输入，必须保留 `</dev/null`：Compose 的 `exec -T` 默认仍会读取标准输入，在 heredoc 脚本中可能消耗后续命令，表现为备份后直接退出且不报错。执行 psql/pg_restore 时则明确从 SQL/备份文件重定向输入。
 
 定期执行并异地保存，配置和密钥加密备份。已有备份核对格式和 PG 版本，恢复到新库，不覆盖其他库：
 
@@ -603,18 +605,27 @@ infra-compose exec -T dragonfly sh -ec 'REDISCLI_AUTH="$DFLY_requirepass" redis-
 
 共享环境不执行 down -v、FLUSHALL 或无范围的 FLUSHDB。
 
-后端更新先上传新包、备份 FundLive 库，只停止 API 后替换：
+后端更新先上传新包、备份 FundLive 库，只停止 API 后替换。
+
+`2026.11.03-holding-opening` 新增期初持仓类型字段。现有库必须先应用包内 `upgrade-20261103-holding-opening.sql`，不要重新导入 `fundlive-schema.sql`。先升级 API，再发布前端；执行示例前请核对专属数据库名（下例为 fundlive）。
+
+以下更新脚本会在 SQL 或校验失败时停止，不会继续替换程序：
 
 ~~~bash
-install -d -m 755 /tmp/fund-live-update
-tar -xzf /tmp/fund-live-backend-linux-amd64.tar.gz -C /tmp/fund-live-update
+bash -euo pipefail <<'SH'
+fundlive_update_dir=$(mktemp -d /tmp/fund-live-update.XXXXXX)
+tar -xzf /tmp/fund-live-backend-linux-amd64.tar.gz -C "$fundlive_update_dir"
+(cd "$fundlive_update_dir" && sha256sum -c SHA256SUMS)
+infra-compose exec -T postgres psql -U postgres -d fundlive -v ON_ERROR_STOP=1 \
+  < "$fundlive_update_dir/upgrade-20261103-holding-opening.sql"
 systemctl stop fund-live-backend
 cp /opt/fund-live/fund-live-backend /opt/fund-live/fund-live-backend.previous
 cp /opt/fund-live/fund-live-crawler /opt/fund-live/fund-live-crawler.previous
-install -m 755 /tmp/fund-live-update/fund-live-backend /opt/fund-live/fund-live-backend
-install -m 755 /tmp/fund-live-update/fund-live-crawler /opt/fund-live/fund-live-crawler
+install -m 755 "$fundlive_update_dir/fund-live-backend" /opt/fund-live/fund-live-backend
+install -m 755 "$fundlive_update_dir/fund-live-crawler" /opt/fund-live/fund-live-crawler
 systemctl start fund-live-backend
 curl -fsS http://127.0.0.1:13896/health
+SH
 ~~~
 
 schema 升级在启动新版前单独审核、应用该版本迁移，不重跑空库文件。程序回滚不撤销数据库迁移，先确认旧程序兼容。配置不从压缩包示例覆盖。

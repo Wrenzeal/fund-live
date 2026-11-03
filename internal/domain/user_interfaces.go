@@ -56,10 +56,13 @@ type UserFundHoldingRepository interface {
 	ListFundHoldingsMissingConfirmation(ctx context.Context) ([]UserFundHolding, error)
 	ListDistinctFundIDs(ctx context.Context) ([]string, error)
 	SaveFundHolding(ctx context.Context, holding *UserFundHolding) error
+	CreateFundHoldingWithTransaction(ctx context.Context, holding *UserFundHolding, transaction *UserFundHoldingTransaction) error
+	ConfirmFundHoldingIfUnchanged(ctx context.Context, original, confirmed *UserFundHolding) (bool, error)
 	DeleteFundHolding(ctx context.Context, userID, holdingID string) error
 	ListFundHoldingTransactions(ctx context.Context, userID string, limit int) ([]UserFundHoldingTransaction, error)
 	ListFundHoldingTransactionsFiltered(ctx context.Context, userID string, filter UserFundHoldingTransactionFilter) ([]UserFundHoldingTransaction, error)
 	GetFundHoldingTransaction(ctx context.Context, userID, transactionID string) (*UserFundHoldingTransaction, error)
+	DeleteFundHoldingTransaction(ctx context.Context, userID, transactionID string) (bool, error)
 	SaveFundHoldingTransaction(ctx context.Context, tx *UserFundHoldingTransaction) error
 	VoidFundHoldingTransaction(ctx context.Context, userID, transactionID, reason string, voidedAt time.Time) (*UserFundHoldingTransaction, error)
 }

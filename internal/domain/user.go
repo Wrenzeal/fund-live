@@ -119,6 +119,7 @@ type UserHoldingOverrideSet struct {
 
 // UserFundHolding stores a user's fund-level position record.
 type UserFundHolding struct {
+	EntryType          string          `json:"entry_type"`
 	ID                 string          `json:"id"`
 	UserID             string          `json:"user_id"`
 	FundID             string          `json:"fund_id"`
@@ -138,6 +139,8 @@ type UserFundHolding struct {
 
 // UserFundHoldingDetail enriches a fund holding with current fund profile data.
 type UserFundHoldingDetail struct {
+	EntryType          string          `json:"entry_type"`
+	RealMetricsStale   bool            `json:"real_metrics_stale,omitempty"`
 	ID                 string          `json:"id"`
 	FundID             string          `json:"fund_id"`
 	Amount             decimal.Decimal `json:"amount"`
@@ -165,6 +168,7 @@ type UserFundHoldingDetail struct {
 
 // UpdateFundHoldingInput describes user-editable correction fields for a fund holding record.
 type UpdateFundHoldingInput struct {
+	SnapshotDate     string
 	Amount           string
 	Shares           string
 	ConfirmedNav     string
@@ -177,6 +181,11 @@ type UpdateFundHoldingInput struct {
 
 // CreateFundHoldingInput describes one user fund-level position record to create.
 type CreateFundHoldingInput struct {
+	EntryType      string `json:"entry_type,omitempty"`
+	Shares         string `json:"shares,omitempty"`
+	MarketValue    string `json:"market_value,omitempty"`
+	HoldingProfit  string `json:"holding_profit,omitempty"`
+	SnapshotDate   string `json:"snapshot_date,omitempty"`
 	FundID         string `json:"fund_id"`
 	Amount         string `json:"amount"`
 	TradeAt        string `json:"trade_at"`
@@ -238,6 +247,7 @@ type AdjustFundHoldingSharesInput struct {
 type UserFundHoldingTransactionType string
 
 const (
+	UserFundHoldingTransactionOpening    UserFundHoldingTransactionType = "opening"
 	UserFundHoldingTransactionBuy        UserFundHoldingTransactionType = "buy"
 	UserFundHoldingTransactionCorrection UserFundHoldingTransactionType = "correction"
 	UserFundHoldingTransactionDelete     UserFundHoldingTransactionType = "delete"
@@ -245,6 +255,9 @@ const (
 	UserFundHoldingTransactionDividend   UserFundHoldingTransactionType = "dividend"
 	UserFundHoldingTransactionAdjustment UserFundHoldingTransactionType = "adjustment"
 )
+
+// HoldingTransactionDeletedHistoryKey prevents unsafe rollback when later history was removed.
+const HoldingTransactionDeletedHistoryKey = "related_history_deleted"
 
 // UserFundHoldingTransaction records user-visible activity around a fund holding.
 type UserFundHoldingTransaction struct {

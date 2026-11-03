@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import useSWR from 'swr'
+import useSWR, { mutate as mutatePortfolioCache } from 'swr'
 import { useMarketTradingState } from '@/hooks/use-market-status'
 import type { Fund, FundEstimate } from '@/hooks/use-fund-data'
 import type { HoldingSourceFilter } from '@/lib/holding-sources'
@@ -26,6 +26,8 @@ export interface WatchlistGroup {
 }
 
 export interface HoldingEntry {
+	entry_type?: 'buy' | 'opening'
+	real_metrics_stale?: boolean
   id: string
   fund_id: string
   amount: string
@@ -84,7 +86,7 @@ export interface HoldingAggregateEntry {
   fund?: Fund
 }
 
-export type HoldingTransactionType = 'buy' | 'correction' | 'delete' | 'sell' | 'dividend' | 'adjustment'
+export type HoldingTransactionType = 'buy' | 'opening' | 'correction' | 'delete' | 'sell' | 'dividend' | 'adjustment'
 export type HoldingTransactionStatusFilter = 'all' | 'active' | 'voided'
 
 export interface HoldingTransactionFilters {
@@ -171,8 +173,13 @@ interface HoldingsResponse {
 }
 
 export interface CreateHoldingBatchItem {
+	entry_type?: 'buy' | 'opening'
+	shares?: string
+	market_value?: string
+	holding_profit?: string
+	snapshot_date?: string
   fund_id: string
-  amount: string
+  amount?: string
   trade_at?: string
   as_of_date?: string
   note?: string
@@ -196,6 +203,7 @@ export interface HoldingBatchCreateResult {
 }
 
 export interface UpdateHoldingPayload {
+	snapshot_date?: string
   amount: string
   shares?: string
   confirmed_nav?: string
@@ -295,6 +303,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
   }
 
   return json.data ?? null
+}
+
+export async function deleteHoldingTransaction(transactionID: string) {
+  const prefix = `${API_BASE_URL}/api/v1/user/holdings/transactions`
+  const detailKey = `${prefix}/${encodeURIComponent(transactionID)}`
+  await request(`/api/v1/user/holdings/transactions/${encodeURIComponent(transactionID)}`, { method: 'DELETE' })
+  // Remove the deleted entry immediately from every cached filter/page and invalidate detail previews.
+  const transactionKey = (key: unknown) => typeof key === 'string' && (key === prefix || key.startsWith(prefix + '?') || key.startsWith(prefix + '/'))
+  await mutatePortfolioCache(transactionKey, (cached: unknown) => Array.isArray(cached) ? (cached as HoldingTransactionEntry[]).filter(item => item.id !== transactionID) : undefined, { revalidate: false })
+  // A failed refresh must not report a successful deletion as a failed delete.
+  void mutatePortfolioCache(key => transactionKey(key) && key !== detailKey).catch(() => undefined)
 }
 
 function parseDecimal(value?: string) {
@@ -532,7 +551,8 @@ export function useUserPortfolio(userID: string | null, transactionFilters: Hold
     fetcher,
     {
       revalidateOnFocus: false,
-      dedupingInterval: 5000,
+      dedupingInterval: 3000,
+      refreshInterval: payload => payload?.items?.some(item => !item.real_metrics_ready || item.real_metrics_stale) ? 5000 : 60000,
     },
   )
 
@@ -695,7 +715,13 @@ export function useUserPortfolio(userID: string | null, transactionFilters: Hold
           note,
         }),
       })
-      await Promise.all([mutateHoldings(), mutateHoldingTransactions()])
+      await Promise.allSettled([mutateHoldings(), mutateHoldingTransactions()])
+    },
+    addOpeningHolding: async (payload: CreateHoldingBatchItem) => {
+      if (!userID) throw new Error('请先登录。')
+      const result = await request<HoldingEntry>('/api/v1/user/holdings', { method: 'POST', body: JSON.stringify({ ...payload, entry_type: 'opening' }) })
+      await Promise.allSettled([mutateHoldings(), mutateHoldingTransactions()])
+      return result
     },
     updateHolding: async (holdingID: string, payload: UpdateHoldingPayload) => {
       if (!userID) return
@@ -744,6 +770,10 @@ export function useUserPortfolio(userID: string | null, transactionFilters: Hold
       })
       await mutateHoldingTransactions()
     },
+    deleteHoldingTransaction: async (transactionID: string) => {
+      if (!userID) throw new Error('请先登录后再删除流水。')
+      await deleteHoldingTransaction(transactionID)
+    },
     previewHoldingTransactionRollback: async (transactionID: string) => {
       if (!userID) return null
       return request<HoldingTransactionRollbackPreview>(
@@ -768,7 +798,7 @@ export function useUserPortfolio(userID: string | null, transactionFilters: Hold
         method: 'POST',
         body: JSON.stringify({ items }),
       })
-      await Promise.all([mutateHoldings(), mutateHoldingTransactions()])
+      await Promise.allSettled([mutateHoldings(), mutateHoldingTransactions()])
       return result
     },
     getHoldingTransactionDetail: async (transactionID: string) => {

@@ -486,6 +486,7 @@ func domainFundHoldingFromDB(holding database.UserFundHolding) domain.UserFundHo
 	}
 
 	return domain.UserFundHolding{
+		EntryType:          holding.EntryType,
 		ID:                 holding.ID,
 		UserID:             holding.UserID,
 		FundID:             holding.FundID,
@@ -595,6 +596,7 @@ func (r *PostgresUserRepository) SaveFundHolding(ctx context.Context, holding *d
 	}
 
 	dbHolding := &database.UserFundHolding{
+		EntryType:          holding.EntryType,
 		ID:                 holding.ID,
 		UserID:             holding.UserID,
 		FundID:             holding.FundID,
@@ -615,6 +617,7 @@ func (r *PostgresUserRepository) SaveFundHolding(ctx context.Context, holding *d
 		Columns: []clause.Column{{Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{
 			"fund_id",
+			"entry_type",
 			"amount",
 			"shares",
 			"confirmed_nav",
@@ -766,6 +769,46 @@ func (r *PostgresUserRepository) GetFundHoldingTransaction(ctx context.Context, 
 
 	transaction := domainFundHoldingTransactionFromDB(dbTransaction)
 	return &transaction, nil
+}
+
+// DeleteFundHoldingTransaction removes history and guards earlier rollbacks in one database transaction.
+func (r *PostgresUserRepository) DeleteFundHoldingTransaction(ctx context.Context, userID, transactionID string) (bool, error) {
+	deleted := false
+	err := r.db.WithContext(ctx).Transaction(func(db *gorm.DB) error {
+		var target database.UserFundHoldingTransaction
+		err := db.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ?", transactionID, userID).First(&target).Error
+		if err == gorm.ErrRecordNotFound {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		query := db.Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ? AND fund_id = ? AND id <> ? AND created_at <= ?", userID, target.FundID, target.ID, target.CreatedAt)
+		if target.HoldingID != "" {
+			query = query.Where("holding_id = ? OR holding_id = '' OR holding_id IS NULL", target.HoldingID)
+		}
+		var related []database.UserFundHoldingTransaction
+		if err := query.Find(&related).Error; err != nil {
+			return err
+		}
+		for _, activity := range related {
+			metadata := decodeHoldingTransactionMetadata(activity.Metadata)
+			if metadata == nil {
+				metadata = make(map[string]string)
+			}
+			metadata[domain.HoldingTransactionDeletedHistoryKey] = "true"
+			if err := db.Model(&database.UserFundHoldingTransaction{}).Where("id = ? AND user_id = ?", activity.ID, userID).Update("metadata", encodeHoldingTransactionMetadata(metadata)).Error; err != nil {
+				return err
+			}
+		}
+		result := db.Where("id = ? AND user_id = ?", target.ID, userID).Delete(&database.UserFundHoldingTransaction{})
+		deleted = result.RowsAffected > 0
+		return result.Error
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to delete fund holding transaction: %w", err)
+	}
+	return deleted, nil
 }
 
 func (r *PostgresUserRepository) SaveFundHoldingTransaction(ctx context.Context, tx *domain.UserFundHoldingTransaction) error {

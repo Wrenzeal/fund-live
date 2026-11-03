@@ -13,6 +13,7 @@ import {
   WalletCards,
 } from 'lucide-react'
 import Link from 'next/link'
+import { HoldingTransactionDeleteButton } from '@/components/holding-transaction-delete-button'
 import { useState } from 'react'
 import type {
   HoldingTransactionEntry,
@@ -32,6 +33,7 @@ import { cn } from '@/lib/utils'
 interface HoldingActivityTimelineProps {
   transactions: HoldingTransactionEntry[]
   compact?: boolean
+  onDeleteTransaction?: (transactionID: string) => Promise<void> | void
   onVoidTransaction?: (
     transactionID: string,
     reason: string,
@@ -74,6 +76,7 @@ interface HoldingActivityTimelineProps {
 
 function transactionMeta(type: HoldingTransactionType) {
   switch (type) {
+    case 'opening': return { label: '期初持仓', description: '登记已有份额与剩余成本，不代表新增买入。', className: 'border-accent/25 bg-accent/10 text-accent', dotClassName: 'bg-accent', icon: WalletCards }
     case 'buy':
       return {
         label: '买入/补仓',
@@ -170,6 +173,7 @@ function formatRollbackValue(value?: string) {
 }
 
 const activityCoverageTypes: HoldingTransactionType[] = [
+  'opening',
   'buy',
   'sell',
   'correction',
@@ -182,6 +186,7 @@ const transactionTypeOptions: Array<{
   label: string
 }> = [
   { value: 'all', label: '全部类型' },
+  { value: 'opening', label: '期初持仓' },
   { value: 'buy', label: '买入/补仓' },
   { value: 'sell', label: '卖出/清仓' },
   { value: 'correction', label: '校正' },
@@ -201,6 +206,7 @@ const transactionStatusOptions: Array<{
 export function HoldingActivityTimeline({
   transactions,
   compact = false,
+  onDeleteTransaction,
   onVoidTransaction,
   onPreviewRollback,
   onApplyRollback,
@@ -518,7 +524,7 @@ export function HoldingActivityTimeline({
       </div>
 
       {(voidFeedback || previewFeedback) && (
-        <div className="mt-4 rounded-[20px] border border-[var(--card-border)] bg-surface-subtle px-4 py-3 text-xs leading-5 text-theme-secondary">
+        <div role="status" className="mt-4 rounded-[20px] border border-[var(--card-border)] bg-surface-subtle px-4 py-3 text-xs leading-5 text-theme-secondary">
           {voidFeedback || previewFeedback}
         </div>
       )}
@@ -704,7 +710,7 @@ export function HoldingActivityTimeline({
                   transaction.source_label,
                 )
                 return (
-                  <div key={transaction.id} className="relative pl-11">
+                  <div key={transaction.id} data-testid="holding-transaction-row" className="relative pl-11">
                     <span
                       className={cn(
                         'absolute left-[10px] top-5 h-4 w-4 rounded-full ring-4 ring-[var(--card-bg)]',
@@ -784,7 +790,7 @@ export function HoldingActivityTimeline({
                         <div className="min-w-[210px] space-y-3">
                           <div className="grid grid-cols-2 gap-2 text-xs sm:text-right">
                             <div>
-                              <div className="text-theme-muted">金额</div>
+                              <div className="text-theme-muted">{transaction.type === 'opening' ? '登记成本' : '金额'}</div>
                               <div className="mt-0.5 font-semibold text-theme-primary">
                                 {formatSummaryMoney(transaction.amount)}
                               </div>
@@ -799,7 +805,7 @@ export function HoldingActivityTimeline({
                               </div>
                             </div>
                           </div>
-                          <div className="grid gap-2 sm:grid-cols-3">
+                          <div className="grid gap-2 sm:grid-cols-2">
                             <Link
                               href={`/holdings/transactions/${transaction.id}`}
                               className="rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-center text-xs font-medium text-theme-secondary transition hover:border-accent/35 hover:text-theme-primary"
@@ -834,6 +840,7 @@ export function HoldingActivityTimeline({
                                   : '作废流水'}
                               </button>
                             )}
+                            {onDeleteTransaction && <HoldingTransactionDeleteButton transaction={transaction} onDelete={onDeleteTransaction} onDeleted={() => { setRollbackPreview(null); setPreviewFeedback(null); setVoidFeedback('流水已删除，当前持仓金额和份额未改变。') }} />}
                           </div>
                         </div>
                       </div>

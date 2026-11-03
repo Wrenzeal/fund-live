@@ -1,10 +1,27 @@
 package crawler
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/shopspring/decimal"
 )
+
+func TestNAVDateUsesShanghaiRegardlessOfServerTimezone(t *testing.T) {
+	previous := time.Local
+	time.Local = time.UTC
+	t.Cleanup(func() { time.Local = previous })
+	date := time.Date(2026, 11, 2, 0, 0, 0, 0, time.FixedZone("CST", 8*3600))
+	content := fmt.Sprintf(`var Data_netWorthTrend = [{"x":%d,"y":2,"equityReturn":1}]; var Data_ACWorthTrend = [[%d,2.5]];`, date.UnixMilli(), date.UnixMilli())
+	detail, err := NewEastmoneyAPIParser().ParsePingzhongJS(content, "014662")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.NAVDate != "2026-11-02" || len(detail.History) != 1 || detail.History[0].Date != "2026-11-02" || !detail.History[0].AccumVal.Equal(decimal.RequireFromString("2.5")) {
+		t.Fatalf("incorrect Shanghai NAV date: %+v history=%+v", detail, detail.History)
+	}
+}
 
 func TestParsePingzhongJSBuildsHistoryFromNetWorthAndAccumulatedTrend(t *testing.T) {
 	parser := NewEastmoneyAPIParser()

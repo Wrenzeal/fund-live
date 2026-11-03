@@ -58,6 +58,11 @@ type watchlistFundRequest struct {
 }
 
 type createFundHoldingRequest struct {
+	EntryType      string `json:"entry_type"`
+	Shares         string `json:"shares"`
+	MarketValue    string `json:"market_value"`
+	HoldingProfit  string `json:"holding_profit"`
+	SnapshotDate   string `json:"snapshot_date"`
 	FundID         string `json:"fund_id"`
 	Amount         string `json:"amount"`
 	AsOfDate       string `json:"as_of_date"`
@@ -72,6 +77,7 @@ type createFundHoldingsBatchRequest struct {
 }
 
 type updateFundHoldingRequest struct {
+	SnapshotDate     string `json:"snapshot_date"`
 	Amount           string `json:"amount"`
 	Shares           string `json:"shares"`
 	ConfirmedNav     string `json:"confirmed_nav"`
@@ -621,6 +627,26 @@ func (h *UserHandler) GetFundHoldingTransactionDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, APIResponse{Success: true, Data: detail})
 }
 
+// DeleteFundHoldingTransaction deletes only the authenticated user's selected activity.
+func (h *UserHandler) DeleteFundHoldingTransaction(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok || user == nil {
+		c.JSON(http.StatusUnauthorized, APIResponse{Success: false, Error: &APIError{Code: "UNAUTHORIZED", Message: "Authentication required"}})
+		return
+	}
+	transactionID := strings.TrimSpace(c.Param("transactionId"))
+	if transactionID == "" {
+		c.JSON(http.StatusBadRequest, APIResponse{Success: false, Error: &APIError{Code: "INVALID_TRANSACTION_ID", Message: "Transaction ID is required"}})
+		return
+	}
+	if err := h.userPreferenceService.DeleteFundHoldingTransaction(c.Request.Context(), user.ID, transactionID); err != nil {
+		status, apiErr := mapUserPreferenceError(err)
+		c.JSON(status, APIResponse{Success: false, Error: apiErr})
+		return
+	}
+	c.JSON(http.StatusOK, APIResponse{Success: true, Data: gin.H{"deleted": true}})
+}
+
 // VoidFundHoldingTransaction marks a historical holding activity as ignored without changing current holdings.
 func (h *UserHandler) VoidFundHoldingTransaction(c *gin.Context) {
 	user, ok := middleware.CurrentUser(c)
@@ -754,7 +780,7 @@ func (h *UserHandler) CreateFundHolding(c *gin.Context) {
 		tradeAt = strings.TrimSpace(req.AsOfDate)
 	}
 
-	holding, err := h.userPreferenceService.CreateFundHolding(c.Request.Context(), user.ID, req.FundID, req.Amount, tradeAt, req.Note)
+	holding, err := h.userPreferenceService.CreateFundHoldingWithInput(c.Request.Context(), user.ID, domain.CreateFundHoldingInput{FundID: req.FundID, Amount: req.Amount, TradeAt: tradeAt, Note: req.Note, SourcePlatform: req.SourcePlatform, SourceLabel: req.SourceLabel, EntryType: req.EntryType, Shares: req.Shares, MarketValue: req.MarketValue, HoldingProfit: req.HoldingProfit, SnapshotDate: req.SnapshotDate})
 	if err != nil {
 		statusCode, apiErr := mapUserPreferenceError(err)
 		c.JSON(statusCode, APIResponse{Success: false, Error: apiErr})
@@ -791,6 +817,7 @@ func (h *UserHandler) CreateFundHoldingsBatch(c *gin.Context) {
 			tradeAt = strings.TrimSpace(item.AsOfDate)
 		}
 		inputs = append(inputs, domain.CreateFundHoldingInput{
+			EntryType: item.EntryType, Shares: item.Shares, MarketValue: item.MarketValue, HoldingProfit: item.HoldingProfit, SnapshotDate: item.SnapshotDate,
 			FundID:         item.FundID,
 			Amount:         item.Amount,
 			TradeAt:        tradeAt,
@@ -839,7 +866,7 @@ func (h *UserHandler) UpdateFundHolding(c *gin.Context) {
 		return
 	}
 
-	holding, err := h.userPreferenceService.UpdateFundHolding(c.Request.Context(), user.ID, holdingID, domain.UpdateFundHoldingInput{
+	holding, err := h.userPreferenceService.UpdateFundHolding(c.Request.Context(), user.ID, holdingID, domain.UpdateFundHoldingInput{SnapshotDate: req.SnapshotDate,
 		Amount:           req.Amount,
 		Shares:           req.Shares,
 		ConfirmedNav:     req.ConfirmedNav,
@@ -1304,6 +1331,10 @@ func mapUserPreferenceError(err error) (int, *APIError) {
 		return http.StatusBadRequest, &APIError{Code: "INVALID_WATCHLIST_GROUP", Message: err.Error()}
 	case errors.Is(err, service.ErrInvalidWatchlistOrder):
 		return http.StatusBadRequest, &APIError{Code: "INVALID_WATCHLIST_ORDER", Message: err.Error()}
+	case errors.Is(err, service.ErrOpeningNAVUnavailable):
+		return http.StatusConflict, &APIError{Code: "OPENING_NAV_UNAVAILABLE", Message: err.Error()}
+	case errors.Is(err, service.ErrInvalidOpeningPosition):
+		return http.StatusBadRequest, &APIError{Code: "INVALID_OPENING_POSITION", Message: err.Error()}
 	case errors.Is(err, service.ErrInvalidHoldingAmount):
 		return http.StatusBadRequest, &APIError{Code: "INVALID_HOLDING_AMOUNT", Message: err.Error()}
 	case errors.Is(err, service.ErrInvalidHoldingDate):

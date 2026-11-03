@@ -1,13 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { AlertTriangle, ArrowLeft, Ban, CheckCircle2, Clock3, FileText, History, LoaderCircle, RotateCcw, WalletCards } from 'lucide-react'
 import { AccountAreaShell } from '@/components/account-area-shell'
 import { ScrollRevealStack } from '@/components/scroll-reveal'
+import { HoldingTransactionDeleteButton } from '@/components/holding-transaction-delete-button'
 import { useCurrentUser } from '@/hooks/use-auth'
 import {
   useHoldingTransactionDetail,
+  deleteHoldingTransaction,
   type HoldingTransactionEntry,
   type HoldingTransactionRollbackField,
   type HoldingTransactionType,
@@ -18,6 +20,7 @@ import { cn } from '@/lib/utils'
 
 function transactionTypeLabel(type: HoldingTransactionType) {
   switch (type) {
+    case 'opening': return '期初持仓'
     case 'buy':
       return '买入/补仓'
     case 'sell':
@@ -36,6 +39,7 @@ function transactionTypeLabel(type: HoldingTransactionType) {
 
 function transactionTone(type: HoldingTransactionType) {
   switch (type) {
+    case 'opening': return 'border-accent/28 bg-accent/10 text-accent'
     case 'buy':
       return 'border-success/28 bg-success/10 text-success'
     case 'sell':
@@ -131,6 +135,7 @@ function RelatedTransactionRow({ transaction }: { transaction: HoldingTransactio
 }
 
 export default function HoldingTransactionDetailPage() {
+  const router = useRouter()
   const params = useParams<{ transactionId: string }>()
   const transactionID = typeof params?.transactionId === 'string' ? params.transactionId : ''
   const { user, isLoading: isUserLoading } = useCurrentUser()
@@ -182,14 +187,17 @@ export default function HoldingTransactionDetailPage() {
   const transaction = detail.transaction
   const rollbackPreview = detail.rollback_preview
   const sourceLabel = resolveHoldingSourceLabel(transaction.source_platform, transaction.source_label)
-  const metadataEntries = Object.entries(transaction.metadata ?? {})
+  const metadataEntries = Object.entries(transaction.metadata ?? {}).filter(([key]) => key !== 'related_history_deleted' && key !== 'holding_entry_type')
 
   return (
     <AccountAreaShell title="流水详情" description="查看单条持仓流水、快照变化和回滚预览。">
       <ScrollRevealStack className="space-y-6">
-        <Link href="/holdings" className="inline-flex items-center gap-2 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition hover:border-accent/35 hover:text-theme-primary">
-          <ArrowLeft className="h-4 w-4" /> 返回持仓页
-        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link href="/holdings?tab=ledger" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2 text-sm text-theme-secondary transition hover:border-accent/35 hover:text-theme-primary">
+            <ArrowLeft className="h-4 w-4" /> 返回交易记录
+          </Link>
+          <HoldingTransactionDeleteButton transaction={transaction} onDelete={deleteHoldingTransaction} onDeleted={() => router.replace('/holdings?tab=ledger')} />
+        </div>
 
         <section className="overflow-hidden rounded-[34px] border border-[var(--card-border)] bg-[var(--card-bg)]/86 p-6 glass">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">

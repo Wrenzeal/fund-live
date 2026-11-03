@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/RomaticDOG/fund/internal/domain"
+	"github.com/RomaticDOG/fund/internal/trading"
 	"github.com/shopspring/decimal"
 )
 
@@ -115,7 +116,7 @@ func (p *EastmoneyAPIParser) parseNavTrend(jsonArray string, fundCode string) (d
 	var prev decimal.Decimal
 	for _, point := range points {
 		navValue := decimal.NewFromFloat(point.Y)
-		date := time.Unix(point.X/1000, 0).Format("2006-01-02")
+		date := time.UnixMilli(point.X).In(trading.TradingLocation()).Format("2006-01-02")
 		dailyReturn := decimal.Zero
 		if point.EquityReturn != nil {
 			dailyReturn = decimal.NewFromFloat(*point.EquityReturn).Round(4)
@@ -144,7 +145,7 @@ func (p *EastmoneyAPIParser) parseNavTrend(jsonArray string, fundCode string) (d
 	}
 
 	// Convert timestamp (milliseconds) to date
-	t := time.Unix(lastPoint.X/1000, 0)
+	t := time.UnixMilli(lastPoint.X).In(trading.TradingLocation())
 	date := t.Format("2006-01-02")
 
 	return nav, prevNav, date, histories
@@ -178,7 +179,7 @@ func (p *EastmoneyAPIParser) attachAccumulatedWorthTrend(histories []domain.Fund
 		if len(point) < 2 {
 			continue
 		}
-		date := time.Unix(int64(point[0])/1000, 0).Format("2006-01-02")
+		date := time.UnixMilli(int64(point[0])).In(trading.TradingLocation()).Format("2006-01-02")
 		accumByDate[date] = decimal.NewFromFloat(point[1])
 	}
 

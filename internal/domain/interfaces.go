@@ -51,6 +51,8 @@ type FundRepository interface {
 
 	// SaveFundHistory saves or updates an official daily NAV snapshot.
 	SaveFundHistory(ctx context.Context, history *FundHistory) error
+	// ReplaceFundHistoryRange atomically replaces one verified source range, removing stale misdated rows.
+	ReplaceFundHistoryRange(ctx context.Context, fundID, start, end string, histories []FundHistory) error
 
 	// GetLatestFundHistory retrieves the latest official NAV snapshot for a fund.
 	GetLatestFundHistory(ctx context.Context, fundID string) (*FundHistory, error)

@@ -134,6 +134,11 @@ var managedMigrations = []sqlMigration{
 		Statements:     userHoldingSourceMigrationStatements,
 	},
 	{
+		ID:             "20261103_holding_opening_positions",
+		RequiredTables: []string{"tb_user_fund_holding"},
+		Statements:     holdingOpeningMigrationStatements,
+	},
+	{
 		ID:             "20260423_user_watchlist_group_ordering",
 		RequiredTables: []string{"tb_user_watchlist_group"},
 		Statements:     watchlistGroupOrderingMigrationStatements,

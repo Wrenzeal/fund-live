@@ -111,6 +111,9 @@ export function buildHoldingReconciliationSummary(holdings: HoldingEntry[]): Hol
     const sourceLabel = resolveHoldingSourceLabel(holding.source_platform, holding.source_label)
     const sourceText = sourceLabel || '外部平台'
 
+    if (holding.entry_type === 'opening' && shares && amount > 0) {
+      return { id: holding.id, fundID: holding.fund_id, fundName: fundNameFromHolding(holding), amount, impliedPrincipal: null, difference: null, differencePercent: null, severity: 'ok', manual: true, sourceLabel, reason: '已有持仓按实际份额和剩余成本登记，无需用买入净值反推份额。' }
+    }
     if (!shares || !confirmedNav || amount <= 0) {
       return {
         id: holding.id,

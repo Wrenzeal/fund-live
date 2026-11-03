@@ -133,7 +133,7 @@ export function resolveHoldingMetrics(holding: HoldingMetricInput, estimate: Est
     const shares = parseOptionalNumber(holding.shares)
     const nav = parseOptionalNumber(estimate?.estimate_nav)
     const previous = parseOptionalNumber(estimate?.prev_nav)
-    if (holding.confirmed_nav_date && shares !== null && shares > 0 && nav !== null && nav > 0) {
+    if ((holding.entry_type === 'opening' || holding.confirmed_nav_date) && shares !== null && shares > 0 && nav !== null && nav > 0) {
       marketValue = shares * nav
       if (previous !== null && previous > 0) {
         todayProfit = Number((shares * (nav - previous)).toFixed(8))
@@ -196,8 +196,8 @@ export function aggregateLatestUpdatedAt(holdings: Array<Pick<HoldingEntry, 'upd
   }, null)
 }
 
-export function isHoldingIncomplete(holding: Pick<HoldingEntry, 'shares' | 'confirmed_nav_date' | 'real_metrics_ready'>) {
-  return !holding.shares || !holding.confirmed_nav_date || holding.real_metrics_ready === false
+export function isHoldingIncomplete(holding: Pick<HoldingEntry, 'shares' | 'confirmed_nav_date' | 'real_metrics_ready' | 'entry_type'>) {
+  return !holding.shares || (holding.entry_type !== 'opening' && !holding.confirmed_nav_date) || holding.real_metrics_ready === false
 }
 
 export function isAggregateIncomplete(aggregate: Pick<HoldingAggregateEntry, 'incomplete_holdings_count' | 'metrics_scope' | 'real_metrics_ready'>) {
@@ -207,7 +207,7 @@ export function isAggregateIncomplete(aggregate: Pick<HoldingAggregateEntry, 'in
     aggregate.real_metrics_ready === false
 }
 
-export function incompleteAggregateChildren<T extends Pick<HoldingEntry, 'shares' | 'confirmed_nav_date' | 'real_metrics_ready'>>(holdings: T[], showIncompleteOnly: boolean): T[] {
+export function incompleteAggregateChildren<T extends Pick<HoldingEntry, 'shares' | 'confirmed_nav_date' | 'real_metrics_ready' | 'entry_type'>>(holdings: T[], showIncompleteOnly: boolean): T[] {
   return showIncompleteOnly ? holdings.filter(isHoldingIncomplete) : holdings
 }
 

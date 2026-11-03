@@ -55,6 +55,9 @@ func (r *countingCollectorFundRepository) GetTimeSeriesByDate(ctx context.Contex
 func (r *countingCollectorFundRepository) SaveFundHistory(ctx context.Context, history *domain.FundHistory) error {
 	return nil
 }
+func (r *countingCollectorFundRepository) ReplaceFundHistoryRange(ctx context.Context, fundID, start, end string, histories []domain.FundHistory) error {
+	return nil
+}
 
 func (r *countingCollectorFundRepository) GetLatestFundHistory(ctx context.Context, fundID string) (*domain.FundHistory, error) {
 	return nil, nil

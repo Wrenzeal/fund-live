@@ -22,15 +22,16 @@ type officialNAVHistoryCrawler interface {
 
 // OfficialNAVSyncService fetches official end-of-day NAV data and reconciles held funds.
 type OfficialNAVSyncService struct {
-	fundRepo        domain.FundRepository
-	fundHoldingRepo domain.UserFundHoldingRepository
-	favoriteRepo    domain.UserFavoriteRepository
-	watchlistRepo   domain.UserWatchlistRepository
-	crawler         officialNAVHistoryCrawler
-	location        *time.Location
-	now             func() time.Time
-	maxConcurrency  int
-	syncHour        int
+	confirmationLoader func(context.Context, string, []string) error
+	fundRepo           domain.FundRepository
+	fundHoldingRepo    domain.UserFundHoldingRepository
+	favoriteRepo       domain.UserFavoriteRepository
+	watchlistRepo      domain.UserWatchlistRepository
+	crawler            officialNAVHistoryCrawler
+	location           *time.Location
+	now                func() time.Time
+	maxConcurrency     int
+	syncHour           int
 }
 
 // NewOfficialNAVSyncService creates a new nightly official NAV sync service.
@@ -51,6 +52,10 @@ func NewOfficialNAVSyncService(
 		maxConcurrency:  6,
 		syncHour:        23,
 	}
+}
+
+func (s *OfficialNAVSyncService) SetConfirmationHistoryLoader(loader func(context.Context, string, []string) error) {
+	s.confirmationLoader = loader
 }
 
 // Start launches the background loop.
@@ -263,6 +268,25 @@ func (s *OfficialNAVSyncService) backfillHoldingConfirmations(ctx context.Contex
 		return 0, nil
 	}
 
+	if s.confirmationLoader != nil {
+		dates := make(map[string][]string)
+		for _, holding := range holdings {
+			if needsHoldingConfirmationData(holding) {
+				dates[holding.FundID] = append(dates[holding.FundID], holding.AsOfDate)
+			}
+		}
+		group, groupCtx := errgroup.WithContext(ctx)
+		group.SetLimit(4)
+		for fundID, required := range dates {
+			group.Go(func() error {
+				if err := s.confirmationLoader(groupCtx, fundID, required); err != nil {
+					log.Printf("Holding confirmation NAV %s: %v", fundID, err)
+				}
+				return nil
+			})
+		}
+		_ = group.Wait()
+	}
 	historiesByKey, err := s.fundRepo.GetFundHistoriesByLookupKeys(ctx, collectHoldingHistoryLookupKeys(holdings))
 	if err != nil {
 		return 0, err
@@ -285,10 +309,13 @@ func (s *OfficialNAVSyncService) backfillHoldingConfirmations(ctx context.Contex
 		}
 		updatedHolding.UpdatedAt = time.Now()
 
-		if err := s.fundHoldingRepo.SaveFundHolding(ctx, &updatedHolding); err != nil {
+		updated, err := s.fundHoldingRepo.ConfirmFundHoldingIfUnchanged(ctx, &holding, &updatedHolding)
+		if err != nil {
 			return backfilledCount, err
 		}
-		backfilledCount++
+		if updated {
+			backfilledCount++
+		}
 	}
 
 	return backfilledCount, nil

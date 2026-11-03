@@ -99,6 +99,7 @@ func TestInitDBCreatesCoreSchemaWithoutAutoMigrate(t *testing.T) {
 		"20260416_user_holding_confirmation",
 		"20260525_user_holding_manual_confirmation",
 		"20260525_user_holding_transactions",
+		"20261103_holding_opening_positions",
 		"20260525_user_holding_transaction_voids",
 		"20260526_user_holding_sources",
 		"20260423_user_watchlist_group_ordering",

@@ -12,6 +12,7 @@ import { HoldingActivityTimeline } from "@/components/holding-activity-timeline"
 import { HoldingImportPanel } from "@/components/holding-import-panel";
 import { HoldingPortfolioHealthPanel } from "@/components/holding-portfolio-health-panel";
 import { HoldingReconciliationPanel } from "@/components/holding-reconciliation-panel";
+import { HoldingOpeningComposer } from '@/components/holding-opening-composer';
 import { HoldingRecordComposer } from "@/components/holding-record-composer";
 import { HoldingReminderPanel } from "@/components/holding-reminder-panel";
 import {
@@ -89,12 +90,14 @@ export default function HoldingsPage() {
     holdingsError,
     refreshHoldings,
     addHolding,
+    addOpeningHolding,
     updateHolding,
     sellHolding,
     recordHoldingDividend,
     adjustHoldingShares,
     removeHolding,
     voidHoldingTransaction,
+    deleteHoldingTransaction,
     previewHoldingTransactionRollback,
     applyHoldingTransactionRollback,
     addHoldingsBatch,
@@ -116,8 +119,12 @@ export default function HoldingsPage() {
   const [tradeDate, setTradeDate] = useState("");
   const [tradeTiming, setTradeTiming] = useState<TradeTiming>("before_close");
   const [viewMode, setViewMode] = useState<HoldingViewMode>("aggregate");
+  const [recordKind, setRecordKind] = useState<'buy' | 'opening'>('buy');
   const [workspaceTab, setWorkspaceTab] =
     useState<HoldingWorkspaceTab>("summary");
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('tab') === 'ledger') setWorkspaceTab('ledger');
+  }, []);
   const [metricScope, setMetricScope] =
     useState<HoldingMetricScope>("official");
   const [sortMode, setSortMode] = useState<HoldingSortMode>("default");
@@ -188,7 +195,8 @@ export default function HoldingsPage() {
 
   const resolvedFundID = selectedFundID || autoMatchedFund?.id || "";
   const resolvedFundName = selectedFundName || autoMatchedFund?.name || "";
-  const tradeAtPayload = buildTradeAtValue(tradeDate, tradeTiming);
+  const [importedTradeAt, setImportedTradeAt] = useState('');
+  const tradeAtPayload = importedTradeAt || buildTradeAtValue(tradeDate, tradeTiming);
   const {
     preview,
     isLoading: isPricingPreviewLoading,
@@ -502,6 +510,7 @@ export default function HoldingsPage() {
           : resolveTradeTimingFromServerClock(marketStatus.currentTime),
       );
       setNote("");
+      setImportedTradeAt('');
       setWorkspaceTab("summary");
       setFeedback({
         type: "success",
@@ -591,7 +600,9 @@ export default function HoldingsPage() {
           </div>
         )}
 
-        {activeWorkspaceTab === "record" && (
+        {activeWorkspaceTab === "record" && <div className="flex flex-wrap gap-2" aria-label="持仓录入类型"><ActionButton type="button" className={recordKind === 'buy' ? 'border-[var(--accent-primary)] bg-accent-soft' : ''} aria-pressed={recordKind === 'buy'} onClick={() => setRecordKind('buy')}>记录买入</ActionButton><ActionButton type="button" className={recordKind === 'opening' ? 'border-[var(--accent-primary)] bg-accent-soft' : ''} aria-pressed={recordKind === 'opening'} onClick={() => setRecordKind('opening')}>录入已有持仓</ActionButton></div>}
+        {activeWorkspaceTab === "record" && recordKind === 'opening' && <HoldingOpeningComposer fundID={resolvedFundID} fundName={resolvedFundName} query={query} results={results} today={todayTradeDate} previousTradingDay={previousTradeDate} onQueryChange={value => { setQuery(value); setSelectedFundID(''); setSelectedFundName(''); }} onSelectFund={fund => { setSelectedFundID(fund.id); setSelectedFundName(fund.name); setQuery(fund.name); }} onSave={async payload => { const result = await addOpeningHolding(payload); setWorkspaceTab('summary'); setFeedback({ type: 'success', message: result?.real_metrics_ready ? '已有持仓已登记，可查看官方市值与持有盈亏。' : '已有份额与成本已保存，正在补齐官方净值。' }); return result; }} />}
+        {activeWorkspaceTab === "record" && recordKind === 'buy' && (
           <HoldingRecordComposer
             query={query}
             results={results}
@@ -627,8 +638,8 @@ export default function HoldingsPage() {
             }}
             onAmountChange={setAmount}
             onNoteChange={setNote}
-            onTradeDateChange={setTradeDate}
-            onTradeTimingChange={setTradeTiming}
+            onTradeDateChange={value => { setTradeDate(value); setImportedTradeAt(''); }}
+            onTradeTimingChange={value => { setTradeTiming(value); setImportedTradeAt(''); }}
             onAddHolding={() => void handleAddHolding()}
           />
         )}
@@ -637,8 +648,8 @@ export default function HoldingsPage() {
           <EmptyState
             icon={<Wallet className="h-10 w-10" />}
             title="从第一笔记录开始"
-            description="记录买入金额与日期，确认份额后就能查看当前市值和持有盈亏。已有持仓请导入原始买入记录，再核对份额。"
-            action={<div className="flex flex-wrap justify-center gap-3"><ActionButton className="holding-primary-action min-h-11" variant="primary" onClick={() => setWorkspaceTab('record')}>记录第一笔</ActionButton><ActionButton variant="subtle" onClick={() => setWorkspaceTab('tools')}>导入历史记录</ActionButton></div>}
+            description="已有基金可直接登记持有份额与剩余成本，或按同一净值日的市值与持有盈亏换算；新买入单独记录。"
+            action={<div className="flex flex-wrap justify-center gap-3"><ActionButton variant="primary" onClick={() => { setRecordKind('opening'); setWorkspaceTab('record'); }}>录入已有持仓</ActionButton><ActionButton variant="subtle" onClick={() => { setRecordKind('buy'); setWorkspaceTab('record'); }}>记录第一笔</ActionButton><ActionButton variant="subtle" onClick={() => setWorkspaceTab('tools')}>导入历史记录</ActionButton></div>}
           />
         )}
 
@@ -759,6 +770,7 @@ export default function HoldingsPage() {
             compact
             transactions={holdingTransactions}
             onVoidTransaction={voidHoldingTransaction}
+            onDeleteTransaction={deleteHoldingTransaction}
             fundOptions={transactionFundOptions}
             fundFilter={transactionFundFilter}
             typeFilter={transactionTypeFilter}
@@ -794,7 +806,7 @@ export default function HoldingsPage() {
 
         {activeWorkspaceTab === "tools" && (
           <>
-            <p className="text-sm leading-6 text-theme-secondary">导入金额是买入成本，不是当前市值。请使用真实交易日期，导入后在基金明细中校正确认份额；当前接口不记录赎回到账金额。</p>
+            <p className="text-sm leading-6 text-theme-secondary">请先选择导入已有持仓或买入记录。已有持仓不会记成新买入；导入按行新增，不会覆盖现有持仓。</p>
             {holdings.length > 0 && <HoldingReconciliationPanel compact holdings={holdings} transactions={holdingTransactions} />}
             <HoldingImportPanel
               compact
@@ -809,6 +821,7 @@ export default function HoldingsPage() {
                       ? `已导入 ${result.created_count}/${result.total} 行${result.failed_count ? `，${result.failed_count} 行需修正。` : "。"}`
                       : "导入完成。",
                   });
+                  if (result && result.created_count > 0 && result.failed_count === 0) setWorkspaceTab("summary");
                   return result;
                 } catch (error) {
                   setFeedback({
@@ -828,6 +841,10 @@ export default function HoldingsPage() {
                 setSelectedFundID(draft.fundID);
                 setSelectedFundName(matchedAggregate?.fund?.name || "");
                 setQuery(matchedAggregate?.fund?.name || draft.fundID);
+                setRecordKind('buy');
+                setImportedTradeAt(draft.tradeAt);
+                const importedDate = new Date(draft.tradeAt);
+                if (!Number.isNaN(importedDate.getTime())) { setTradeDate(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(importedDate)); setTradeTiming(resolveTradeTimingFromServerClock(importedDate)); }
                 setAmount(draft.amount);
                 setNote(draft.note);
                 setWorkspaceTab("record");

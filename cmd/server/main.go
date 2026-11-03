@@ -15,6 +15,7 @@ import (
 	"github.com/RomaticDOG/fund/internal/adapter"
 	"github.com/RomaticDOG/fund/internal/appconfig"
 	authcache "github.com/RomaticDOG/fund/internal/cache"
+	"github.com/RomaticDOG/fund/internal/crawler"
 	"github.com/RomaticDOG/fund/internal/database"
 	"github.com/RomaticDOG/fund/internal/domain"
 	"github.com/RomaticDOG/fund/internal/handler"
@@ -183,6 +184,8 @@ func main() {
 		}
 	}
 	userPreferenceService := service.NewUserPreferenceService(fundRepo, favoriteRepo, watchlistRepo, fundHoldingRepo, overrideRepo)
+	holdingHistoryRefresher := service.NewHoldingNAVRefresher(fundRepo, crawler.NewCrawlService(4))
+	userPreferenceService.SetHoldingHistorySync(holdingHistoryRefresher.Ensure)
 	issueService := service.NewIssueService(issueRepo)
 	announcementService := service.NewAnnouncementService(announcementRepo)
 	// Initialize fund resolver for feeder fund -> ETF resolution
@@ -199,6 +202,7 @@ func main() {
 
 	if dbInstance != nil {
 		officialNavSync := service.NewOfficialNAVSyncService(fundRepo, fundHoldingRepo, favoriteRepo, watchlistRepo)
+		officialNavSync.SetConfirmationHistoryLoader(holdingHistoryRefresher.Ensure)
 		officialNavSync.Start(context.Background())
 		log.Println("🕚 Official NAV sync scheduled for 23:00 Asia/Shanghai")
 
@@ -260,7 +264,7 @@ func main() {
 			"status":           "ok",
 			"timestamp":        time.Now().Unix(),
 			"service":          "FundLive API",
-			"version":          "2026.10.16-fund-observation",
+			"version":          "2026.11.03-holding-opening",
 			"storage_mode":     storageMode,
 			"email_code_login": emailCodeHealthStatus(c.Request.Context(), authConfig.EmailCodeEnabled, authService),
 		})
@@ -301,6 +305,7 @@ func main() {
 			user.POST("/holdings/batch", userHandler.CreateFundHoldingsBatch)
 			user.GET("/holdings/transactions", userHandler.ListFundHoldingTransactions)
 			user.GET("/holdings/transactions/:transactionId", userHandler.GetFundHoldingTransactionDetail)
+			user.DELETE("/holdings/transactions/:transactionId", userHandler.DeleteFundHoldingTransaction)
 			user.GET("/holdings/transactions/:transactionId/rollback-preview", userHandler.PreviewFundHoldingTransactionRollback)
 			user.POST("/holdings/transactions/:transactionId/rollback-apply", userHandler.ApplyFundHoldingTransactionRollback)
 			user.POST("/holdings/transactions/:transactionId/void", userHandler.VoidFundHoldingTransaction)
@@ -436,6 +441,7 @@ func main() {
 		log.Printf("   POST /api/v1/user/holdings/batch - Batch create fund holding records")
 		log.Printf("   GET /api/v1/user/holdings/transactions - List recent holding activity")
 		log.Printf("   GET /api/v1/user/holdings/transactions/:transactionId - Get holding activity detail")
+		log.Printf("   DELETE /api/v1/user/holdings/transactions/:transactionId - Delete history without changing holdings")
 		log.Printf("   GET /api/v1/user/holdings/transactions/:transactionId/rollback-preview - Preview holding activity rollback")
 		log.Printf("   POST /api/v1/user/holdings/transactions/:transactionId/rollback-apply - Apply safe holding activity rollback")
 		log.Printf("   POST /api/v1/user/holdings/transactions/:transactionId/void - Void holding activity")

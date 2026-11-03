@@ -16,6 +16,7 @@ type UserPreferenceService interface {
 	RemoveWatchlistFund(ctx context.Context, userID, groupID, fundID string) error
 	ListFundHoldings(ctx context.Context, userID string) (*UserFundHoldingList, error)
 	CreateFundHolding(ctx context.Context, userID, fundID, amount, tradeAt, note string) (*UserFundHoldingDetail, error)
+	CreateFundHoldingWithInput(ctx context.Context, userID string, input CreateFundHoldingInput) (*UserFundHoldingDetail, error)
 	CreateFundHoldingsBatch(ctx context.Context, userID string, inputs []CreateFundHoldingInput) (*UserFundHoldingBatchCreateResult, error)
 	UpdateFundHolding(ctx context.Context, userID, holdingID string, input UpdateFundHoldingInput) (*UserFundHoldingDetail, error)
 	SellFundHolding(ctx context.Context, userID, holdingID string, input SellFundHoldingInput) (*UserFundHoldingDetail, error)
@@ -25,6 +26,7 @@ type UserPreferenceService interface {
 	ListFundHoldingTransactions(ctx context.Context, userID string, limit int) ([]UserFundHoldingTransaction, error)
 	ListFundHoldingTransactionsFiltered(ctx context.Context, userID string, filter UserFundHoldingTransactionFilter) ([]UserFundHoldingTransaction, error)
 	GetFundHoldingTransactionDetail(ctx context.Context, userID, transactionID string) (*UserFundHoldingTransactionDetail, error)
+	DeleteFundHoldingTransaction(ctx context.Context, userID, transactionID string) error
 	VoidFundHoldingTransaction(ctx context.Context, userID, transactionID, reason string) (*UserFundHoldingTransaction, error)
 	PreviewFundHoldingTransactionRollback(ctx context.Context, userID, transactionID string) (*UserFundHoldingTransactionRollbackPreview, error)
 	ApplyFundHoldingTransactionRollback(ctx context.Context, userID, transactionID, reason string) (*UserFundHoldingTransactionRollbackApplyResult, error)

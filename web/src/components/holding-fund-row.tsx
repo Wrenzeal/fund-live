@@ -78,13 +78,14 @@ export function HoldingFundRow({
   const { fund } = useFund(holding.fund_id)
   const estimate = providedEstimate ?? null
   const fundName = holding.fund?.name || fund?.name || estimate?.fund_name || holding.fund_id
+  const isOpening = holding.entry_type === 'opening'
   const tradeAtLabel = formatTradeAt(holding.trade_at)
   const sourceLabel = resolveHoldingSourceLabel(holding.source_platform, holding.source_label)
   const metrics = resolveHoldingMetrics(holding, estimate, metricScope)
   const confirmedDateLabel = holding.confirmed_nav_date || holding.as_of_date || '待确认'
   const metricNote = metrics.ready
-    ? metricScope === 'official' ? '官方净值日 ' + (holding.actual_date || '待更新') : '按确认份额与盘中预估净值计算'
-    : metricScope === 'official' ? '等待净值更新' : '确认份额或预估净值不足'
+    ? metricScope === 'official' ? '官方净值日 ' + (holding.actual_date || '待更新') + (holding.real_metrics_stale ? ' · 新净值待更新' : '') : '按确认份额与盘中预估净值计算'
+    : metricScope === 'official' ? holding.real_metrics_message || '等待净值更新' : '确认份额或预估净值不足'
   const actionDisabled = isRemoving || isSaving || isSellSaving || isDividendSaving || isAdjustmentSaving
 
   useEffect(() => {
@@ -159,7 +160,7 @@ export function HoldingFundRow({
     const normalizedAmount = normalizeDecimalInput(form.amount)
     const normalizedShares = normalizeDecimalInput(form.shares)
     const normalizedNav = normalizeDecimalInput(form.confirmedNav)
-    const hasAnyConfirmation = Boolean(normalizedShares || normalizedNav || form.confirmedNavDate)
+    const hasAnyConfirmation = !isOpening && Boolean(normalizedShares || normalizedNav || form.confirmedNavDate)
     const hasFullConfirmation = Boolean(normalizedShares && normalizedNav && form.confirmedNavDate)
 
     if (!validatePositiveDecimal(normalizedAmount)) {
@@ -167,6 +168,7 @@ export function HoldingFundRow({
       return
     }
 
+    if (isOpening && !validatePositiveDecimal(normalizedShares)) { setFormError('请输入有效的持有份额。'); return }
     if (hasAnyConfirmation && !hasFullConfirmation) {
       setFormError('如果要按支付宝/微信校正确认口径，需要同时填写份额、确认净值和净值日。')
       return
@@ -189,7 +191,8 @@ export function HoldingFundRow({
         shares: normalizedShares,
         confirmed_nav: normalizedNav,
         confirmed_nav_date: form.confirmedNavDate,
-        trade_at: buildCorrectionTradeAt(form.tradeDate, holding.trade_at),
+        snapshot_date: isOpening ? form.tradeDate : undefined,
+        trade_at: isOpening ? undefined : buildCorrectionTradeAt(form.tradeDate, holding.trade_at),
         note: form.note.trim(),
         source_platform: form.sourcePlatform || undefined,
       }))
@@ -365,7 +368,7 @@ export function HoldingFundRow({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="break-words text-base font-semibold text-theme-primary">{fundName}</div>
-            <div className="mt-1 text-xs text-theme-secondary">{holding.fund_id} · 买入于 {tradeAtLabel || '日期待补充'}</div>
+            <div className="mt-1 text-xs text-theme-secondary">{holding.fund_id} · {isOpening ? '已有持仓 · 登记于 ' + holding.as_of_date : '买入于 ' + (tradeAtLabel || '日期待补充')}</div>
           </div>
           <Link href={'/observations/' + holding.fund_id} className="inline-flex min-h-11 items-center text-sm text-theme-secondary hover:text-theme-primary">公告与资料</Link>
         </div>
@@ -374,7 +377,7 @@ export function HoldingFundRow({
           <div><dt className="text-xs text-theme-secondary">持有盈亏</dt><dd className={cn('mt-2 break-words text-base font-semibold tabular-nums sm:text-xl', holdingTone(metrics.holdingProfit))}>{holdingMoney(metrics.holdingProfit, true)}</dd></div>
           <div><dt className="text-xs text-theme-secondary">当日变动{metricScope === 'estimate' ? '预估' : ''}</dt><dd className={cn('mt-2 break-words text-base font-semibold tabular-nums sm:text-xl', holdingTone(metrics.todayProfit))}>{holdingMoney(metrics.todayProfit, true)}</dd></div>
         </dl>
-        <p className="text-xs leading-6 text-theme-secondary">{metricNote} · 剩余成本 {holdingMoney(metrics.principal)} · 确认份额 {holding.shares || '待确认'} · 确认净值日 {confirmedDateLabel}{sourceLabel ? ' · ' + sourceLabel : ''}{holding.manual_confirmation ? ' · 手动校正' : ''}</p>
+        <p className="text-xs leading-6 text-theme-secondary">{metricNote} · 剩余成本 {holdingMoney(metrics.principal)} · 确认份额 {holding.shares || '待确认'}{!isOpening && <> · 确认净值日 {confirmedDateLabel}</>}{sourceLabel ? ' · ' + sourceLabel : ''}{holding.manual_confirmation && !isOpening ? ' · 手动校正' : ''}</p>
         {holding.note && <p className="break-words text-sm text-theme-secondary">{holding.note}</p>}
         <div className="flex flex-wrap items-center gap-2 border-t border-[var(--card-border)] pt-3">
 
@@ -519,7 +522,7 @@ export function HoldingFundRow({
               />
             </label>
             <label className="space-y-2 text-xs text-theme-secondary">
-              <span>确认份额</span>
+              <span>{isOpening ? '持有份额' : '确认份额'}</span>
               <input
                 value={form.shares}
                 onChange={(event) => updateForm({ shares: event.target.value })}
@@ -529,9 +532,10 @@ export function HoldingFundRow({
               />
             </label>
             <label className="space-y-2 text-xs text-theme-secondary">
-              <span>确认净值</span>
+              <span>{isOpening ? '参考净值（无需填写）' : '确认净值'}</span>
               <input
                 value={form.confirmedNav}
+                disabled={isOpening}
                 onChange={(event) => updateForm({ confirmedNav: event.target.value })}
                 className="min-h-11 w-full rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-accent/60"
                 inputMode="decimal"
@@ -543,12 +547,13 @@ export function HoldingFundRow({
               <input
                 type="date"
                 value={form.confirmedNavDate}
+                disabled={isOpening}
                 onChange={(event) => updateForm({ confirmedNavDate: event.target.value })}
                 className="min-h-11 w-full rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 text-sm text-theme-primary outline-none transition-colors focus:border-accent/60"
               />
             </label>
             <label className="space-y-2 text-xs text-theme-secondary">
-              <span>申购日期</span>
+              <span>{isOpening ? '持仓登记日期' : '申购日期'}</span>
               <input
                 type="date"
                 value={form.tradeDate}
@@ -613,13 +618,14 @@ export function HoldingFundRow({
             >
               取消
             </button>
+            {!isOpening && (
             <button
               type="button"
               onClick={() => updateForm({ shares: '', confirmedNav: '', confirmedNavDate: '', sourcePlatform: '' })}
               className="rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-4 py-2.5 text-sm text-theme-muted transition-colors hover:border-warning/35 hover:text-theme-primary"
             >
               回到自动确认
-            </button>
+            </button>)}
           </div>
         </div>
       )}
@@ -768,7 +774,7 @@ export function HoldingFundRow({
               />
             </label>
             <label className="space-y-2 text-xs text-theme-secondary">
-              <span>确认净值</span>
+              <span>{isOpening ? '参考净值（无需填写）' : '确认净值'}</span>
               <input
                 value={adjustmentForm.confirmedNav}
                 onChange={(event) => updateAdjustmentForm({ confirmedNav: event.target.value })}

@@ -626,6 +626,33 @@ func (r *MemoryUserRepository) GetFundHoldingTransaction(ctx context.Context, us
 	return nil, nil
 }
 
+func (r *MemoryUserRepository) DeleteFundHoldingTransaction(ctx context.Context, userID, transactionID string) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	transactions := r.holdingTxs[userID]
+	for index, target := range transactions {
+		if target.ID != transactionID {
+			continue
+		}
+		for i := range transactions {
+			candidate := &transactions[i]
+			if candidate.ID == target.ID || candidate.FundID != target.FundID || candidate.CreatedAt.After(target.CreatedAt) {
+				continue
+			}
+			if target.HoldingID != "" && candidate.HoldingID != "" && candidate.HoldingID != target.HoldingID {
+				continue
+			}
+			if candidate.Metadata == nil {
+				candidate.Metadata = make(map[string]string)
+			}
+			candidate.Metadata[domain.HoldingTransactionDeletedHistoryKey] = "true"
+		}
+		r.holdingTxs[userID] = append(transactions[:index], transactions[index+1:]...)
+		return true, nil
+	}
+	return false, nil
+}
+
 func (r *MemoryUserRepository) SaveFundHoldingTransaction(ctx context.Context, tx *domain.UserFundHoldingTransaction) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
